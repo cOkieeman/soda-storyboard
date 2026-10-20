@@ -1,0 +1,121 @@
+"""Render a readable wireframe PNG preview with Pillow."""
+
+from __future__ import annotations
+
+import warnings
+from collections.abc import Iterable, Mapping
+from pathlib import Path
+
+from .models import Character, Page, Panel
+
+
+def find_font(font: str | Path | None = None) -> Path | None:
+    candidates = [
+        Path(font) if font else None,
+        Path(r"C:\Windows\Fonts\msyh.ttc"),
+        Path(r"C:\Windows\Fonts\msyhbd.ttc"),
+        Path(r"C:\Windows\Fonts\simhei.ttf"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    ]
+    return next((candidate for candidate in candidates if candidate and candidate.exists()), None)
+
+
+def _character_names(panel: Panel, characters: Mapping[str, Character] | None) -> str:
+    if not panel.character_ids:
+        return ""
+    if not characters:
+        return ", ".join(panel.character_ids)
+    return ", ".join(
+        characters.get(identifier, Character(identifier, identifier)).display_name
+        for identifier in panel.character_ids
+    )
+
+
+def render_preview(
+    page: Page,
+    output: str | Path,
+    characters: Mapping[str, Character] | Iterable[Character] | None = None,
+    *,
+    font: str | Path | None = None,
+    scale: float = 1.0,
+) -> Path:
+    """Render ``page`` to ``output`` and return the resulting path."""
+
+    try:
+        from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
+    except ImportError as exc:  # pragma: no cover - exercised only without optional dependency
+        raise RuntimeError("preview 需要 Pillow，请先安装 Pillow") from exc
+
+    character_map = (
+        {character.id: character for character in characters}
+        if characters is not None and not isinstance(characters, Mapping)
+        else dict(characters or {})
+    )
+    width = max(1, int(page.canvas_width * scale))
+    height = max(1, int(page.canvas_height * scale))
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+    font_path = find_font(font)
+    if font and font_path is None:
+        raise FileNotFoundError(f"找不到字体文件：{font}")
+    if font_path is None:
+        warnings.warn(
+            "未找到中文字体，将使用 Pillow 默认字体；可通过 --font 指定字体文件", RuntimeWarning, stacklevel=2
+        )
+    if font_path:
+        label_font = ImageFont.truetype(str(font_path), max(12, int(18 * scale)))
+        small_font = ImageFont.truetype(str(font_path), max(10, int(13 * scale)))
+    else:
+        label_font = ImageFont.load_default()
+        small_font = label_font
+
+    def s(value: float) -> int:
+        return int(round(value * scale))
+
+    for panel in sorted(page.panels, key=lambda item: item.order):
+        shape = panel.shape
+        shape_type = shape.get("type", "rect") if isinstance(shape, Mapping) else "rect"
+        if shape_type == "quad":
+            raw_points = shape.get("points", [])
+            points = [(s(float(point[0])), s(float(point[1]))) for point in raw_points]
+            if len(points) == 4:
+                draw.polygon(points, outline="#1d4ed8", width=max(2, s(4)))
+                left = min(point[0] for point in points)
+                top = min(point[1] for point in points)
+            else:
+                continue
+        else:
+            x = float(shape.get("x", 0))
+            y = float(shape.get("y", 0))
+            w = float(shape.get("w", shape.get("width", 0)))
+            h = float(shape.get("h", shape.get("height", 0)))
+            left, top = s(x), s(y)
+            draw.rectangle((left, top, s(x + w), s(y + h)), outline="#1d4ed8", width=max(2, s(4)))
+        title = f"{panel.order}  {panel.shot} / {panel.angle}"
+        names = _character_names(panel, character_map)
+        detail = " · ".join(part for part in (names, panel.description[:28]) if part)
+        draw.text((left + s(8), top + s(8)), title, fill="#111827", font=label_font)
+        if detail:
+            draw.text((left + s(8), top + s(32)), detail, fill="#374151", font=small_font)
+        for index, dialogue in enumerate(panel.dialogue):
+            bubble_left = left + s(12)
+            bubble_top = top + s(60 + index * 48)
+            bubble_right = bubble_left + max(s(120), s(min(260, 16 + len(dialogue.text) * 16)))
+            bubble_bottom = bubble_top + s(34)
+            draw.rounded_rectangle(
+                (bubble_left, bubble_top, bubble_right, bubble_bottom),
+                radius=max(3, s(8)),
+                outline="#dc2626",
+                width=max(1, s(2)),
+            )
+            draw.text(
+                (bubble_left + s(6), bubble_top + s(5)), dialogue.text[:18], fill="#991b1b", font=small_font
+            )
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path)
+    return output_path
+
+
+__all__ = ["find_font", "render_preview"]

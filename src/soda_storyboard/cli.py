@@ -1,0 +1,310 @@
+"""Command line interface for soda-storyboard."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+from .compiler import compile_page
+from .io import load_characters, load_page, load_project, write_json
+from .models import Character, Page, Panel, Project
+from .preview import render_preview
+from .templates import builtin_templates, suggest_layouts
+from .validation import validate_page
+
+
+def _json_print(value: Any) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2))
+
+
+def _emit(value: Any, as_json: bool) -> None:
+    if as_json:
+        _json_print(value)
+        return
+    if isinstance(value, dict) and "valid" in value:
+        state = "通过" if value["valid"] else "失败"
+        print(f"校验{state}：{len(value.get('errors', []))} 个错误，{len(value.get('warnings', []))} 个警告")
+        for issue in value.get("errors", []) + value.get("warnings", []):
+            print(f"- [{issue['severity']}] {issue['message']}")
+    elif isinstance(value, dict) and "items" in value:
+        print(f"已生成 MOSS 布局：{len(value['items'])} 个条目")
+    elif isinstance(value, list):
+        for item in value:
+            print(f"{item.get('template_id', item.get('id', ''))}: {item.get('name', '')}")
+    else:
+        print(value)
+
+
+def _default_page(project: Project, page_id: str, panels: int) -> Page:
+    return Page(
+        page_id=page_id,
+        canvas_width=project.default_canvas_width,
+        canvas_height=project.default_canvas_height,
+        reading_direction=project.reading_direction,
+        style_prefix=project.default_style_prefix,
+        dialogue_mode=project.default_dialogue_mode,
+        panels=[
+            Panel(
+                id=f"panel-{index}",
+                order=index,
+                shape={"type": "rect", "x": 0, "y": 0, "w": 1, "h": 1},
+                description="",
+            )
+            for index in range(1, panels + 1)
+        ],
+    )
+
+
+def _project_for(path: Path) -> Project:
+    project_path = path / "project.json" if path.is_dir() else path.parent.parent / "project.json"
+    if project_path.exists():
+        return load_project(project_path)
+    return Project(name=path.name if path.is_dir() else "soda-storyboard")
+
+
+def command_init(args: argparse.Namespace) -> int:
+    root = Path(args.directory)
+    root.mkdir(parents=True, exist_ok=True)
+    for directory in ("pages", "characters", "templates"):
+        (root / directory).mkdir(exist_ok=True)
+    project = Project(
+        name=args.name or root.name,
+        default_canvas_width=args.width,
+        default_canvas_height=args.height,
+        reading_direction=args.direction,
+    )
+    write_json(root / "project.json", project)
+    result = {"project": str(root / "project.json"), "directories": ["pages", "characters", "templates"]}
+    _emit(result, args.json)
+    return 0
+
+
+def command_page_new(args: argparse.Namespace) -> int:
+    root = Path(args.project)
+    project = _project_for(root)
+    page = Page(
+        page_id=args.id,
+        canvas_width=args.width or project.default_canvas_width,
+        canvas_height=args.height or project.default_canvas_height,
+        reading_direction=args.direction or project.reading_direction,
+        style_prefix=args.style if args.style is not None else project.default_style_prefix,
+        description=args.description,
+        dialogue_mode=args.dialogue_mode or project.default_dialogue_mode,
+    )
+    target = Path(args.output) if args.output else root / "pages" / f"{args.id}.json"
+    write_json(target, page)
+    _emit({"path": str(target), "page": page.to_dict()}, args.json)
+    return 0
+
+
+def command_character_new(args: argparse.Namespace) -> int:
+    root = Path(args.project)
+    character = Character(
+        id=args.id,
+        display_name=args.name or args.id,
+        trigger_words=args.trigger or [],
+        appearance_zh=args.appearance_zh,
+        appearance_en=args.appearance_en,
+    )
+    target = Path(args.output) if args.output else root / "characters" / f"{args.id}.json"
+    write_json(target, character)
+    _emit({"path": str(target), "character": character.to_dict()}, args.json)
+    return 0
+
+
+def command_template_list(args: argparse.Namespace) -> int:
+    templates = builtin_templates(args.panels)
+    _emit(templates, args.json)
+    return 0
+
+
+def command_layout_suggest(args: argparse.Namespace) -> int:
+    if args.panels is None and not args.page:
+        raise ValueError("layout suggest 需要 --panels 或 --page")
+    page = load_page(args.page) if args.page else None
+    width = page.canvas_width if page else args.width
+    height = page.canvas_height if page else args.height
+    importance = (
+        _parse_importance(args.importance)
+        if args.importance
+        else page and [panel.importance for panel in page.panels]
+    )
+    results = suggest_layouts(
+        args.panels or len(page.panels),
+        width=width,
+        height=height,
+        importance=importance,
+        user_templates=args.templates,
+        candidates=args.candidates,
+        gap=args.gap,
+    )
+    if args.page and args.write_page:
+        target_page = page
+        if target_page is None:
+            raise ValueError("--write-page 需要同时提供 --page")
+        chosen = results[0]["panels"]
+        for panel, shape in zip(target_page.panels, chosen, strict=True):
+            panel.shape = shape
+        write_json(args.write_page, target_page)
+    if args.output:
+        write_json(args.output, {"panel_count": args.panels or len(page.panels), "candidates": results})
+    _emit(results, args.json)
+    return 0
+
+
+def _characters_near(page_path: Path) -> dict[str, Character]:
+    root = page_path.parent.parent
+    return load_characters(root / "characters")
+
+
+def command_validate(args: argparse.Namespace) -> int:
+    path = Path(args.page)
+    page = load_page(path)
+    report = validate_page(page, _characters_near(path), max_dialogue_chars=args.max_dialogue_chars)
+    _emit(report.to_dict(), args.json)
+    return report.exit_code
+
+
+def command_preview(args: argparse.Namespace) -> int:
+    path = Path(args.page)
+    page = load_page(path)
+    output = args.output or str(path.with_suffix(".png"))
+    rendered = render_preview(page, output, _characters_near(path), font=args.font, scale=args.scale)
+    _emit({"path": str(rendered), "font": str(args.font or "auto")}, args.json)
+    return 0
+
+
+def _parse_size(value: str | None) -> tuple[int, int] | None:
+    if not value:
+        return None
+    try:
+        width, height = value.lower().replace("×", "x").split("x", 1)
+        return int(width), int(height)
+    except ValueError as exc:
+        raise ValueError("尺寸应写成 WIDTHxHEIGHT，例如 1024x1536") from exc
+
+
+def _parse_importance(value: str) -> list[int]:
+    try:
+        values = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise ValueError("重要度应写成逗号分隔的整数，例如 3,2,1") from exc
+    if not values or any(item not in (1, 2, 3) for item in values):
+        raise ValueError("每格重要度必须是 1、2 或 3")
+    return values
+
+
+def command_compile(args: argparse.Namespace) -> int:
+    path = Path(args.page)
+    page = load_page(path)
+    compiled = compile_page(page, _characters_near(path), size_check=_parse_size(args.size_check))
+    if args.output:
+        write_json(args.output, compiled)
+    _emit(compiled, args.json)
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="soda-storyboard", description="分镜单 v1 工具")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    init = subparsers.add_parser("init", help="初始化项目目录")
+    init.add_argument("directory")
+    init.add_argument("--name")
+    init.add_argument("--width", type=int, default=1024)
+    init.add_argument("--height", type=int, default=1536)
+    init.add_argument("--direction", choices=("rtl", "ltr"), default="rtl")
+    init.add_argument("--json", action="store_true")
+    init.set_defaults(func=command_init)
+
+    page = subparsers.add_parser("page", help="创建分镜页")
+    page_sub = page.add_subparsers(dest="page_command", required=True)
+    page_new = page_sub.add_parser("new")
+    page_new.add_argument("--project", default=".")
+    page_new.add_argument("--id", required=True)
+    page_new.add_argument("--output")
+    page_new.add_argument("--width", type=int)
+    page_new.add_argument("--height", type=int)
+    page_new.add_argument("--direction", choices=("rtl", "ltr"))
+    page_new.add_argument("--style")
+    page_new.add_argument("--description", default="")
+    page_new.add_argument("--dialogue-mode", choices=("moss_text", "lettering"))
+    page_new.add_argument("--json", action="store_true")
+    page_new.set_defaults(func=command_page_new)
+
+    character = subparsers.add_parser("character", help="创建角色卡")
+    character_sub = character.add_subparsers(dest="character_command", required=True)
+    character_new = character_sub.add_parser("new")
+    character_new.add_argument("--project", default=".")
+    character_new.add_argument("--id", required=True)
+    character_new.add_argument("--name")
+    character_new.add_argument("--trigger", action="append")
+    character_new.add_argument("--appearance-zh", default="")
+    character_new.add_argument("--appearance-en", default="")
+    character_new.add_argument("--output")
+    character_new.add_argument("--json", action="store_true")
+    character_new.set_defaults(func=command_character_new)
+
+    template = subparsers.add_parser("template", help="查看模板")
+    template_sub = template.add_subparsers(dest="template_command", required=True)
+    template_list = template_sub.add_parser("list")
+    template_list.add_argument("--panels", type=int)
+    template_list.add_argument("--json", action="store_true")
+    template_list.set_defaults(func=command_template_list)
+
+    layout = subparsers.add_parser("layout", help="版式求解")
+    layout_sub = layout.add_subparsers(dest="layout_command", required=True)
+    suggest = layout_sub.add_parser("suggest")
+    suggest.add_argument("--panels", type=int)
+    suggest.add_argument("--page")
+    suggest.add_argument("--width", type=int, default=1024)
+    suggest.add_argument("--height", type=int, default=1536)
+    suggest.add_argument("--templates")
+    suggest.add_argument("--importance", help="逗号分隔的每格重要度，例如 3,2,1,1,1")
+    suggest.add_argument("--candidates", type=int, default=3)
+    suggest.add_argument("--gap", type=int, default=24)
+    suggest.add_argument("--output")
+    suggest.add_argument("--write-page")
+    suggest.add_argument("--json", action="store_true")
+    suggest.set_defaults(func=command_layout_suggest)
+
+    validate = subparsers.add_parser("validate", help="校验分镜页")
+    validate.add_argument("page")
+    validate.add_argument("--max-dialogue-chars", type=int, default=20)
+    validate.add_argument("--json", action="store_true")
+    validate.set_defaults(func=command_validate)
+
+    preview = subparsers.add_parser("preview", help="生成线框预览")
+    preview.add_argument("page")
+    preview.add_argument("--output")
+    preview.add_argument("--font")
+    preview.add_argument("--scale", type=float, default=1.0)
+    preview.add_argument("--json", action="store_true")
+    preview.set_defaults(func=command_preview)
+
+    compile_parser = subparsers.add_parser("compile", help="编译为 MOSS 布局 JSON")
+    compile_parser.add_argument("page")
+    compile_parser.add_argument("--output")
+    compile_parser.add_argument("--size-check")
+    compile_parser.add_argument("--json", action="store_true")
+    compile_parser.set_defaults(func=command_compile)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return int(args.func(args))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        if getattr(args, "json", False):
+            _json_print({"error": str(exc)})
+        else:
+            print(f"错误：{exc}", file=sys.stderr)
+        return 2
+
+
+__all__ = ["build_parser", "main"]

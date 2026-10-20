@@ -1,0 +1,37 @@
+[project]
+name = "soda-storyboard"
+version = "0.1.0"
+description = "结构化日漫分镜单与 MOSS 布局编译工具"
+requires-python = ">=3.12"
+dependencies = ["Pillow>=10.0"]
+
+[project.scripts]
+soda-storyboard = "soda_storyboard.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.9"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+exclude = [".uv-cache", ".venv", "docs/research"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["ANN", "D", "COM812", "ISC001", "PLR", "SLF001", "T201"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"src/soda_storyboard/*.py" = [
+  "C901", "CPY001", "EM101", "EM102", "FBT001", "PERF401", "PLW2901",
+  "RUF001", "RUF002", "RUF022", "RUF046", "SIM114", "TC001", "TRY003", "TRY004"
+]
+"tests/*.py" = ["CPY001", "INP001", "PT018", "TC003"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

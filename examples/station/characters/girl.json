@@ -1,0 +1,12 @@
+{
+  "format": "soda-storyboard-character-v1",
+  "id": "girl",
+  "display_name": "车站女孩",
+  "trigger_words": ["short dark hair", "school uniform", "soft expression"],
+  "appearance": {
+    "zh": "黑色短发，浅色校服，背着帆布包"
+  },
+  "clothing": ["浅色水手服", "深色裙子", "帆布包"],
+  "reference_images": [],
+  "approved_images": []
+}

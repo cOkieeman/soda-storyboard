@@ -1,0 +1,3 @@
+soda-storyboard 的版式模板命名和启发式结构参考了 manga-blueprint-studio 的公开 layout recipes、layout solver 与相关文档。
+
+这些参考内容以 MIT License 发布；本项目仅移植版式概念并重写为 Python 实现，保留 MIT 来源说明。未使用 kumiko 的 AGPL 代码。

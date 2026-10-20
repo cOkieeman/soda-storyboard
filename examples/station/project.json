@@ -1,0 +1,9 @@
+{
+  "format": "soda-storyboard-project-v1",
+  "name": "车站回头",
+  "default_style_prefix": "日式青春漫画，清透线稿，柔和午后光线",
+  "default_canvas_width": 1024,
+  "default_canvas_height": 1536,
+  "reading_direction": "rtl",
+  "default_dialogue_mode": "moss_text"
+}

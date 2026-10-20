@@ -1,0 +1,1428 @@
+{
+  "75": {
+    "inputs": {
+      "string": "worst quality, low quality, blurry, jpeg artifacts, watermark, signature, logo, username, bad anatomy, bad hands, extra fingers, missing fingers, deformed"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "负面提示词 · 只在 Turbo 关（CFG3）时生效"
+    }
+  },
+  "77": {
+    "inputs": {
+      "__lm_autocomplete_meta_text": {
+        "version": 1,
+        "textWidgetName": "text"
+      },
+      "text": "",
+      "loras": {
+        "__value__": []
+      },
+      "model": [
+        "135:610",
+        0
+      ],
+      "clip": [
+        "135:66",
+        0
+      ],
+      "lora_stack": [
+        "303",
+        0
+      ]
+    },
+    "class_type": "Lora Loader (LoraManager)",
+    "_meta": {
+      "title": "④ 统一加载 · MOSS 分类 LoRA 汇总（本框留空）"
+    }
+  },
+  "81": {
+    "inputs": {
+      "filename": "Soda-MOSS_%time",
+      "path": "MOSS",
+      "extension": "png",
+      "steps": [
+        "135:101",
+        0
+      ],
+      "cfg": [
+        "135:100",
+        0
+      ],
+      "modelname": [
+        "135:111",
+        1
+      ],
+      "sampler_name": [
+        "361:351",
+        0
+      ],
+      "scheduler_name": [
+        "361:352",
+        0
+      ],
+      "positive": [
+        "622",
+        0
+      ],
+      "negative": [
+        "75",
+        0
+      ],
+      "seed_value": [
+        "84",
+        0
+      ],
+      "width": [
+        "150",
+        0
+      ],
+      "height": [
+        "150",
+        1
+      ],
+      "lossless_webp": true,
+      "quality_jpeg_or_webp": 100,
+      "optimize_png": false,
+      "counter": 0,
+      "denoise": 1,
+      "clip_skip": 0,
+      "time_format": "%Y-%m-%d-%H%M%S",
+      "save_workflow_as_json": false,
+      "embed_workflow": true,
+      "additional_hashes": "",
+      "download_civitai_data": false,
+      "easy_remix": true,
+      "show_preview": true,
+      "custom": [
+        "389",
+        0
+      ],
+      "label": "",
+      "images": [
+        "152:602",
+        0
+      ]
+    },
+    "class_type": "Image Saver",
+    "_meta": {
+      "title": "保存 MOSS 图片与完整本地记录｜不联网"
+    }
+  },
+  "84": {
+    "inputs": {
+      "seed": -1
+    },
+    "class_type": "Seed (rgthree)",
+    "_meta": {
+      "title": "Seed (rgthree)"
+    }
+  },
+  "150": {
+    "inputs": {
+      "resolution_json": "{\"version\":1,\"width\":1024,\"height\":1536}"
+    },
+    "class_type": "ResolutionPreset",
+    "_meta": {
+      "title": "📐 分辨率预设"
+    }
+  },
+  "171": {
+    "inputs": {
+      "text": [
+        "361:170",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "Show Text 🐍"
+    }
+  },
+  "172": {
+    "inputs": {
+      "text": [
+        "622",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "实际正向原文 · 编码 / 预览 / 存图共用"
+    }
+  },
+  "180": {
+    "inputs": {
+      "rgthree_comparer": {
+        "images": []
+      },
+      "image_a": [
+        "152:602",
+        0
+      ],
+      "image_b": [
+        "148:139",
+        0
+      ]
+    },
+    "class_type": "Image Comparer (rgthree)",
+    "_meta": {
+      "title": "Image Comparer (rgthree)"
+    }
+  },
+  "182": {
+    "inputs": {
+      "string": ""
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "① 固定质量 / 主题前缀 · 两种画风来源共用"
+    }
+  },
+  "183": {
+    "inputs": {
+      "string": ""
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "④ 可选后缀 · 署名 / 附加文字"
+    }
+  },
+  "204": {
+    "inputs": {
+      "group_mode": true,
+      "default_active": true,
+      "allow_strength_adjustment": false,
+      "trigger_words": [
+        "77",
+        2
+      ]
+    },
+    "class_type": "TriggerWord Toggle (LoraManager)",
+    "_meta": {
+      "title": "MOSS LoRA 触发词 · 逐项启停"
+    }
+  },
+  "230": {
+    "inputs": {
+      "loaded_loras": [
+        "77",
+        3
+      ]
+    },
+    "class_type": "LoraTagsToHashMetadata",
+    "_meta": {
+      "title": "本地 LoRA 哈希｜只读本机文件，不联网"
+    }
+  },
+  "237": {
+    "inputs": {
+      "text": [
+        "81",
+        1
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "完整存图记录 · 保存后更新"
+    }
+  },
+  "300": {
+    "inputs": {
+      "prefix_prompt": [
+        "182",
+        0
+      ],
+      "selection_payload_json": "{\"version\":1,\"separator\":\", \",\"selections\":[]}"
+    },
+    "class_type": "PromptSelector",
+    "_meta": {
+      "title": "A · 手写 / 主题风格词库"
+    }
+  },
+  "301": {
+    "inputs": {
+      "__lm_autocomplete_meta_text": {
+        "version": 1,
+        "textWidgetName": "text"
+      },
+      "text": "",
+      "loras": {
+        "__value__": []
+      }
+    },
+    "class_type": "Lora Stacker (LoraManager)",
+    "_meta": {
+      "title": "① MOSS 角色 LoRA · Manager 发送到此"
+    }
+  },
+  "302": {
+    "inputs": {
+      "__lm_autocomplete_meta_text": {
+        "version": 1,
+        "textWidgetName": "text"
+      },
+      "text": "",
+      "loras": {
+        "__value__": []
+      },
+      "lora_stack": [
+        "301",
+        0
+      ]
+    },
+    "class_type": "Lora Stacker (LoraManager)",
+    "_meta": {
+      "title": "② MOSS 画风 LoRA · Manager 发送到此"
+    }
+  },
+  "303": {
+    "inputs": {
+      "__lm_autocomplete_meta_text": {
+        "version": 1,
+        "textWidgetName": "text"
+      },
+      "text": "",
+      "loras": {
+        "__value__": []
+      },
+      "lora_stack": [
+        "302",
+        0
+      ]
+    },
+    "class_type": "Lora Stacker (LoraManager)",
+    "_meta": {
+      "title": "③ MOSS 工具 / 姿态 LoRA · Manager 发送到此"
+    }
+  },
+  "372": {
+    "inputs": {
+      "any_02": [
+        "300",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "所选前缀 · 生成 / 预览 / 保存共用"
+    }
+  },
+  "389": {
+    "inputs": {
+      "f_string": "{a}; {b}; {c}",
+      "values.a": [
+        "361:236",
+        0
+      ],
+      "values.b": [
+        "152:387",
+        0
+      ],
+      "values.c": [
+        "700:735",
+        0
+      ]
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "附加 NVIDIA 后处理记录 · 自动"
+    }
+  },
+  "620": {
+    "inputs": {
+      "string": "{\n  \"summary\": {\n    \"meta\": [\n      \"illustration\"\n    ],\n    \"canvas\": \"single\",\n    \"caption\": \"整体画风、主体、场景、光线写在这里；需要的 LoRA 触发词也写进来。\"\n  },\n  \"items\": [\n    {\n      \"label\": \"object\",\n      \"caption\": \"主体 1 的外观与动作\",\n      \"bbox\": [\n        -500,\n        -300,\n        500,\n        300\n      ]\n    }\n  ],\n  \"bbox_coord_space\": \"abs_centralized\",\n  \"bbox_format\": \"yxyx\"\n}"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "JSON Layout 原文 · 整份粘贴到这里"
+    }
+  },
+  "622": {
+    "inputs": {
+      "any_02": [
+        "620",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "实际正向 · 普通合并 / JSON原文"
+    }
+  },
+  "623": {
+    "inputs": {
+      "any_02": [
+        "77",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "实际模型 · 普通处理 / 直接加载"
+    }
+  },
+  "624": {
+    "inputs": {
+      "any_02": [
+        "77",
+        1
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "实际编码器 · 普通处理 / 直接加载"
+    }
+  },
+  "625": {
+    "inputs": {
+      "any_02": [
+        "620",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "重绘正文 · 普通展开 / JSON原文"
+    }
+  },
+  "702": {
+    "inputs": {
+      "text": [
+        "700:735",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "二采实际参数 · 执行后更新"
+    }
+  },
+  "135:105": {
+    "inputs": {
+      "int": 50
+    },
+    "class_type": "Int Literal",
+    "_meta": {
+      "title": "质量档步数｜50"
+    }
+  },
+  "135:102": {
+    "inputs": {
+      "float": 3
+    },
+    "class_type": "Cfg Literal",
+    "_meta": {
+      "title": "质量档CFG｜3.0"
+    }
+  },
+  "135:66": {
+    "inputs": {
+      "clip_name": "qwen3.5_9b_w4a8_gptq.safetensors",
+      "type": "moss_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "135:65": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "135:101": {
+    "inputs": {
+      "any_01": [
+        "135:105",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "Step Switch"
+    }
+  },
+  "135:100": {
+    "inputs": {
+      "any_01": [
+        "135:102",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "CFG Switch"
+    }
+  },
+  "135:111": {
+    "inputs": {
+      "unet_name": "MOSS-Image\\MOSS-Image-SFT\\moss_image_sft_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNet loader with Name (Image Saver)",
+    "_meta": {
+      "title": "UNet loader with Name (Image Saver)"
+    }
+  },
+  "135:513": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "Sampler Selector",
+    "_meta": {
+      "title": "质量档采样器｜Euler"
+    }
+  },
+  "135:517": {
+    "inputs": {
+      "string": "Quality50 / Euler / CFG3 / SLG single22 start0 end1 / no acceleration LoRA"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "质量档记录｜SLG22全程"
+    }
+  },
+  "135:516": {
+    "inputs": {
+      "shift": 5,
+      "sampling": "flow",
+      "model": [
+        "135:111",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "MOSS 采样偏移｜两档共用 Shift 5"
+    }
+  },
+  "135:515": {
+    "inputs": {
+      "any_01": [
+        "135:513",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "Sampler Switch"
+    }
+  },
+  "135:519": {
+    "inputs": {
+      "any_01": [
+        "135:517",
+        0
+      ],
+      "any_02": "MOSS-Image\\tool\\加速蒸馏\\MOSS-Image-SFT-Turbo-MFD-v0.1.comfy.safetensors"
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "当前档位记录"
+    }
+  },
+  "135:610": {
+    "inputs": {
+      "double_layers": "",
+      "single_layers": "22",
+      "start_percent": 0,
+      "end_percent": 1,
+      "model": [
+        "135:516",
+        0
+      ]
+    },
+    "class_type": "SkipLayerGuidanceDiTSimple",
+    "_meta": {
+      "title": "普通质量档专用 SLG22｜Turbo开启后自动旁路"
+    }
+  },
+  "148:142": {
+    "inputs": {
+      "width": [
+        "150",
+        0
+      ],
+      "height": [
+        "150",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "空Latent"
+    }
+  },
+  "148:144": {
+    "inputs": {
+      "text": [
+        "622",
+        0
+      ],
+      "clip": [
+        "624",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "148:145": {
+    "inputs": {
+      "text": [
+        "75",
+        0
+      ],
+      "clip": [
+        "624",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "148:141": {
+    "inputs": {
+      "model": [
+        "623",
+        0
+      ],
+      "clip": [
+        "624",
+        0
+      ],
+      "vae": [
+        "135:65",
+        0
+      ],
+      "positive": [
+        "148:144",
+        0
+      ],
+      "negative": [
+        "148:145",
+        0
+      ]
+    },
+    "class_type": "ToBasicPipe",
+    "_meta": {
+      "title": "ToBasicPipe"
+    }
+  },
+  "148:139": {
+    "inputs": {
+      "samples": [
+        "148:146",
+        1
+      ],
+      "vae": [
+        "148:146",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "148:146": {
+    "inputs": {
+      "seed": [
+        "84",
+        0
+      ],
+      "steps": [
+        "135:101",
+        0
+      ],
+      "cfg": [
+        "135:100",
+        0
+      ],
+      "sampler_name": [
+        "135:515",
+        0
+      ],
+      "scheduler": "simple",
+      "denoise": 1,
+      "basic_pipe": [
+        "148:141",
+        0
+      ],
+      "latent_image": [
+        "148:142",
+        0
+      ]
+    },
+    "class_type": "ImpactKSamplerBasicPipe",
+    "_meta": {
+      "title": "MOSS 主采样｜参数由普通 / Turbo 组联动"
+    }
+  },
+  "700:730": {
+    "inputs": {
+      "any_02": [
+        "148:139",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "最终图 · 二采开/首采回退"
+    }
+  },
+  "700:731": {
+    "inputs": {
+      "any_02": [
+        "148:146",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "最终Pipe · 二采普通模型/首采回退"
+    }
+  },
+  "700:732": {
+    "inputs": {
+      "any_02": [
+        "135:101",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "后续精修步数"
+    }
+  },
+  "700:733": {
+    "inputs": {
+      "any_02": [
+        "135:100",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "后续精修CFG"
+    }
+  },
+  "700:734": {
+    "inputs": {
+      "any_02": [
+        "135:515",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "后续精修采样器"
+    }
+  },
+  "700:735": {
+    "inputs": {
+      "any_02": [
+        "700:736",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "二采记录 · 开/关"
+    }
+  },
+  "700:736": {
+    "inputs": {
+      "string": "MOSS second pass=off; first-pass image/pipe passed through"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "二采关闭记录"
+    }
+  },
+  "152:106": {
+    "inputs": {
+      "expression": "a",
+      "a": [
+        "700:732",
+        0
+      ]
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "MOSS 当前档步数｜直接跟随 25 / 6"
+    }
+  },
+  "152:225": {
+    "inputs": {
+      "any_01": [
+        "152:227",
+        0
+      ],
+      "any_02": [
+        "152:507",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "SeedVR2 成品 / F 选中图片"
+    }
+  },
+  "152:227": {
+    "inputs": {
+      "seed": 2026101921,
+      "resolution": [
+        "152:760",
+        0
+      ],
+      "max_resolution": 3840,
+      "batch_size": 1,
+      "uniform_batch_size": false,
+      "color_correction": "lab",
+      "temporal_overlap": 0,
+      "prepend_frames": 0,
+      "input_noise_scale": 0,
+      "latent_noise_scale": 0,
+      "offload_device": "none",
+      "enable_debug": false,
+      "image": [
+        "152:507",
+        0
+      ],
+      "dit": [
+        "152:228",
+        0
+      ],
+      "vae": [
+        "152:229",
+        0
+      ]
+    },
+    "class_type": "SeedVR2VideoUpscaler",
+    "_meta": {
+      "title": "SeedVR2 Video Upscaler (v2.5.24)"
+    }
+  },
+  "152:229": {
+    "inputs": {
+      "model": "ema_vae_fp16.safetensors",
+      "device": "cuda:0",
+      "encode_tiled": true,
+      "encode_tile_size": 1024,
+      "encode_tile_overlap": 128,
+      "decode_tiled": true,
+      "decode_tile_size": 1024,
+      "decode_tile_overlap": 128,
+      "tile_debug": "false",
+      "offload_device": "cpu",
+      "cache_model": true
+    },
+    "class_type": "SeedVR2LoadVAEModel",
+    "_meta": {
+      "title": "SeedVR2 (Down)Load VAE Model"
+    }
+  },
+  "152:228": {
+    "inputs": {
+      "model": "seedvr2_ema_7b_sharp_fp8_e4m3fn_mixed_block35_fp16.safetensors",
+      "device": "cuda:0",
+      "blocks_to_swap": 10,
+      "swap_io_components": false,
+      "offload_device": "cpu",
+      "cache_model": true,
+      "attention_mode": "sageattn_2"
+    },
+    "class_type": "SeedVR2LoadDiTModel",
+    "_meta": {
+      "title": "SeedVR2 (Down)Load DiT Model"
+    }
+  },
+  "152:129": {
+    "inputs": {
+      "ckpt_name": "SAM3\\SAM3\\sam3.1_multiplex_fp16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Checkpoint加载器（简易）"
+    }
+  },
+  "152:310": {
+    "inputs": {
+      "any_02": [
+        "700:730",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "脸修结果 / 原图"
+    }
+  },
+  "152:311": {
+    "inputs": {
+      "any_02": [
+        "700:731",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "脸修管线 / 原管线"
+    }
+  },
+  "152:312": {
+    "inputs": {
+      "any_02": [
+        "152:310",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "手修结果 / 上一步"
+    }
+  },
+  "152:322": {
+    "inputs": {
+      "string": "Face=off"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "关闭时记录"
+    }
+  },
+  "152:323": {
+    "inputs": {
+      "any_02": [
+        "152:322",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "阶段记录 / off"
+    }
+  },
+  "152:332": {
+    "inputs": {
+      "string": "Hand=off"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "关闭时记录"
+    }
+  },
+  "152:333": {
+    "inputs": {
+      "any_02": [
+        "152:332",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "阶段记录 / off"
+    }
+  },
+  "152:340": {
+    "inputs": {
+      "id": 227,
+      "widget_name": "seed,resolution,max_resolution,batch_size,color_correction",
+      "return_all": false,
+      "node_title": "",
+      "allowed_float_decimals": 3,
+      "any_input": [
+        "152:227",
+        0
+      ]
+    },
+    "class_type": "WidgetToString",
+    "_meta": {
+      "title": "实际节点参数 · 227"
+    }
+  },
+  "152:341": {
+    "inputs": {
+      "f_string": "SeedVR2=on; sizing=longest_edge_auto; target_long_edge={b}; target_short_edge={c}; {a}",
+      "values.a": [
+        "152:340",
+        0
+      ],
+      "values.b": 3840,
+      "values.c": [
+        "152:760",
+        0
+      ]
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "本阶段实际记录"
+    }
+  },
+  "152:342": {
+    "inputs": {
+      "string": "SeedVR2=off"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "关闭时记录"
+    }
+  },
+  "152:343": {
+    "inputs": {
+      "any_01": [
+        "152:341",
+        0
+      ],
+      "any_02": [
+        "152:342",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "阶段记录 / off"
+    }
+  },
+  "152:381": {
+    "inputs": {
+      "any_02": [
+        "152:225",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "D 关闭时直通原后处理结果"
+    }
+  },
+  "152:382": {
+    "inputs": {
+      "any_02": [
+        "152:381",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "E 关闭时直通 D 的选中结果"
+    }
+  },
+  "152:383": {
+    "inputs": {
+      "value": "RTX VSR Pro: disabled"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "D 已关闭 · 记录回退"
+    }
+  },
+  "152:384": {
+    "inputs": {
+      "value": "DLSS5 Neural Render: disabled"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "E 已关闭 · 记录回退"
+    }
+  },
+  "152:385": {
+    "inputs": {
+      "any_02": [
+        "152:383",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "D 记录与开关同步"
+    }
+  },
+  "152:386": {
+    "inputs": {
+      "any_02": [
+        "152:384",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "E 记录与开关同步"
+    }
+  },
+  "152:387": {
+    "inputs": {
+      "f_string": "{a}; {b}; {c}; {d}",
+      "values.a": [
+        "152:385",
+        0
+      ],
+      "values.b": [
+        "152:386",
+        0
+      ],
+      "values.c": [
+        "152:512",
+        0
+      ],
+      "values.d": [
+        "152:604",
+        0
+      ]
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "追加后处理记录 · ILL / NVIDIA / Bloom"
+    }
+  },
+  "152:507": {
+    "inputs": {
+      "any_02": [
+        "152:312",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "F 开=ILL 成品；关=原图片直通"
+    }
+  },
+  "152:511": {
+    "inputs": {
+      "string": "ILL: disabled"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "F 已关闭 · 记录回退"
+    }
+  },
+  "152:512": {
+    "inputs": {
+      "any_02": [
+        "152:511",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "F 记录与开关同步"
+    }
+  },
+  "152:602": {
+    "inputs": {
+      "any_02": [
+        "152:382",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "G 关闭时返回全部既有后处理结果"
+    }
+  },
+  "152:603": {
+    "inputs": {
+      "value": "Bloom: disabled"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "G · 关闭记录"
+    }
+  },
+  "152:604": {
+    "inputs": {
+      "any_02": [
+        "152:603",
+        0
+      ]
+    },
+    "class_type": "Any Switch (rgthree)",
+    "_meta": {
+      "title": "G · 记录跟随开关"
+    }
+  },
+  "152:760": {
+    "inputs": {
+      "expression": "max(16, ceil(b * min(a.width, a.height) / max(a.width, a.height) / 2) * 2)",
+      "a": [
+        "152:507",
+        0
+      ],
+      "b": 3840
+    },
+    "class_type": "MathExpression|pysssss",
+    "_meta": {
+      "title": "自动匹配实际输入比例 · 由目标长边计算 SeedVR2 短边"
+    }
+  },
+  "361:110": {
+    "inputs": {
+      "action": "append",
+      "tidy_tags": "no",
+      "text_a": "",
+      "text_b": [
+        "622",
+        0
+      ],
+      "text_c": ""
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "实际正向原文 · 不整理、不追加"
+    }
+  },
+  "361:234": {
+    "inputs": {
+      "f_string": "Final output pixels={a}x{b}",
+      "values.a": [
+        "361:231",
+        0
+      ],
+      "values.b": [
+        "361:231",
+        1
+      ]
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "最终成品尺寸 · 一节点格式化"
+    }
+  },
+  "361:236": {
+    "inputs": {
+      "action": "append",
+      "tidy_tags": "yes",
+      "text_a": "",
+      "text_b": [
+        "361:235",
+        0
+      ],
+      "text_c": [
+        "230",
+        3
+      ]
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "LoRA hashes"
+    }
+  },
+  "361:231": {
+    "inputs": {
+      "image": [
+        "152:602",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "实际像素宽高"
+    }
+  },
+  "361:167": {
+    "inputs": {
+      "Number": "1.1"
+    },
+    "class_type": "Float",
+    "_meta": {
+      "title": "Float"
+    }
+  },
+  "361:165": {
+    "inputs": {
+      "input1": [
+        "135:100",
+        0
+      ],
+      "input2": [
+        "361:167",
+        0
+      ]
+    },
+    "class_type": "LogicGateCompare",
+    "_meta": {
+      "title": "ABiggerThanB"
+    }
+  },
+  "361:164": {
+    "inputs": {
+      "on_true": "没有加速",
+      "on_false": "有加速",
+      "boolean": [
+        "361:165",
+        0
+      ]
+    },
+    "class_type": "Switch string [Crystools]",
+    "_meta": {
+      "title": "🪛 Switch string"
+    }
+  },
+  "361:160": {
+    "inputs": {
+      "action": "append",
+      "tidy_tags": "no",
+      "text_a": "模型名字1：",
+      "text_b": [
+        "135:111",
+        1
+      ],
+      "text_c": "\n加速lora:"
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "String Function 🐍"
+    }
+  },
+  "361:168": {
+    "inputs": {
+      "action": "append",
+      "tidy_tags": "no",
+      "text_a": [
+        "361:163",
+        0
+      ],
+      "text_b": [
+        "622",
+        0
+      ],
+      "text_c": "\n负面提示词：\n"
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "String Function 🐍"
+    }
+  },
+  "361:163": {
+    "inputs": {
+      "action": "append",
+      "tidy_tags": "no",
+      "text_a": [
+        "361:160",
+        0
+      ],
+      "text_b": [
+        "361:164",
+        0
+      ],
+      "text_c": "\n实际正向提示词：\n"
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "String Function 🐍"
+    }
+  },
+  "361:170": {
+    "inputs": {
+      "action": "append",
+      "tidy_tags": "no",
+      "text_a": [
+        "361:169",
+        0
+      ],
+      "text_b": [
+        "361:178",
+        0
+      ],
+      "text_c": ""
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "String Function 🐍"
+    }
+  },
+  "361:178": {
+    "inputs": {
+      "text": [
+        "77",
+        3
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "Show Text 🐍"
+    }
+  },
+  "361:169": {
+    "inputs": {
+      "action": "append",
+      "tidy_tags": "no",
+      "text_a": [
+        "361:168",
+        0
+      ],
+      "text_b": [
+        "75",
+        0
+      ],
+      "text_c": "\n\n\nLora："
+    },
+    "class_type": "StringFunction|pysssss",
+    "_meta": {
+      "title": "String Function 🐍"
+    }
+  },
+  "361:351": {
+    "inputs": {
+      "f_string": "{a}",
+      "values.a": [
+        "135:515",
+        0
+      ]
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "当前采样器｜实时档位值"
+    }
+  },
+  "361:352": {
+    "inputs": {
+      "string": "simple"
+    },
+    "class_type": "String Literal",
+    "_meta": {
+      "title": "当前调度器｜simple"
+    }
+  },
+  "361:235": {
+    "inputs": {
+      "f_string": "Base sampling size recorded in Size; {a}; {b}; {c}; {d}; preset={e}; separate stages, not a single sampler",
+      "values.a": [
+        "152:323",
+        0
+      ],
+      "values.b": [
+        "152:333",
+        0
+      ],
+      "values.c": [
+        "152:343",
+        0
+      ],
+      "values.d": [
+        "361:234",
+        0
+      ],
+      "values.e": [
+        "135:519",
+        0
+      ]
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "后处理真实记录 · 非单阶段参数"
+    }
+  }
+}

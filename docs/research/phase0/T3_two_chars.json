@@ -1,0 +1,45 @@
+{
+  "summary": {
+    "meta": [
+      "comic",
+      "manga",
+      "multi_panel"
+    ],
+    "canvas": "multi_panel",
+    "caption": "A black-and-white Japanese manga page, read right to left, panels separated by clean white gutters, crisp ink line art, screentone shading. Three panels: Sylvia and 鲸鱼娘 chatting at a cafe table."
+  },
+  "items": [
+    {
+      "label": "object",
+      "caption": "Panel 1, medium shot: Sylvia on the right and 鲸鱼娘 on the left sitting across a cafe table, talking.",
+      "bbox": [
+        -752,
+        -496,
+        -16,
+        496
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 2, close-up of Sylvia smiling.",
+      "bbox": [
+        0,
+        8,
+        752,
+        496
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 3, close-up of 鲸鱼娘 laughing.",
+      "bbox": [
+        0,
+        -496,
+        752,
+        -8
+      ]
+    }
+  ],
+  "bbox_coord_space": "abs_centralized",
+  "bbox_format": "yxyx"
+}

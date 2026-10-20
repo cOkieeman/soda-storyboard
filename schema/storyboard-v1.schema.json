@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soda-storyboard.local/schema/storyboard-v1.schema.json",
+  "title": "soda-storyboard v1",
+  "oneOf": [
+    {"$ref": "#/$defs/project"},
+    {"$ref": "#/$defs/page"},
+    {"$ref": "#/$defs/character"}
+  ],
+  "$defs": {
+    "rect": {
+      "type": "object",
+      "required": ["type", "x", "y", "w", "h"],
+      "properties": {
+        "type": {"const": "rect"},
+        "x": {"type": "number"}, "y": {"type": "number"},
+        "w": {"type": "number", "exclusiveMinimum": 0},
+        "h": {"type": "number", "exclusiveMinimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "quad": {
+      "type": "object",
+      "required": ["type", "points"],
+      "properties": {
+        "type": {"const": "quad"},
+        "points": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "minItems": 2, "maxItems": 2}}
+      },
+      "additionalProperties": false
+    },
+    "dialogue": {
+      "type": "object",
+      "required": ["speaker_id", "text", "bubble"],
+      "properties": {
+        "speaker_id": {"type": "string"},
+        "text": {"type": "string"},
+        "bubble": {"enum": ["speech", "shout", "thought", "narration"]},
+        "position": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "panel": {
+      "type": "object",
+      "required": ["id", "order", "shape"],
+      "properties": {
+        "id": {"type": "string"}, "order": {"type": "integer", "minimum": 1},
+        "shape": {"oneOf": [{"$ref": "#/$defs/rect"}, {"$ref": "#/$defs/quad"}]},
+        "shot": {"enum": ["extreme_long", "long", "full", "medium", "close_up", "extreme_close_up"]},
+        "angle": {"enum": ["eye", "high", "low", "bird", "worm", "dutch"]},
+        "character_ids": {"type": "array", "items": {"type": "string"}},
+        "description": {"type": "string"},
+        "dialogue": {"type": "array", "items": {"$ref": "#/$defs/dialogue"}},
+        "sfx": {"type": "array", "items": {"type": "string"}},
+        "importance": {"type": "integer", "minimum": 1, "maximum": 3},
+        "status": {"enum": ["draft", "approved", "needs_redraw"]}
+      },
+      "additionalProperties": true
+    },
+    "page": {
+      "type": "object",
+      "required": ["format", "id", "canvas_width", "canvas_height", "panels"],
+      "properties": {
+        "format": {"const": "soda-storyboard-page-v1"}, "id": {"type": "string"},
+        "canvas_width": {"type": "integer", "multipleOf": 16, "minimum": 16},
+        "canvas_height": {"type": "integer", "multipleOf": 16, "minimum": 16},
+        "reading_direction": {"enum": ["rtl", "ltr"]},
+        "style_prefix": {"type": "string"}, "description": {"type": "string"},
+        "panel_gap": {"type": "number", "minimum": 0},
+        "dialogue_mode": {"enum": ["moss_text", "lettering"]},
+        "panels": {"type": "array", "items": {"$ref": "#/$defs/panel"}}
+      },
+      "additionalProperties": true
+    },
+    "project": {
+      "type": "object",
+      "required": ["format", "name"],
+      "properties": {
+        "format": {"const": "soda-storyboard-project-v1"}, "name": {"type": "string"},
+        "default_style_prefix": {"type": "string"},
+        "default_canvas_width": {"type": "integer", "multipleOf": 16, "minimum": 16},
+        "default_canvas_height": {"type": "integer", "multipleOf": 16, "minimum": 16},
+        "reading_direction": {"enum": ["rtl", "ltr"]},
+        "default_dialogue_mode": {"enum": ["moss_text", "lettering"]}
+      },
+      "additionalProperties": true
+    },
+    "character": {
+      "type": "object",
+      "required": ["format", "id", "display_name"],
+      "properties": {
+        "format": {"const": "soda-storyboard-character-v1"}, "id": {"type": "string"},
+        "display_name": {"type": "string"}, "trigger_words": {"type": "array", "items": {"type": "string"}},
+        "lora": {"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}, "strength": {"type": "number"}}},
+        "appearance": {"type": "object", "additionalProperties": {"type": "string"}},
+        "clothing": {"type": "array", "items": {"type": "string"}},
+        "reference_images": {"type": "array", "items": {"type": "string"}},
+        "approved_images": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    }
+  }
+}

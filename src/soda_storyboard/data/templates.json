@@ -1,0 +1,8 @@
+{
+  "source": "manga-blueprint-studio layout recipes, adapted under MIT terms",
+  "templates": [
+    {"id": "hero-top", "name": "大格开场", "tags": ["opening", "hero"]},
+    {"id": "hero-side", "name": "一大多小", "tags": ["hero", "rhythm"]},
+    {"id": "strip", "name": "横长条分段", "tags": ["strip", "pace"]}
+  ]
+}

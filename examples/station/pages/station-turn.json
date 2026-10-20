@@ -1,0 +1,65 @@
+{
+  "format": "soda-storyboard-page-v1",
+  "id": "station-turn",
+  "canvas_width": 1024,
+  "canvas_height": 1536,
+  "reading_direction": "rtl",
+  "style_prefix": "日式青春漫画，清透线稿，柔和午后光线",
+  "description": "女孩在车站听见熟悉的声音，回头欲言又止。",
+  "panel_gap": 24,
+  "dialogue_mode": "moss_text",
+  "panels": [
+    {
+      "id": "p1",
+      "order": 1,
+      "shape": {"type": "rect", "x": 536, "y": 48, "w": 440, "h": 500},
+      "shot": "medium",
+      "angle": "eye",
+      "character_ids": ["girl"],
+      "description": "站台上，女孩听见身后的呼唤，肩膀微微停住。",
+      "dialogue": [],
+      "sfx": ["脚步声"],
+      "importance": 2,
+      "status": "approved"
+    },
+    {
+      "id": "p2",
+      "order": 2,
+      "shape": {"type": "rect", "x": 48, "y": 48, "w": 440, "h": 500},
+      "shot": "close_up",
+      "angle": "eye",
+      "character_ids": ["girl"],
+      "description": "女孩回头，眼神惊讶又克制，发梢被风吹起。",
+      "dialogue": [{"speaker_id": "girl", "text": "……是你？", "bubble": "speech"}],
+      "sfx": [],
+      "importance": 3,
+      "status": "approved"
+    },
+    {
+      "id": "p3",
+      "order": 3,
+      "shape": {"type": "rect", "x": 536, "y": 572, "w": 440, "h": 916},
+      "shot": "full",
+      "angle": "low",
+      "character_ids": ["girl"],
+      "description": "列车驶过站台，女孩站在光影交界处，手指抓紧包带。",
+      "dialogue": [{"speaker_id": "girl", "text": "我正要走。", "bubble": "speech"}],
+      "sfx": ["轰——"],
+      "importance": 2,
+      "status": "approved"
+    },
+    {
+      "id": "p4",
+      "order": 4,
+      "shape": {"type": "rect", "x": 48, "y": 572, "w": 440, "h": 916},
+      "shot": "long",
+      "angle": "high",
+      "character_ids": ["girl"],
+      "description": "列车门即将关闭，女孩回头张口，却只留下一个迟疑的微笑。",
+      "dialogue": [],
+      "sfx": ["嘟——"],
+      "importance": 1,
+      "status": "approved"
+    }
+  ]
+}
