@@ -3,6 +3,7 @@ name = "soda-storyboard"
 version = "0.1.0"
 description = "结构化日漫分镜单与 MOSS 布局编译工具"
 requires-python = ">=3.12"
+license-files = ["NOTICE"]
 dependencies = ["Pillow>=10.0"]
 
 [project.scripts]
@@ -22,15 +23,31 @@ exclude = [".uv-cache", ".venv", "docs/research"]
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["ANN", "D", "COM812", "ISC001", "PLR", "SLF001", "T201"]
+ignore = ["COM812", "CPY001", "D", "ISC001"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
-"src/soda_storyboard/*.py" = [
-  "C901", "CPY001", "EM101", "EM102", "FBT001", "PERF401", "PLW2901",
-  "RUF001", "RUF002", "RUF022", "RUF046", "SIM114", "TC001", "TRY003", "TRY004"
-]
-"tests/*.py" = ["CPY001", "INP001", "PT018", "TC003"]
+# JSON boundaries intentionally accept heterogeneous values; CLI prints UTF-8
+# Chinese diagnostics, and argparse's flat declaration stays in one function.
+"src/soda_storyboard/cli.py" = ["ANN401", "T201", "FBT001", "RUF001", "EM101", "TRY003", "PLR0915"]
+# Summary extraction recognizes both Chinese and ASCII punctuation.
+"src/soda_storyboard/compiler.py" = ["RUF001"]
+# Geometry accepts legacy objects as well as JSON; 2/4 denote point dimensions.
+"src/soda_storyboard/geometry.py" = ["ANN401", "PLR2004"]
+# Keep the public ValueError contract and concise file-specific JSON diagnostics.
+"src/soda_storyboard/io.py" = ["ANN401", "TRY004", "TRY003", "EM102", "RUF001"]
+# Model parsing accepts untyped JSON and reports inline field names in errors.
+"src/soda_storyboard/models.py" = ["ANN401", "EM101", "EM102", "TRY003", "PLR2004"]
+# Rendering is a single drawing pass with Chinese diagnostics and four-point quads.
+"src/soda_storyboard/preview.py" = ["C901", "PLR0915", "EM101", "EM102", "TRY003", "RUF001", "PLR2004"]
+# Direct recipe dispatch preserves upstream ratios/counts; keyword-rich public API.
+"src/soda_storyboard/templates.py" = ["C901", "PLR0912", "PLR0913", "PLR0917", "PLR2004", "EM101", "EM102", "TRY003", "RUF001"]
+# Existing compatibility validator handles both object and mapping models.
+"src/soda_storyboard/validation.py" = ["ANN401", "PLR2004", "PLR0911", "PLW2901", "PLR0913", "C901", "PLR0912", "PLR0915", "RUF001"]
+# Assertions and numeric expectations are appropriate in tests.
+"tests/*.py" = ["S101", "INP001", "PLR2004", "TC003"]
+# Subprocess argv is a fixed Python executable plus locally parameterized flags;
+# fullwidth punctuation here tests Chinese dialogue round trips.
+"tests/test_p1b.py" = ["S603", "RUF001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

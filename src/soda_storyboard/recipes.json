@@ -1,0 +1,344 @@
+[
+  {
+    "id": "balanced-grid",
+    "ja": "均整グリッド",
+    "en": "Balanced grid",
+    "family": "standard",
+    "minPanels": 1,
+    "maxPanels": 6,
+    "tags": [
+      "standard",
+      "conversation"
+    ],
+    "helpJa": "最も素直な段組み。会話・日常・説明の基準点。",
+    "helpEn": "A neutral baseline for dialogue, daily scenes, and exposition.",
+    "zh": "均衡网格",
+    "helpZh": "适合对话、日常与说明的均衡分段。",
+    "supported_panel_counts": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "vertical-rhythm",
+    "ja": "縦リズム",
+    "en": "Vertical rhythm",
+    "family": "standard",
+    "minPanels": 2,
+    "maxPanels": 6,
+    "tags": [
+      "conversation",
+      "quiet"
+    ],
+    "helpJa": "全幅コマを縦に積み、時間を順番に読ませる。",
+    "helpEn": "Full-width bands for linear time and quiet progression.",
+    "zh": "全宽横条纵向堆叠",
+    "helpZh": "全宽横条依次堆叠；四格时为四个等高横条。",
+    "supported_panel_counts": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "horizontal-rhythm",
+    "ja": "横連続",
+    "en": "Horizontal rhythm",
+    "family": "standard",
+    "minPanels": 2,
+    "maxPanels": 4,
+    "tags": [
+      "sequence",
+      "comparison"
+    ],
+    "helpJa": "横方向に連続する比較・動作向け。",
+    "helpEn": "Side-by-side beats for comparison or sequential motion.",
+    "zh": "横向连续",
+    "helpZh": "同段并排，用于比较或连续动作。",
+    "supported_panel_counts": [
+      2,
+      3,
+      4
+    ]
+  },
+  {
+    "id": "hero-bottom",
+    "ja": "下段大ゴマ",
+    "en": "Hero bottom",
+    "family": "payoff",
+    "minPanels": 2,
+    "maxPanels": 6,
+    "tags": [
+      "climax",
+      "reveal",
+      "payoff"
+    ],
+    "heroPosition": "last",
+    "helpJa": "上で溜め、最後の下段を大きく見せる。",
+    "helpEn": "Build above and release into a large final panel.",
+    "zh": "下段大格收尾",
+    "helpZh": "上方铺陈，下段大格完成揭示或高潮。",
+    "supported_panel_counts": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "hero-top",
+    "ja": "上段大ゴマ",
+    "en": "Hero top",
+    "family": "entry",
+    "minPanels": 2,
+    "maxPanels": 6,
+    "tags": [
+      "entrance",
+      "establishing",
+      "impact"
+    ],
+    "heroPosition": "first",
+    "helpJa": "最初の大ゴマで場所・登場・衝撃を固定する。",
+    "helpEn": "Open with a large establishing or impact panel.",
+    "zh": "上段大格开场",
+    "helpZh": "上段大格先交代场景、登场或冲击。",
+    "supported_panel_counts": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "hero-right",
+    "ja": "右大ゴマ＋左積み",
+    "en": "Hero right + stack",
+    "family": "entry",
+    "minPanels": 2,
+    "maxPanels": 5,
+    "tags": [
+      "entrance",
+      "portrait",
+      "dialogue"
+    ],
+    "heroPosition": "first",
+    "helpJa": "右の大きな導入から左側の反応へ流す。",
+    "helpEn": "A tall opening panel on the right with supporting beats stacked left.",
+    "zh": "阅读起点大格加侧边堆叠",
+    "helpZh": "大格位于阅读起点一侧，随后阅读另一侧的反应。",
+    "supported_panel_counts": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "dialogue-stagger",
+    "ja": "会話段違い",
+    "en": "Dialogue stagger",
+    "family": "conversation",
+    "minPanels": 3,
+    "maxPanels": 6,
+    "tags": [
+      "conversation",
+      "reaction"
+    ],
+    "helpJa": "左右幅を交互に変え、切り返しと反応に大小差を付ける。",
+    "helpEn": "Alternating widths create conversational shot/reaction contrast.",
+    "zh": "对话错位",
+    "helpZh": "交替左右宽度，突出对话与反应。",
+    "supported_panel_counts": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "action-step",
+    "ja": "アクション段階",
+    "en": "Action step",
+    "family": "action",
+    "minPanels": 3,
+    "maxPanels": 6,
+    "tags": [
+      "action",
+      "acceleration",
+      "payoff"
+    ],
+    "heroPosition": "last",
+    "helpJa": "小→中→大へ面積を段階的に増やして加速する。",
+    "helpEn": "Escalates panel area toward the final action beat.",
+    "zh": "动作递进",
+    "helpZh": "由小到大递增面积，形成动作加速。",
+    "supported_panel_counts": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "detail-payoff",
+    "ja": "ディテール→見せ場",
+    "en": "Detail to payoff",
+    "family": "payoff",
+    "minPanels": 3,
+    "maxPanels": 6,
+    "tags": [
+      "detail",
+      "reveal",
+      "climax"
+    ],
+    "heroPosition": "last",
+    "helpJa": "細部を刻んでから最後の見せ場へ解放する。",
+    "helpEn": "Stacks detail beats before a large payoff.",
+    "zh": "细节到高潮",
+    "helpZh": "先排列细节，再用末格释放高潮。",
+    "supported_panel_counts": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "quiet-build",
+    "ja": "静かな積み上げ",
+    "en": "Quiet build",
+    "family": "quiet",
+    "minPanels": 3,
+    "maxPanels": 6,
+    "tags": [
+      "quiet",
+      "emotion",
+      "hold"
+    ],
+    "heroPosition": "last",
+    "helpJa": "小さな差を積み、最後だけ少し広くして余韻を作る。",
+    "helpEn": "Subtle progression with a gently expanded final beat.",
+    "zh": "安静铺陈",
+    "helpZh": "轻微变化后，以稍大的末格留下余韵。",
+    "supported_panel_counts": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "wide-middle",
+    "ja": "中央ワイド",
+    "en": "Wide middle",
+    "family": "transition",
+    "minPanels": 3,
+    "maxPanels": 5,
+    "tags": [
+      "transition",
+      "establishing",
+      "action"
+    ],
+    "helpJa": "中央の横長コマを橋にして前後の意味をつなぐ。",
+    "helpEn": "A wide middle beat bridges setup and reaction.",
+    "zh": "中央宽格",
+    "helpZh": "中央横向宽格连接前后的叙事。",
+    "supported_panel_counts": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "ladder",
+    "ja": "階段リズム",
+    "en": "Ladder rhythm",
+    "family": "action",
+    "minPanels": 4,
+    "maxPanels": 6,
+    "tags": [
+      "action",
+      "tempo",
+      "asymmetry"
+    ],
+    "helpJa": "段ごとに左右比率を反転させ、視線を階段状に送る。",
+    "helpEn": "Alternating row splits create a stepped reading rhythm.",
+    "zh": "阶梯节奏",
+    "helpZh": "逐段反转左右比例，形成错位的阶梯视线。",
+    "supported_panel_counts": [
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "three-band",
+    "ja": "三段構成",
+    "en": "Three-band composition",
+    "family": "standard",
+    "minPanels": 3,
+    "maxPanels": 6,
+    "tags": [
+      "story",
+      "balanced",
+      "rhythm"
+    ],
+    "helpJa": "上・中・下の三段に役割を分ける汎用構成。",
+    "helpEn": "A flexible three-band page for setup, development, and landing.",
+    "zh": "三段构成",
+    "helpZh": "上中下三段分别承担铺垫、发展和落点。",
+    "supported_panel_counts": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  {
+    "id": "cinematic-stack",
+    "ja": "シネマ縦積み",
+    "en": "Cinematic stack",
+    "family": "cinematic",
+    "minPanels": 2,
+    "maxPanels": 6,
+    "tags": [
+      "cinematic",
+      "emotion",
+      "vertical"
+    ],
+    "helpJa": "高さに強弱を付けた全幅コマで映画的に呼吸させる。",
+    "helpEn": "Full-width bands with varied heights for cinematic pacing.",
+    "zh": "电影横条堆叠",
+    "helpZh": "全宽横条的高度交替变化，形成电影节奏。",
+    "supported_panel_counts": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  }
+]

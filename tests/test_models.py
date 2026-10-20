@@ -31,7 +31,8 @@ def test_character_aliases_and_lora() -> None:
     )
     assert character.display_name == "A"
     assert character.trigger_words == ["hero"]
-    assert character.lora is not None and character.lora.strength == 0.8
+    assert character.lora is not None
+    assert character.lora.strength == 0.8
 
 
 def test_panel_bbox_is_xywh() -> None:

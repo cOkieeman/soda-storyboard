@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
 from .compiler import compile_page
-from .io import load_characters, load_page, load_project, write_json
+from .io import load_characters, load_page, load_project, read_json, write_json
 from .models import Character, Page, Panel, Project
 from .preview import render_preview
 from .templates import builtin_templates, suggest_layouts
@@ -46,6 +47,8 @@ def _default_page(project: Project, page_id: str, panels: int) -> Page:
         reading_direction=project.reading_direction,
         style_prefix=project.default_style_prefix,
         dialogue_mode=project.default_dialogue_mode,
+        text_direction=project.text_direction,
+        color_mode=project.color_mode,
         panels=[
             Panel(
                 id=f"panel-{index}",
@@ -93,6 +96,8 @@ def command_page_new(args: argparse.Namespace) -> int:
         style_prefix=args.style if args.style is not None else project.default_style_prefix,
         description=args.description,
         dialogue_mode=args.dialogue_mode or project.default_dialogue_mode,
+        text_direction=args.text_direction or project.text_direction,
+        color_mode=args.color_mode or project.color_mode,
     )
     target = Path(args.output) if args.output else root / "pages" / f"{args.id}.json"
     write_json(target, page)
@@ -125,32 +130,59 @@ def command_layout_suggest(args: argparse.Namespace) -> int:
     if args.panels is None and not args.page:
         raise ValueError("layout suggest 需要 --panels 或 --page")
     page = load_page(args.page) if args.page else None
+    if args.write_page and page is None:
+        raise ValueError("--write-page 需要同时提供 --page")
+    if page is not None and args.panels is not None and args.panels != len(page.panels):
+        raise ValueError("--panels 与页文件格数不一致")
+    panel_count = args.panels if args.panels is not None else len(page.panels)
     width = page.canvas_width if page else args.width
     height = page.canvas_height if page else args.height
     importance = (
         _parse_importance(args.importance)
         if args.importance
-        else page and [panel.importance for panel in page.panels]
+        else [panel.importance for panel in sorted(page.panels, key=lambda panel: panel.order)]
+        if page
+        else None
     )
     results = suggest_layouts(
-        args.panels or len(page.panels),
+        panel_count,
         width=width,
         height=height,
         importance=importance,
         user_templates=args.templates,
         candidates=args.candidates,
-        gap=args.gap,
+        gap=args.gap if args.gap is not None else page.panel_gap if page else 24,
+        reading_direction=args.direction or (page.reading_direction if page else "rtl"),
+        pick=args.pick,
     )
-    if args.page and args.write_page:
-        target_page = page
-        if target_page is None:
-            raise ValueError("--write-page 需要同时提供 --page")
+    if args.preview_dir:
+        for index, result in enumerate(results, 1):
+            preview_page = Page(
+                canvas_width=width,
+                canvas_height=height,
+                panels=[
+                    Panel(
+                        id=f"panel-{p['order']}",
+                        order=p["order"],
+                        shape={k: v for k, v in p.items() if k != "order"},
+                    )
+                    for p in result["panels"]
+                ],
+            )
+            safe_id = re.sub(r"[^\w.-]", "_", result["template_id"])
+            target = Path(args.preview_dir) / f"{index:02d}-{safe_id}.png"
+            result["preview"] = str(render_preview(preview_page, target))
+    if args.page:
+        # Write only geometry in the original JSON, including legacy and unknown fields.
+        payload = read_json(args.page)
         chosen = results[0]["panels"]
-        for panel, shape in zip(target_page.panels, chosen, strict=True):
-            panel.shape = shape
-        write_json(args.write_page, target_page)
+        for panel, shape in zip(
+            sorted(payload["panels"], key=lambda panel: panel["order"]), chosen, strict=True
+        ):
+            panel["shape"] = {key: value for key, value in shape.items() if key != "order"}
+        write_json(args.write_page or args.page, payload)
     if args.output:
-        write_json(args.output, {"panel_count": args.panels or len(page.panels), "candidates": results})
+        write_json(args.output, {"panel_count": panel_count, "candidates": results})
     _emit(results, args.json)
     return 0
 
@@ -199,8 +231,14 @@ def _parse_importance(value: str) -> list[int]:
 
 def command_compile(args: argparse.Namespace) -> int:
     path = Path(args.page)
-    page = load_page(path)
-    compiled = compile_page(page, _characters_near(path), size_check=_parse_size(args.size_check))
+    payload = read_json(path)
+    project = _project_for(path)
+    payload.setdefault("text_direction", project.text_direction)
+    payload.setdefault("color_mode", project.color_mode)
+    page = Page.from_dict(payload)
+    compiled = compile_page(
+        page, _characters_near(path), size_check=_parse_size(args.size_check), with_ids=args.with_ids
+    )
     if args.output:
         write_json(args.output, compiled)
     _emit(compiled, args.json)
@@ -232,6 +270,8 @@ def build_parser() -> argparse.ArgumentParser:
     page_new.add_argument("--style")
     page_new.add_argument("--description", default="")
     page_new.add_argument("--dialogue-mode", choices=("moss_text", "lettering"))
+    page_new.add_argument("--text-direction", choices=("vertical", "horizontal"))
+    page_new.add_argument("--color-mode", choices=("monochrome", "color"))
     page_new.add_argument("--json", action="store_true")
     page_new.set_defaults(func=command_page_new)
 
@@ -264,8 +304,11 @@ def build_parser() -> argparse.ArgumentParser:
     suggest.add_argument("--height", type=int, default=1536)
     suggest.add_argument("--templates")
     suggest.add_argument("--importance", help="逗号分隔的每格重要度，例如 3,2,1,1,1")
-    suggest.add_argument("--candidates", type=int, default=3)
-    suggest.add_argument("--gap", type=int, default=24)
+    suggest.add_argument("--candidates", type=int, default=4)
+    suggest.add_argument("--gap", type=int)
+    suggest.add_argument("--direction", choices=("rtl", "ltr"))
+    suggest.add_argument("--pick", help="选择 template_id；--page 会写回所选候选，默认第一项")
+    suggest.add_argument("--preview-dir", help="为每个候选生成线框 PNG")
     suggest.add_argument("--output")
     suggest.add_argument("--write-page")
     suggest.add_argument("--json", action="store_true")
@@ -289,12 +332,16 @@ def build_parser() -> argparse.ArgumentParser:
     compile_parser.add_argument("page")
     compile_parser.add_argument("--output")
     compile_parser.add_argument("--size-check")
+    compile_parser.add_argument("--with-ids", action="store_true", help="输出 panel_id、speaker_id 辅助字段")
     compile_parser.add_argument("--json", action="store_true")
     compile_parser.set_defaults(func=command_compile)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

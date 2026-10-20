@@ -1,0 +1,989 @@
+{
+  "panel_count": 5,
+  "candidates": [
+    {
+      "id": "balanced-grid",
+      "ja": "均整グリッド",
+      "en": "Balanced grid",
+      "family": "standard",
+      "minPanels": 1,
+      "maxPanels": 6,
+      "tags": [
+        "standard",
+        "conversation"
+      ],
+      "helpJa": "最も素直な段組み。会話・日常・説明の基準点。",
+      "helpEn": "A neutral baseline for dialogue, daily scenes, and exposition.",
+      "zh": "均衡网格",
+      "helpZh": "适合对话、日常与说明的均衡分段。",
+      "supported_panel_counts": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "balanced-grid",
+      "name": "均衡网格",
+      "name_zh": "均衡网格",
+      "name_ja": "均整グリッド",
+      "description": "适合对话、日常与说明的均衡分段。",
+      "hero_position": null,
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 465.3333333333333,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 465.3333333333333,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 535.3333333333333,
+          "w": 454.0,
+          "h": 465.3333333333333,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 535.3333333333333,
+          "w": 454.0,
+          "h": 465.3333333333333,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1024.6666666666665,
+          "w": 932.0,
+          "h": 465.3333333333333,
+          "order": 5
+        }
+      ],
+      "score": 1278736.0,
+      "preview": "examples\\station\\layout-previews\\01-balanced-grid.png"
+    },
+    {
+      "id": "vertical-rhythm",
+      "ja": "縦リズム",
+      "en": "Vertical rhythm",
+      "family": "standard",
+      "minPanels": 2,
+      "maxPanels": 6,
+      "tags": [
+        "conversation",
+        "quiet"
+      ],
+      "helpJa": "全幅コマを縦に積み、時間を順番に読ませる。",
+      "helpEn": "Full-width bands for linear time and quiet progression.",
+      "zh": "全宽横条纵向堆叠",
+      "helpZh": "全宽横条依次堆叠；四格时为四个等高横条。",
+      "supported_panel_counts": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "vertical-rhythm",
+      "name": "全宽横条纵向堆叠",
+      "name_zh": "全宽横条纵向堆叠",
+      "name_ja": "縦リズム",
+      "description": "全宽横条依次堆叠；四格时为四个等高横条。",
+      "hero_position": null,
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 932.0,
+          "h": 269.6,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 339.6,
+          "w": 932.0,
+          "h": 269.6,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 633.2,
+          "w": 932.0,
+          "h": 269.6,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 926.8000000000001,
+          "w": 932.0,
+          "h": 269.6,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1220.4,
+          "w": 932.0,
+          "h": 269.6,
+          "order": 5
+        }
+      ],
+      "score": 1256336.0,
+      "preview": "examples\\station\\layout-previews\\02-vertical-rhythm.png"
+    },
+    {
+      "id": "hero-bottom",
+      "ja": "下段大ゴマ",
+      "en": "Hero bottom",
+      "family": "payoff",
+      "minPanels": 2,
+      "maxPanels": 6,
+      "tags": [
+        "climax",
+        "reveal",
+        "payoff"
+      ],
+      "heroPosition": "last",
+      "helpJa": "上で溜め、最後の下段を大きく見せる。",
+      "helpEn": "Build above and release into a large final panel.",
+      "zh": "下段大格收尾",
+      "helpZh": "上方铺陈，下段大格完成揭示或高潮。",
+      "supported_panel_counts": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "hero-bottom",
+      "name": "下段大格收尾",
+      "name_zh": "下段大格收尾",
+      "name_ja": "下段大ゴマ",
+      "description": "上方铺陈，下段大格完成揭示或高潮。",
+      "hero_position": "last",
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 427.94871794871796,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 427.94871794871796,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 809.8974358974359,
+          "w": 932.0,
+          "h": 680.1025641025641,
+          "order": 5
+        }
+      ],
+      "score": 1283890.4615384615,
+      "preview": "examples\\station\\layout-previews\\03-hero-bottom.png"
+    },
+    {
+      "id": "hero-top",
+      "ja": "上段大ゴマ",
+      "en": "Hero top",
+      "family": "entry",
+      "minPanels": 2,
+      "maxPanels": 6,
+      "tags": [
+        "entrance",
+        "establishing",
+        "impact"
+      ],
+      "heroPosition": "first",
+      "helpJa": "最初の大ゴマで場所・登場・衝撃を固定する。",
+      "helpEn": "Open with a large establishing or impact panel.",
+      "zh": "上段大格开场",
+      "helpZh": "上段大格先交代场景、登场或冲击。",
+      "supported_panel_counts": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "hero-top",
+      "name": "上段大格开场",
+      "name_zh": "上段大格开场",
+      "name_ja": "上段大ゴマ",
+      "description": "上段大格先交代场景、登场或冲击。",
+      "hero_position": "first",
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 932.0,
+          "h": 651.4666666666667,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 721.4666666666667,
+          "w": 454.0,
+          "h": 372.26666666666665,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 721.4666666666667,
+          "w": 454.0,
+          "h": 372.26666666666665,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 1117.7333333333333,
+          "w": 454.0,
+          "h": 372.26666666666665,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1117.7333333333333,
+          "w": 454.0,
+          "h": 372.26666666666665,
+          "order": 5
+        }
+      ],
+      "score": 1283203.2,
+      "preview": "examples\\station\\layout-previews\\04-hero-top.png"
+    },
+    {
+      "id": "hero-right",
+      "ja": "右大ゴマ＋左積み",
+      "en": "Hero right + stack",
+      "family": "entry",
+      "minPanels": 2,
+      "maxPanels": 5,
+      "tags": [
+        "entrance",
+        "portrait",
+        "dialogue"
+      ],
+      "heroPosition": "first",
+      "helpJa": "右の大きな導入から左側の反応へ流す。",
+      "helpEn": "A tall opening panel on the right with supporting beats stacked left.",
+      "zh": "阅读起点大格加侧边堆叠",
+      "helpZh": "大格位于阅读起点一侧，随后阅读另一侧的反应。",
+      "supported_panel_counts": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "hero-right",
+      "name": "阅读起点大格加侧边堆叠",
+      "name_zh": "阅读起点大格加侧边堆叠",
+      "name_ja": "右大ゴマ＋左積み",
+      "description": "大格位于阅读起点一侧，随后阅读另一侧的反应。",
+      "hero_position": "first",
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 478.6,
+          "y": 46,
+          "w": 499.40000000000003,
+          "h": 1444,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46,
+          "y": 46.0,
+          "w": 408.6,
+          "h": 343.0,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 46,
+          "y": 413.0,
+          "w": 408.6,
+          "h": 343.0,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46,
+          "y": 780.0,
+          "w": 408.6,
+          "h": 343.0,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46,
+          "y": 1147.0,
+          "w": 408.6,
+          "h": 343.0,
+          "order": 5
+        }
+      ],
+      "score": 1281732.8000000003,
+      "preview": "examples\\station\\layout-previews\\05-hero-right.png"
+    },
+    {
+      "id": "dialogue-stagger",
+      "ja": "会話段違い",
+      "en": "Dialogue stagger",
+      "family": "conversation",
+      "minPanels": 3,
+      "maxPanels": 6,
+      "tags": [
+        "conversation",
+        "reaction"
+      ],
+      "helpJa": "左右幅を交互に変え、切り返しと反応に大小差を付ける。",
+      "helpEn": "Alternating widths create conversational shot/reaction contrast.",
+      "zh": "对话错位",
+      "helpZh": "交替左右宽度，突出对话与反应。",
+      "supported_panel_counts": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "dialogue-stagger",
+      "name": "对话错位",
+      "name_zh": "对话错位",
+      "name_ja": "会話段違い",
+      "description": "交替左右宽度，突出对话与反应。",
+      "hero_position": null,
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 433.20000000000005,
+          "y": 46.0,
+          "w": 544.8,
+          "h": 480.59016393442624,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 363.20000000000005,
+          "h": 480.59016393442624,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 614.8,
+          "y": 550.5901639344263,
+          "w": 363.20000000000005,
+          "h": 457.7049180327869,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 550.5901639344263,
+          "w": 544.8,
+          "h": 457.7049180327869,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1032.2950819672133,
+          "w": 932.0,
+          "h": 457.7049180327869,
+          "order": 5
+        }
+      ],
+      "score": 1278552.918032787,
+      "preview": "examples\\station\\layout-previews\\06-dialogue-stagger.png"
+    },
+    {
+      "id": "action-step",
+      "ja": "アクション段階",
+      "en": "Action step",
+      "family": "action",
+      "minPanels": 3,
+      "maxPanels": 6,
+      "tags": [
+        "action",
+        "acceleration",
+        "payoff"
+      ],
+      "heroPosition": "last",
+      "helpJa": "小→中→大へ面積を段階的に増やして加速する。",
+      "helpEn": "Escalates panel area toward the final action beat.",
+      "zh": "动作递进",
+      "helpZh": "由小到大递增面积，形成动作加速。",
+      "supported_panel_counts": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "action-step",
+      "name": "动作递进",
+      "name_zh": "动作递进",
+      "name_ja": "アクション段階",
+      "description": "由小到大递增面积，形成动作加速。",
+      "hero_position": "last",
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 433.20000000000005,
+          "y": 46.0,
+          "w": 544.8,
+          "h": 273.7254901960784,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 363.20000000000005,
+          "h": 273.7254901960784,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 614.8,
+          "y": 343.7254901960784,
+          "w": 363.20000000000005,
+          "h": 465.33333333333326,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 343.7254901960784,
+          "w": 544.8,
+          "h": 465.33333333333326,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 833.0588235294117,
+          "w": 932.0,
+          "h": 656.9411764705883,
+          "order": 5
+        }
+      ],
+      "score": 1283334.588235294,
+      "preview": "examples\\station\\layout-previews\\07-action-step.png"
+    },
+    {
+      "id": "detail-payoff",
+      "ja": "ディテール→見せ場",
+      "en": "Detail to payoff",
+      "family": "payoff",
+      "minPanels": 3,
+      "maxPanels": 6,
+      "tags": [
+        "detail",
+        "reveal",
+        "climax"
+      ],
+      "heroPosition": "last",
+      "helpJa": "細部を刻んでから最後の見せ場へ解放する。",
+      "helpEn": "Stacks detail beats before a large payoff.",
+      "zh": "细节到高潮",
+      "helpZh": "先排列细节，再用末格释放高潮。",
+      "supported_panel_counts": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "detail-payoff",
+      "name": "细节到高潮",
+      "name_zh": "细节到高潮",
+      "name_ja": "ディテール→見せ場",
+      "description": "先排列细节，再用末格释放高潮。",
+      "hero_position": "last",
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 427.94871794871796,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 427.94871794871796,
+          "w": 454.0,
+          "h": 357.94871794871796,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 809.8974358974359,
+          "w": 932.0,
+          "h": 680.1025641025641,
+          "order": 5
+        }
+      ],
+      "score": 1283890.4615384615,
+      "preview": "examples\\station\\layout-previews\\08-detail-payoff.png"
+    },
+    {
+      "id": "quiet-build",
+      "ja": "静かな積み上げ",
+      "en": "Quiet build",
+      "family": "quiet",
+      "minPanels": 3,
+      "maxPanels": 6,
+      "tags": [
+        "quiet",
+        "emotion",
+        "hold"
+      ],
+      "heroPosition": "last",
+      "helpJa": "小さな差を積み、最後だけ少し広くして余韻を作る。",
+      "helpEn": "Subtle progression with a gently expanded final beat.",
+      "zh": "安静铺陈",
+      "helpZh": "轻微变化后，以稍大的末格留下余韵。",
+      "supported_panel_counts": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "quiet-build",
+      "name": "安静铺陈",
+      "name_zh": "安静铺陈",
+      "name_ja": "静かな積み上げ",
+      "description": "轻微变化后，以稍大的末格留下余韵。",
+      "hero_position": "last",
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 416.7164179104478,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 416.7164179104478,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 486.7164179104478,
+          "w": 454.0,
+          "h": 416.7164179104478,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 486.7164179104478,
+          "w": 454.0,
+          "h": 416.7164179104478,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 927.4328358208955,
+          "w": 932.0,
+          "h": 562.5671641791045,
+          "order": 5
+        }
+      ],
+      "score": 1281069.6119402985,
+      "preview": "examples\\station\\layout-previews\\09-quiet-build.png"
+    },
+    {
+      "id": "wide-middle",
+      "ja": "中央ワイド",
+      "en": "Wide middle",
+      "family": "transition",
+      "minPanels": 3,
+      "maxPanels": 5,
+      "tags": [
+        "transition",
+        "establishing",
+        "action"
+      ],
+      "helpJa": "中央の横長コマを橋にして前後の意味をつなぐ。",
+      "helpEn": "A wide middle beat bridges setup and reaction.",
+      "zh": "中央宽格",
+      "helpZh": "中央横向宽格连接前后的叙事。",
+      "supported_panel_counts": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "wide-middle",
+      "name": "中央宽格",
+      "name_zh": "中央宽格",
+      "name_ja": "中央ワイド",
+      "description": "中央横向宽格连接前后的叙事。",
+      "hero_position": null,
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 404.63768115942025,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 404.63768115942025,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 474.63768115942025,
+          "w": 932.0,
+          "h": 586.7246376811594,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 1085.3623188405795,
+          "w": 454.0,
+          "h": 404.63768115942025,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1085.3623188405795,
+          "w": 454.0,
+          "h": 404.63768115942025,
+          "order": 5
+        }
+      ],
+      "score": 1281649.3913043477,
+      "preview": "examples\\station\\layout-previews\\10-wide-middle.png"
+    },
+    {
+      "id": "ladder",
+      "ja": "階段リズム",
+      "en": "Ladder rhythm",
+      "family": "action",
+      "minPanels": 4,
+      "maxPanels": 6,
+      "tags": [
+        "action",
+        "tempo",
+        "asymmetry"
+      ],
+      "helpJa": "段ごとに左右比率を反転させ、視線を階段状に送る。",
+      "helpEn": "Alternating row splits create a stepped reading rhythm.",
+      "zh": "阶梯节奏",
+      "helpZh": "逐段反转左右比例，形成错位的阶梯视线。",
+      "supported_panel_counts": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "ladder",
+      "name": "阶梯节奏",
+      "name_zh": "阶梯节奏",
+      "name_ja": "階段リズム",
+      "description": "逐段反转左右比例，形成错位的阶梯视线。",
+      "hero_position": null,
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 378.72,
+          "y": 46.0,
+          "w": 599.28,
+          "h": 465.3333333333333,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.00000000000006,
+          "y": 46.0,
+          "w": 308.71999999999997,
+          "h": 465.3333333333333,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 669.28,
+          "y": 535.3333333333333,
+          "w": 308.71999999999997,
+          "h": 465.3333333333333,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 535.3333333333333,
+          "w": 599.28,
+          "h": 465.3333333333333,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1024.6666666666665,
+          "w": 932.0,
+          "h": 465.3333333333333,
+          "order": 5
+        }
+      ],
+      "score": 1278735.9999999998,
+      "preview": "examples\\station\\layout-previews\\11-ladder.png"
+    },
+    {
+      "id": "three-band",
+      "ja": "三段構成",
+      "en": "Three-band composition",
+      "family": "standard",
+      "minPanels": 3,
+      "maxPanels": 6,
+      "tags": [
+        "story",
+        "balanced",
+        "rhythm"
+      ],
+      "helpJa": "上・中・下の三段に役割を分ける汎用構成。",
+      "helpEn": "A flexible three-band page for setup, development, and landing.",
+      "zh": "三段构成",
+      "helpZh": "上中下三段分别承担铺垫、发展和落点。",
+      "supported_panel_counts": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "three-band",
+      "name": "三段构成",
+      "name_zh": "三段构成",
+      "name_ja": "三段構成",
+      "description": "上中下三段分别承担铺垫、发展和落点。",
+      "hero_position": null,
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 411.93442622950823,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 454.0,
+          "h": 411.93442622950823,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 524.0,
+          "y": 481.93442622950823,
+          "w": 454.0,
+          "h": 526.3606557377049,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 481.93442622950823,
+          "w": 454.0,
+          "h": 526.3606557377049,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1032.295081967213,
+          "w": 932.0,
+          "h": 457.7049180327869,
+          "order": 5
+        }
+      ],
+      "score": 1278552.9180327868,
+      "preview": "examples\\station\\layout-previews\\12-three-band.png"
+    },
+    {
+      "id": "cinematic-stack",
+      "ja": "シネマ縦積み",
+      "en": "Cinematic stack",
+      "family": "cinematic",
+      "minPanels": 2,
+      "maxPanels": 6,
+      "tags": [
+        "cinematic",
+        "emotion",
+        "vertical"
+      ],
+      "helpJa": "高さに強弱を付けた全幅コマで映画的に呼吸させる。",
+      "helpEn": "Full-width bands with varied heights for cinematic pacing.",
+      "zh": "电影横条堆叠",
+      "helpZh": "全宽横条的高度交替变化，形成电影节奏。",
+      "supported_panel_counts": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "template_id": "cinematic-stack",
+      "name": "电影横条堆叠",
+      "name_zh": "电影横条堆叠",
+      "name_ja": "シネマ縦積み",
+      "description": "全宽横条的高度交替变化，形成电影节奏。",
+      "hero_position": null,
+      "panel_count": 5,
+      "panels": [
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 46.0,
+          "w": 932.0,
+          "h": 269.6,
+          "order": 1
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 339.6,
+          "w": 932.0,
+          "h": 218.24761904761903,
+          "order": 2
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 581.847619047619,
+          "w": 932.0,
+          "h": 372.3047619047619,
+          "order": 3
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 978.1523809523809,
+          "w": 932.0,
+          "h": 218.24761904761903,
+          "order": 4
+        },
+        {
+          "type": "rect",
+          "x": 46.0,
+          "y": 1220.3999999999999,
+          "w": 932.0,
+          "h": 269.6,
+          "order": 5
+        }
+      ],
+      "score": 1256336.0,
+      "preview": "examples\\station\\layout-previews\\13-cinematic-stack.png"
+    }
+  ]
+}

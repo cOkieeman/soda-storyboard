@@ -66,6 +66,8 @@
         "reading_direction": {"enum": ["rtl", "ltr"]},
         "style_prefix": {"type": "string"}, "description": {"type": "string"},
         "panel_gap": {"type": "number", "minimum": 0},
+        "text_direction": {"enum": ["vertical", "horizontal"]},
+        "color_mode": {"enum": ["monochrome", "color"]},
         "dialogue_mode": {"enum": ["moss_text", "lettering"]},
         "panels": {"type": "array", "items": {"$ref": "#/$defs/panel"}}
       },
@@ -80,6 +82,8 @@
         "default_canvas_width": {"type": "integer", "multipleOf": 16, "minimum": 16},
         "default_canvas_height": {"type": "integer", "multipleOf": 16, "minimum": 16},
         "reading_direction": {"enum": ["rtl", "ltr"]},
+        "text_direction": {"enum": ["vertical", "horizontal"]},
+        "color_mode": {"enum": ["monochrome", "color"]},
         "default_dialogue_mode": {"enum": ["moss_text", "lettering"]}
       },
       "additionalProperties": true

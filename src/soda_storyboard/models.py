@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Any
 
 PROJECT_FORMAT = "soda-storyboard-project-v1"
@@ -42,7 +43,7 @@ def _number(value: Any, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a number")
     result = float(value)
-    if result != result or result in (float("inf"), float("-inf")):
+    if not isfinite(result):
         raise ValueError(f"{name} must be finite")
     return result
 
@@ -442,6 +443,8 @@ class Page:
     panel_gap: int = 24
     panels: list[Panel] = field(default_factory=list)
     dialogue_mode: str = "moss_text"
+    text_direction: str = "vertical"
+    color_mode: str = "monochrome"
     extra: JsonObject = field(default_factory=dict, repr=False)
     format: str = PAGE_FORMAT
 
@@ -493,6 +496,8 @@ class Page:
             "panels",
             "dialogue_mode",
             "lettering_mode",
+            "text_direction",
+            "color_mode",
         }
         canvas = value.get("canvas", value.get("canvas_size", {}))
         if not isinstance(canvas, Mapping):
@@ -513,6 +518,8 @@ class Page:
             dialogue_mode=_text(
                 value.get("dialogue_mode", value.get("lettering_mode", "moss_text")), "page.dialogue_mode"
             ),
+            text_direction=_text(value.get("text_direction", "vertical"), "page.text_direction"),
+            color_mode=_text(value.get("color_mode", "monochrome"), "page.color_mode"),
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PAGE_FORMAT), "page.format"),
         )
@@ -528,6 +535,8 @@ class Page:
             "description": self.description,
             "panel_gap": self.panel_gap,
             "dialogue_mode": self.dialogue_mode,
+            "text_direction": self.text_direction,
+            "color_mode": self.color_mode,
             "panels": [item.to_dict() for item in self.panels],
         }
         result.update(self.extra)
@@ -544,6 +553,8 @@ class Project:
     default_canvas_height: int = 1536
     reading_direction: str = "rtl"
     default_dialogue_mode: str = "moss_text"
+    text_direction: str = "vertical"
+    color_mode: str = "monochrome"
     extra: JsonObject = field(default_factory=dict, repr=False)
     format: str = PROJECT_FORMAT
 
@@ -583,6 +594,8 @@ class Project:
             "direction",
             "default_dialogue_mode",
             "dialogue_mode",
+            "text_direction",
+            "color_mode",
         }
         canvas = value.get("default_canvas", value.get("canvas", {}))
         if not isinstance(canvas, Mapping):
@@ -611,6 +624,8 @@ class Project:
                 value.get("default_dialogue_mode", value.get("dialogue_mode", "moss_text")),
                 "project.default_dialogue_mode",
             ),
+            text_direction=_text(value.get("text_direction", "vertical"), "project.text_direction"),
+            color_mode=_text(value.get("color_mode", "monochrome"), "project.color_mode"),
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PROJECT_FORMAT), "project.format"),
         )
@@ -624,6 +639,8 @@ class Project:
             "default_canvas_height": self.default_canvas_height,
             "reading_direction": self.reading_direction,
             "default_dialogue_mode": self.default_dialogue_mode,
+            "text_direction": self.text_direction,
+            "color_mode": self.color_mode,
         }
         result.update(self.extra)
         return result
@@ -634,24 +651,24 @@ __all__ = [
     "CAMERA_ANGLES",
     "CHARACTER_FORMAT",
     "DIALOGUE_MODES",
-    "Dialogue",
-    "Lora",
     "PAGE_FORMAT",
     "PANEL_STATUSES",
-    "Panel",
-    "Page",
-    "Point",
     "PROJECT_FORMAT",
-    "Project",
-    "QuadShape",
     "READING_DIRECTIONS",
-    "RectShape",
     "SHOT_SIZES",
-    "Shape",
-    "shape_to_dict",
     "Character",
     "CharacterLoRA",
+    "Dialogue",
+    "Lora",
     "LoraConfig",
+    "Page",
+    "Panel",
+    "Point",
+    "Project",
+    "QuadShape",
+    "RectShape",
+    "Shape",
+    "shape_to_dict",
 ]
 
 # Names used by a few clients before the v1 terminology was settled.

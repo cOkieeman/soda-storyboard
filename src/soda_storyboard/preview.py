@@ -71,7 +71,7 @@ def render_preview(
         small_font = label_font
 
     def s(value: float) -> int:
-        return int(round(value * scale))
+        return round(value * scale)
 
     for panel in sorted(page.panels, key=lambda item: item.order):
         shape = panel.shape
