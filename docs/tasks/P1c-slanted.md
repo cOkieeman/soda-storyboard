@@ -31,13 +31,13 @@
    - validate：overlay 引用的格子、角色必须存在；overlay 可以超出所属格子，但要在画布内。
    - preview：overlay 用虚线框画出并标注"出格"。
    - compile：overlay 不进入 MOSS JSON（它在第 3 阶段单独生成后叠加），但在 `--with-ids` 的 map 文件里列出。
-3. **斜切格的编译**：
+3. **斜切格的编译**（第 0d 阶段用户结论：MOSS 照提示也能画出斜切线，但效果不如"先按矩形生成，再裁成斜切形状"）：
    - 新增编译选项 `--slant-mode`：
-     - `hint`（默认）：bbox 取格子"内接"的最大轴对齐矩形（保证相邻斜切格的 bbox 不重叠），并在 summary 里描述斜切分割线（例如 "the top row is split by two diagonal slanted gutters"），每格 caption 加 "slanted panel"。
+     - `cut`（默认）：每个斜切格用它的"中线矩形"作为 bbox（相邻格以斜分割线的中点为界，bbox 互不重叠、拼起来覆盖整行），summary 和 caption **不提**斜切，让 MOSS 按普通矩形格生成；斜切形状在第 3 阶段出图后由程序按 quad 裁剪。编译结果旁边输出 `<name>.cut.json`，列出每格的 quad 和对应 bbox，供裁剪步骤使用。
+     - `hint`：bbox 取格子内接的最大轴对齐矩形，summary 描述斜切分割线、caption 加 "slanted panel"，让 MOSS 自己画斜线（效果较差，保留作为选项）。
      - `rect`：直接用外接矩形（会重叠，只用于调试）。
-   - 第 0d 阶段正在测 MOSS 能否照 hint 画出斜切线，结果出来前两种都要支持。
 4. **候选多样性**：`layout suggest` 默认候选按"版式家族"去重：同一 family 最多一个，优先选不同 family，再按重要度适配排序；`--candidates` 可调数量（默认 6）。
-5. **测试**：斜切后的 quad 在画布内、不重叠、间距达标、阅读顺序不变（rtl 第 1 格仍在右上）；`hint` 模式的 bbox 互不重叠且都在对应 quad 内；overlays 的读写、校验和预览；默认候选的 family 互不相同。
+5. **测试**：斜切后的 quad 在画布内、不重叠、间距达标、阅读顺序不变（rtl 第 1 格仍在右上）；`cut` 模式的 bbox 互不重叠、覆盖整行且 `.cut.json` 内容正确；`hint` 模式的 bbox 都在对应 quad 内；overlays 的读写、校验和预览；默认候选的 family 互不相同。
 6. README 补充斜切、出格和 `--slant-mode` 的说明。
 
 完成标准：

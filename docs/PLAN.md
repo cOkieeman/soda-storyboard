@@ -87,7 +87,7 @@ my-comic/
 - **三种重画参数分开**：修细节 0.45；换人整格 0.85；换人局部 0.85 加遮罩。
 - **重画提示词规则**：只写单张画面（"one frame, no panel borders, no text, no speech bubbles"），绝不能带整页前缀，否则 MOSS 会在格子里再画一页；没有台词的页要在 summary 里写明不要文字和气泡。
 - `character sheet`：生成角色设定图，用户认可后存进角色文件。
-- **斜切页**：若第 0d 阶段证明 MOSS 照提示画不出准确的斜切线，斜切页走"逐格出图 + 按 quad 遮罩裁剪 + 程序拼页"（OpenKoma 的拼法）；能画出则简单斜切页仍可整页出图。
+- **斜切页**（第 0d 阶段结论：MOSS 能照提示画斜线，但不如先生成再裁）：默认按矩形格整页（或逐格）出图，再按 `.cut.json` 里的 quad 用遮罩裁成斜切形状、程序拼页（OpenKoma 的拼法）。
 - **人物出格**：按页文件 `overlays` 生成该角色的单人图，用 ComfyUI 去背景（如 BiRefNet / RMBG）抠成透明 PNG，叠在格子边框上方。
 - `letter`：程序排字，支持横排和竖排、多种气泡形状，用 Noto Sans CJK（OFL 协议）。
 - `export`：PNG、PDF，以及 OpenKoma 项目文件。
