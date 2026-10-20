@@ -1,0 +1,65 @@
+{
+  "summary": {
+    "meta": [
+      "comic",
+      "manga",
+      "multi_panel"
+    ],
+    "canvas": "multi_panel",
+    "caption": "A black-and-white Japanese manga page, read right to left, crisp ink line art, screentone shading. The top row is split into three panels by two DIAGONAL slanted gutters (tilted white lines, not vertical); below are two full-width horizontal panels. No text, no speech bubbles. "
+  },
+  "items": [
+    {
+      "label": "object",
+      "caption": "Top-right slanted panel: a young woman with long black hair in a school uniform raising her arm, medium shot.",
+      "bbox": [
+        -752,
+        188,
+        -248,
+        496
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Top-middle slanted panel: a young woman with long black hair in a school uniform turning her head, close-up.",
+      "bbox": [
+        -752,
+        -152,
+        -248,
+        168
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Top-left slanted panel: a young woman with long black hair in a school uniform closing her eyes, close-up.",
+      "bbox": [
+        -752,
+        -496,
+        -248,
+        -172
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Middle wide panel: extreme close-up of a young woman with long black hair in a school uniform's eyes and face, lying down.",
+      "bbox": [
+        -232,
+        -496,
+        256,
+        496
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Bottom wide panel: a young woman with long black hair in a school uniform leaning on a balcony railing at night, city lights behind.",
+      "bbox": [
+        272,
+        -496,
+        752,
+        496
+      ]
+    }
+  ],
+  "bbox_coord_space": "abs_centralized",
+  "bbox_format": "yxyx"
+}

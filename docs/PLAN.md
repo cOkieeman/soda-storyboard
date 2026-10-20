@@ -69,6 +69,9 @@ my-comic/
 - 命令：`init`、`page new`、`template list`、`layout suggest`、`validate`、`preview`、`compile`。
 - 派单：`docs/tasks/P1-core.md`（已写好）。
 
+### 第 1c 阶段：斜切格、出格图层、候选多样性（Codex）
+- 派单：`docs/tasks/P1c-slanted.md`。在 P2 之前完成，让插件一开始就能用斜切版式。
+
 ### 第 2 阶段：Claude / Codex 插件（Codex）
 - `skill/SKILL.md`：工作流程。片段 → 2～3 个拆格方案 → 用户选 → 版式候选 → 线框预览 → 来回修改 → 编译。写清楚什么时候必须停下来等用户确认。
 - `skill/references/`：从 manga-blueprint-studio 的知识文档（MANGA-KNOWLEDGE、MANGA-TECHNIQUES、PANEL-LAYOUT-GRAMMAR、MANGA-EXPRESSION-CATALOG）整理的中文精简版，加 MOSS 布局写法要点和出图复查清单。
@@ -84,6 +87,8 @@ my-comic/
 - **三种重画参数分开**：修细节 0.45；换人整格 0.85；换人局部 0.85 加遮罩。
 - **重画提示词规则**：只写单张画面（"one frame, no panel borders, no text, no speech bubbles"），绝不能带整页前缀，否则 MOSS 会在格子里再画一页；没有台词的页要在 summary 里写明不要文字和气泡。
 - `character sheet`：生成角色设定图，用户认可后存进角色文件。
+- **斜切页**：若第 0d 阶段证明 MOSS 照提示画不出准确的斜切线，斜切页走"逐格出图 + 按 quad 遮罩裁剪 + 程序拼页"（OpenKoma 的拼法）；能画出则简单斜切页仍可整页出图。
+- **人物出格**：按页文件 `overlays` 生成该角色的单人图，用 ComfyUI 去背景（如 BiRefNet / RMBG）抠成透明 PNG，叠在格子边框上方。
 - `letter`：程序排字，支持横排和竖排、多种气泡形状，用 Noto Sans CJK（OFL 协议）。
 - `export`：PNG、PDF，以及 OpenKoma 项目文件。
 - `review`：生成供 AI 对照分镜单看图复查的材料。
@@ -93,6 +98,7 @@ my-comic/
 - Gemini：在 `editor/` 里 fork OpenKoma，把数据模型换成分镜单（每格的景别、角色、描述、台词；台词和气泡对应），接本地服务，加上预览、编译、出图按钮和出图结果叠加显示。
 - AI 操作编辑器：AI 用命令行改项目文件，编辑器收到推送后自动刷新。
 - 构建出静态文件，供第 6 阶段的 Hub 引用。
+- **OpenKoma 现有能力全部保留**：斜切格（四角拖动、边中点推动）、二次切割、透明图片图层（出格）、非破坏裁剪、文字气泡（横排 / 竖排）、多页、撤销重做、导出 PNG / PDF。
 
 ### 第 5 阶段：从参考页提取版式（Codex）
 - `extract-layout page.png`：OpenCV 检测格子（留白间隔检测、轮廓和四边形拟合、递归切分），按从右往左排阅读顺序，存进用户模板库，并出一张叠加预览图。
