@@ -18,7 +18,7 @@ from soda_storyboard.templates import RECIPES, builtin_templates, suggest_layout
 
 
 def test_default_layouts_cover_four_candidates_and_keep_reading_order() -> None:
-    candidates = suggest_layouts(5, importance=[1, 3, 1, 2, 1])
+    candidates = suggest_layouts(5, importance=[1, 3, 1, 2, 1], skew=0)
     assert len(candidates) >= 4
     for candidate in candidates:
         panels = candidate["panels"]
@@ -47,11 +47,21 @@ def test_all_recipes_have_separated_bounded_panels(
     count: int, direction: str, size: tuple[int, int], gap: int
 ) -> None:
     width, height = size
-    results = suggest_layouts(
-        count, width=width, height=height, gap=gap, reading_direction=direction, candidates=100
-    )
+    templates = builtin_templates(count, skew=0)
+    results = [
+        suggest_layouts(
+            count,
+            width=width,
+            height=height,
+            gap=gap,
+            reading_direction=direction,
+            pick=template["id"],
+            skew=0,
+        )[0]
+        for template in templates
+    ]
     assert len(results) >= 4
-    assert {r["template_id"] for r in results} == {t["id"] for t in builtin_templates(count)}
+    assert {r["template_id"] for r in results} == {t["id"] for t in templates}
     for candidate in results:
         assert candidate["name_zh"]
         assert candidate["name_ja"]

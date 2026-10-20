@@ -431,6 +431,55 @@ class Panel:
 
 
 @dataclass(slots=True)
+class Overlay:
+    """A separately generated transparent character layer above panel borders."""
+
+    id: str
+    character_id: str
+    rect: RectShape
+    panel_id: str | None = None
+    z_index: int = 1
+    description: str = ""
+    status: str = "planned"
+    image_path: str | None = None
+    extra: JsonObject = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.rect, Mapping):
+            self.rect = RectShape.from_dict(self.rect)
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> Overlay:
+        known = {"id", "character_id", "rect", "panel_id", "z_index", "description", "status", "image_path"}
+        return cls(
+            id=_text(value.get("id", ""), "overlay.id"),
+            character_id=_text(value.get("character_id", ""), "overlay.character_id"),
+            rect=RectShape.from_dict(value.get("rect", {})),
+            panel_id=None if value.get("panel_id") is None else _text(value["panel_id"], "overlay.panel_id"),
+            z_index=int(value.get("z_index", 1)),
+            description=_text(value.get("description", ""), "overlay.description"),
+            status=_text(value.get("status", "planned"), "overlay.status"),
+            image_path=None
+            if value.get("image_path") is None
+            else _text(value["image_path"], "overlay.image_path"),
+            extra=_copy_extra(value, known),
+        )
+
+    def to_dict(self) -> JsonObject:
+        return {
+            **self.extra,
+            "id": self.id,
+            "character_id": self.character_id,
+            "rect": self.rect.to_dict(),
+            "panel_id": self.panel_id,
+            "z_index": self.z_index,
+            "description": self.description,
+            "status": self.status,
+            "image_path": self.image_path,
+        }
+
+
+@dataclass(slots=True)
 class Page:
     """A complete storyboard page."""
 
@@ -447,6 +496,7 @@ class Page:
     color_mode: str = "monochrome"
     extra: JsonObject = field(default_factory=dict, repr=False)
     format: str = PAGE_FORMAT
+    overlays: list[Overlay] = field(default_factory=list)
 
     @property
     def id(self) -> str:
@@ -470,6 +520,9 @@ class Page:
 
     def __post_init__(self) -> None:
         self.panels = [item if isinstance(item, Panel) else Panel.from_dict(item) for item in self.panels]
+        self.overlays = [
+            item if isinstance(item, Overlay) else Overlay.from_dict(item) for item in self.overlays
+        ]
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> Page:
@@ -498,6 +551,7 @@ class Page:
             "lettering_mode",
             "text_direction",
             "color_mode",
+            "overlays",
         }
         canvas = value.get("canvas", value.get("canvas_size", {}))
         if not isinstance(canvas, Mapping):
@@ -520,6 +574,7 @@ class Page:
             ),
             text_direction=_text(value.get("text_direction", "vertical"), "page.text_direction"),
             color_mode=_text(value.get("color_mode", "monochrome"), "page.color_mode"),
+            overlays=[Overlay.from_dict(item) for item in value.get("overlays", [])],
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PAGE_FORMAT), "page.format"),
         )
@@ -540,6 +595,8 @@ class Page:
             "panels": [item.to_dict() for item in self.panels],
         }
         result.update(self.extra)
+        if self.overlays:
+            result["overlays"] = [overlay.to_dict() for overlay in self.overlays]
         return result
 
 
@@ -661,6 +718,7 @@ __all__ = [
     "Dialogue",
     "Lora",
     "LoraConfig",
+    "Overlay",
     "Page",
     "Panel",
     "Point",

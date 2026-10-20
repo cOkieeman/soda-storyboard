@@ -1,0 +1,63 @@
+{
+  "summary": {
+    "meta": [
+      "comic"
+    ],
+    "canvas": "single",
+    "caption": "清晰墨线与细腻网点; 女孩听见广播后跑向即将离站的列车。; black-and-white Japanese manga page, 5 panels, read right to left, clean white gutters; Panel 1: medium shot, 女孩听见脚步声. Panel 2: medium shot, 她转头望向站台入口. Panel 3: medium shot, 她攥紧包带. Panel 4: long shot. Panel 5: full shot, 女孩赶到门前.; no text, no speech bubbles"
+  },
+  "items": [
+    {
+      "label": "object",
+      "caption": "Panel 1, medium shot, eye-level: 女孩 (黑色短发，浅色校服，背着帆布包), 女孩听见脚步声，停下脚步。",
+      "bbox": [
+        -728,
+        168,
+        -168,
+        464
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 2, medium shot, eye-level: 女孩 (黑色短发，浅色校服，背着帆布包), 她转头望向站台入口，眉头微皱。",
+      "bbox": [
+        -728,
+        -152,
+        -168,
+        144
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 3, medium shot, eye-level: 女孩 (黑色短发，浅色校服，背着帆布包), 她攥紧包带，准备冲向列车。",
+      "bbox": [
+        -728,
+        -472,
+        -168,
+        -176
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 4, long shot, eye-level: 列车门开始合拢。",
+      "bbox": [
+        -144,
+        -472,
+        256,
+        464
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 5, full shot, eye-level: 女孩 (黑色短发，浅色校服，背着帆布包), 女孩赶到门前，呼出一口气。",
+      "bbox": [
+        280,
+        -472,
+        728,
+        464
+      ]
+    }
+  ],
+  "bbox_coord_space": "abs_centralized",
+  "bbox_format": "yxyx"
+}

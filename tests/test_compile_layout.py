@@ -32,7 +32,7 @@ def test_compile_uses_centered_yxyx_and_dialogue_mode() -> None:
 
 
 def test_layout_suggest_returns_three_in_bounds_candidates() -> None:
-    results = suggest_layouts(5, width=1024, height=1536)
+    results = suggest_layouts(5, width=1024, height=1536, skew=0)
     assert len(results) >= 3
     for result in results[:3]:
         assert len(result["panels"]) == 5

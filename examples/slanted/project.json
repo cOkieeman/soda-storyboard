@@ -1,0 +1,11 @@
+{
+  "format": "soda-storyboard-project-v1",
+  "name": "站台冲刺",
+  "default_style_prefix": "",
+  "default_canvas_width": 1024,
+  "default_canvas_height": 1536,
+  "reading_direction": "rtl",
+  "default_dialogue_mode": "moss_text",
+  "text_direction": "vertical",
+  "color_mode": "monochrome"
+}

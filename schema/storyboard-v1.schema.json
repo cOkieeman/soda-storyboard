@@ -56,6 +56,55 @@
       },
       "additionalProperties": true
     },
+    "overlay": {
+      "type": "object",
+      "required": [
+        "id",
+        "character_id",
+        "rect"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "panel_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "character_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        },
+        "z_index": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "approved"
+          ],
+          "default": "planned"
+        },
+        "image_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
     "page": {
       "type": "object",
       "required": ["format", "id", "canvas_width", "canvas_height", "panels"],
@@ -69,6 +118,7 @@
         "text_direction": {"enum": ["vertical", "horizontal"]},
         "color_mode": {"enum": ["monochrome", "color"]},
         "dialogue_mode": {"enum": ["moss_text", "lettering"]},
+        "overlays": {"type": "array", "items": {"$ref": "#/$defs/overlay"}},
         "panels": {"type": "array", "items": {"$ref": "#/$defs/panel"}}
       },
       "additionalProperties": true

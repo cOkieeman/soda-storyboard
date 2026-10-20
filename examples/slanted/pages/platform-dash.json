@@ -1,0 +1,178 @@
+{
+  "format": "soda-storyboard-page-v1",
+  "id": "platform-dash",
+  "canvas_width": 1024,
+  "canvas_height": 1536,
+  "reading_direction": "rtl",
+  "style_prefix": "清晰墨线与细腻网点",
+  "description": "女孩听见广播后跑向即将离站的列车。",
+  "panel_gap": 24,
+  "dialogue_mode": "moss_text",
+  "text_direction": "vertical",
+  "color_mode": "monochrome",
+  "panels": [
+    {
+      "id": "p1",
+      "order": 1,
+      "shape": {
+        "type": "quad",
+        "points": [
+          [
+            630.8135647442588,
+            40.0
+          ],
+          [
+            976.0,
+            40.0
+          ],
+          [
+            976.0,
+            600.0
+          ],
+          [
+            729.5566739409991,
+            600.0
+          ]
+        ]
+      },
+      "shot": "medium",
+      "angle": "eye",
+      "character_ids": [
+        "runner"
+      ],
+      "description": "女孩听见脚步声，停下脚步。",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft"
+    },
+    {
+      "id": "p2",
+      "order": 2,
+      "shape": {
+        "type": "quad",
+        "points": [
+          [
+            310.8135647442587,
+            40.0
+          ],
+          [
+            606.4433260590009,
+            40.0
+          ],
+          [
+            705.1864352557412,
+            600.0
+          ],
+          [
+            409.55667394099913,
+            600.0
+          ]
+        ]
+      },
+      "shot": "medium",
+      "angle": "eye",
+      "character_ids": [
+        "runner"
+      ],
+      "description": "她转头望向站台入口，眉头微皱。",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft"
+    },
+    {
+      "id": "p3",
+      "order": 3,
+      "shape": {
+        "type": "quad",
+        "points": [
+          [
+            40.0,
+            40.0
+          ],
+          [
+            286.44332605900087,
+            40.0
+          ],
+          [
+            385.1864352557413,
+            600.0
+          ],
+          [
+            40.0,
+            600.0
+          ]
+        ]
+      },
+      "shot": "medium",
+      "angle": "eye",
+      "character_ids": [
+        "runner"
+      ],
+      "description": "她攥紧包带，准备冲向列车。",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft"
+    },
+    {
+      "id": "p4",
+      "order": 4,
+      "shape": {
+        "type": "rect",
+        "x": 40.0,
+        "y": 624.0,
+        "w": 936.0,
+        "h": 400.0
+      },
+      "shot": "long",
+      "angle": "eye",
+      "character_ids": [],
+      "description": "列车门开始合拢。",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft"
+    },
+    {
+      "id": "p5",
+      "order": 5,
+      "shape": {
+        "type": "rect",
+        "x": 40.0,
+        "y": 1048.0,
+        "w": 936.0,
+        "h": 448.0
+      },
+      "shot": "full",
+      "angle": "eye",
+      "character_ids": [
+        "runner"
+      ],
+      "description": "女孩赶到门前，呼出一口气。",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft"
+    }
+  ],
+  "overlays": [
+    {
+      "id": "dash",
+      "character_id": "runner",
+      "rect": {
+        "type": "rect",
+        "x": 130,
+        "y": 420,
+        "w": 310,
+        "h": 340
+      },
+      "panel_id": "p3",
+      "z_index": 2,
+      "description": "人物从第 3 格冲出，盖住下方格子的边框。",
+      "status": "planned",
+      "image_path": null
+    }
+  ]
+}

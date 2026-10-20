@@ -10,8 +10,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from dataclasses import field as dc_field
-from math import hypot
 from typing import Any
+
+from .geometry import convex_polygon, polygons_overlap, shape_distance
 
 
 def _get(value: Any, key: str, default: Any = None) -> Any:
@@ -459,43 +460,12 @@ def validate_page(
             details={"orders": orders, "expected": expected_orders},
         )
 
-    for index, first in enumerate(boxes):
-        x1, y1, w1, h1 = first
-        for second in boxes[index + 1 :]:
-            x2, y2, w2, h2 = second
-            overlap_w = min(x1 + w1, x2 + w2) - max(x1, x2)
-            overlap_h = min(y1 + h1, y2 + h2) - max(y1, y2)
-            if overlap_w > 0 and overlap_h > 0:
-                report.add(
-                    "error",
-                    "panel_overlap",
-                    "格子之间存在重叠",
-                    details={"first": list(first), "second": list(second)},
-                )
-
     configured_gap = min_gap
     if configured_gap is None:
         configured_gap = _get(page, "panel_gap", _get(page, "gutter", 0)) or 0
     configured_gap = max(0.0, _number(configured_gap))
-    if configured_gap:
-        for index, first in enumerate(boxes):
-            x1, y1, w1, h1 = first
-            for second in boxes[index + 1 :]:
-                x2, y2, w2, h2 = second
-                overlap_w = min(x1 + w1, x2 + w2) - max(x1, x2)
-                overlap_h = min(y1 + h1, y2 + h2) - max(y1, y2)
-                if overlap_w > 0 and overlap_h > 0:
-                    continue
-                dx = max(x1 - (x2 + w2), x2 - (x1 + w1), 0.0)
-                dy = max(y1 - (y2 + h2), y2 - (y1 + h1), 0.0)
-                distance = dx if dx and not dy else dy if dy and not dx else hypot(dx, dy)
-                if distance + 1e-9 < configured_gap:
-                    report.add(
-                        "error",
-                        "panel_gap_too_small",
-                        f"格子间距 {distance:g}px 小于设定的 {configured_gap:g}px",
-                        details={"distance": distance, "minimum": configured_gap},
-                    )
+    _validate_polygons(panels, boxes, configured_gap, report)
+    _validate_overlays(page, panels, char_map, report)
 
     if _reading_mismatch(page, panels, boxes):
         direction = str(_get(page, "reading_direction", "rtl") or "rtl").lower()
@@ -565,6 +535,70 @@ def validate_page(
             )
 
     return report
+
+
+def _validation_shape(panel: Any, box: tuple[float, float, float, float]) -> dict[str, Any]:
+    points = _points(_get(panel, "shape", panel))
+    if points:
+        return {"type": "quad", "points": points}
+    x, y, w, h = box
+    return {"type": "rect", "x": x, "y": y, "w": w, "h": h}
+
+
+def _validate_polygons(
+    panels: list[Any], boxes: list[tuple[float, float, float, float]], gap: float, report: ValidationReport
+) -> None:
+    shapes = []
+    for panel, box in zip(panels, boxes, strict=True):
+        shape = _validation_shape(panel, box)
+        try:
+            convex_polygon(shape)
+        except ValueError as exc:
+            report.add("error", "invalid_panel_polygon", str(exc), field_name="shape")
+            shape = None
+        shapes.append(shape)
+    for index, first in enumerate(shapes):
+        for second in shapes[index + 1 :]:
+            if first is None or second is None:
+                continue
+            if polygons_overlap(first, second):
+                report.add(
+                    "error", "panel_overlap", "格子之间存在重叠", details={"first": first, "second": second}
+                )
+            elif shape_distance(first, second) + 1e-7 < gap:
+                report.add(
+                    "error",
+                    "panel_gap_too_small",
+                    "格子间距小于设定值",
+                    details={"distance": shape_distance(first, second), "minimum": gap},
+                )
+
+
+def _validate_overlays(
+    page: Any, panels: list[Any], characters: dict[str, Any], report: ValidationReport
+) -> None:
+    width, height = canvas_size(page)
+    panel_ids = {_panel_id(panel, i) for i, panel in enumerate(panels)}
+    seen = set()
+    for overlay in _get(page, "overlays", []):
+        identifier = _get(overlay, "id", "")
+        if not identifier or identifier in seen:
+            report.add("error", "invalid_overlay_id", "出格图层 id 不能为空或重复", field_name="overlays")
+        seen.add(identifier)
+        parent = _get(overlay, "panel_id")
+        if parent and parent not in panel_ids:
+            report.add("error", "unknown_overlay_panel", "出格图层引用了不存在的格子", field_name="overlays")
+        if _get(overlay, "character_id", "") not in characters:
+            report.add(
+                "error", "unknown_overlay_character", "出格图层引用了不存在的角色", field_name="overlays"
+            )
+        x, y, w, h = panel_bbox({"shape": _get(overlay, "rect", {})})
+        if not (0 <= x < x + w <= width and 0 <= y < y + h <= height):
+            report.add("error", "overlay_out_of_bounds", "出格图层必须在画布内", field_name="overlays")
+        if _get(overlay, "status", "planned") not in {"planned", "approved"}:
+            report.add("error", "invalid_overlay_status", "出格图层状态无效", field_name="overlays")
+        if _number(_get(overlay, "z_index", 1)) < 1:
+            report.add("error", "invalid_overlay_layer", "出格图层层级必须高于格子", field_name="overlays")
 
 
 # Short aliases used by integrations and the CLI.

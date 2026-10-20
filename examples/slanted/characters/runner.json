@@ -1,0 +1,12 @@
+{
+  "format": "soda-storyboard-character-v1",
+  "id": "runner",
+  "display_name": "女孩",
+  "trigger_words": [],
+  "clothing": [],
+  "reference_images": [],
+  "approved_images": [],
+  "appearance": {
+    "zh": "黑色短发，浅色校服，背着帆布包"
+  }
+}

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
-from math import floor
+from dataclasses import replace
+from itertools import combinations
+from math import ceil, floor
 from typing import TYPE_CHECKING, Any
 
-from .geometry import panel_to_moss_bbox, shape_bbox
+from .geometry import inscribed_rect, midline_rect, panel_to_moss_bbox, shape_bbox
+from .models import shape_to_dict
 
 if TYPE_CHECKING:
     from .models import Character, Dialogue, Page, Panel, Shape
@@ -78,14 +81,74 @@ def _panel_summary(panel: Panel) -> str:
     return f"Panel {panel.order}: {shot}{', ' + beat if beat else ''}."
 
 
-def _integer_bbox(shape: Shape, page: Page) -> list[int]:
+def _integer_bbox(shape: Shape, page: Page, *, inward: bool = False) -> list[int]:
     bounds = [page.canvas_height // 2, page.canvas_width // 2] * 2
-    return [
-        max(-bound, min(bound, floor(value + 0.5)))
-        for value, bound in zip(
-            panel_to_moss_bbox(shape, page.canvas_width, page.canvas_height), bounds, strict=True
-        )
-    ]
+    values = panel_to_moss_bbox(shape, page.canvas_width, page.canvas_height)
+    rounded = (
+        [ceil(v - 1e-8) if i < len(values) // 2 else floor(v + 1e-8) for i, v in enumerate(values)]
+        if inward
+        else [floor(v + 0.5) for v in values]
+    )
+    result = [max(-bound, min(bound, value)) for value, bound in zip(rounded, bounds, strict=True)]
+    if inward and (result[0] >= result[2] or result[1] >= result[3]):
+        message = "Panel is too small to contain a positive-area integer MOSS bbox"
+        raise ValueError(message)
+    return result
+
+
+def _compiled_shape(panel: Panel, mode: str) -> dict[str, Any]:
+    shape = shape_to_dict(panel.shape)
+    if shape["type"] != "quad" or mode == "rect":
+        return shape
+    return inscribed_rect(shape) if mode == "hint" else midline_rect(shape)
+
+
+def compile_geometry_map(page: Page, *, slant_mode: str = "cut") -> dict[str, Any]:
+    """Sidecar geometry only; never append this data to the MOSS prompt."""
+    _validate_slant_mode(slant_mode)
+    panels = []
+    for panel in sorted(page.panels, key=lambda panel: panel.order):
+        region = _compiled_shape(panel, slant_mode)
+        entry = {
+            "panel_id": panel.id,
+            "order": panel.order,
+            "shape": shape_to_dict(panel.shape),
+            "generation_rect": dict(zip(("x", "y", "x2", "y2"), shape_bbox(region), strict=True)),
+            "bbox": _integer_bbox(region, page, inward=slant_mode == "hint"),
+        }
+        if panel.shape_type == "quad":
+            entry["quad"] = shape_to_dict(panel.shape)["points"]
+        panels.append(entry)
+    _validate_cut_regions(page, slant_mode, [entry["bbox"] for entry in panels])
+    return {
+        "page_id": page.page_id,
+        "canvas": [page.canvas_width, page.canvas_height],
+        "slant_mode": slant_mode,
+        "shape_coord_space": "top_left_pixels",
+        "bbox_coord_space": "abs_centralized",
+        "bbox_format": "yxyx",
+        "panels": panels,
+        "overlays": [overlay.to_dict() for overlay in page.overlays],
+    }
+
+
+def _validate_slant_mode(mode: str) -> None:
+    if mode not in {"cut", "hint", "rect"}:
+        message = "slant_mode must be cut, hint or rect"
+        raise ValueError(message)
+
+
+def _validate_cut_regions(page: Page, mode: str, bboxes: list[list[int]]) -> None:
+    if mode != "cut" or not any(panel.shape_type == "quad" for panel in page.panels):
+        return
+    for first, second in combinations(bboxes, 2):
+        if min(first[2], second[2]) > max(first[0], second[0]) and min(first[3], second[3]) > max(
+            first[1], second[1]
+        ):
+            message = (
+                "Cut midline rectangles overlap; use shared-seam geometry or slant_mode='rect' for debugging"
+            )
+            raise ValueError(message)
 
 
 def _dialogue_caption(dialogue: Dialogue, page: Page) -> str:
@@ -99,7 +162,9 @@ def _dialogue_caption(dialogue: Dialogue, page: Page) -> str:
     return f'{bubbles.get(dialogue.bubble, bubbles["speech"])} with Chinese text "{dialogue.text}"'
 
 
-def _text_bbox(panel: Panel, dialogue: Dialogue, index: int, page: Page) -> list[int]:
+def _text_bbox(
+    panel: Panel, dialogue: Dialogue, index: int, page: Page, *, inward: bool = False
+) -> list[int]:
     """Place a speech item in the upper portion of its panel."""
 
     x, y, x2, y2 = shape_bbox(panel.shape)
@@ -116,7 +181,40 @@ def _text_bbox(panel: Panel, dialogue: Dialogue, index: int, page: Page) -> list
     else:
         left = x
     top = y + min(24.0 + index * (band_height * 0.85), max(0.0, height - band_height))
-    return _integer_bbox({"x": left, "y": top, "w": band_width, "h": band_height}, page)
+    return _integer_bbox({"x": left, "y": top, "w": band_width, "h": band_height}, page, inward=inward)
+
+
+def _panel_items(
+    panel: Panel, page: Page, characters: Mapping[str, Character], *, mode: str, with_ids: bool
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    generation_panel = replace(panel, shape=_compiled_shape(panel, mode))
+    object_caption = _panel_caption(panel, characters)
+    if mode == "hint" and panel.shape_type == "quad":
+        object_caption += ", slanted panel"
+    items.append(
+        {
+            "label": "object",
+            "caption": object_caption,
+            "bbox": _integer_bbox(generation_panel.shape, page, inward=mode == "hint"),
+        }
+    )
+    if with_ids:
+        items[-1]["panel_id"] = panel.id
+    if page.dialogue_mode == "moss_text":
+        for index, dialogue in enumerate(panel.dialogue):
+            if not dialogue.text.strip():
+                continue
+            items.append(
+                {
+                    "label": "text",
+                    "caption": _dialogue_caption(dialogue, page),
+                    "bbox": _text_bbox(generation_panel, dialogue, index, page, inward=mode == "hint"),
+                }
+            )
+            if with_ids:
+                items[-1].update(panel_id=panel.id, speaker_id=dialogue.speaker_id)
+    return items
 
 
 def compile_page(
@@ -125,9 +223,11 @@ def compile_page(
     *,
     size_check: tuple[int, int] | None = None,
     with_ids: bool = False,
+    slant_mode: str = "cut",
 ) -> dict[str, Any]:
     """Return a MOSS layout dictionary for ``page``."""
 
+    _validate_slant_mode(slant_mode)
     character_map = _character_map(characters)
     panel_summaries = [_panel_summary(panel) for panel in sorted(page.panels, key=lambda item: item.order)]
     lead = "; ".join(part for part in (page.style_prefix, page.description) if part)
@@ -135,6 +235,8 @@ def compile_page(
     direction = "left to right" if page.reading_direction == "ltr" else "right to left"
     suffix = f"{color} Japanese manga page, {len(page.panels)} panels, read {direction}, clean white gutters"
     caption = "; ".join(part for part in (lead, suffix, " ".join(panel_summaries)) if part)
+    if slant_mode == "hint" and any(panel.shape_type == "quad" for panel in page.panels):
+        caption += "; panels separated by slanted dividing lines"
     if page.dialogue_mode == "lettering" or not any(d.text.strip() for p in page.panels for d in p.dialogue):
         caption += "; no text, no speech bubbles"
     result: dict[str, Any] = {
@@ -151,29 +253,9 @@ def compile_page(
         }
     items: list[dict[str, Any]] = result["items"]
     for panel in sorted(page.panels, key=lambda item: item.order):
-        items.append(
-            {
-                "label": "object",
-                "caption": _panel_caption(panel, character_map),
-                "bbox": _integer_bbox(panel.shape, page),
-            }
-        )
-        if with_ids:
-            items[-1]["panel_id"] = panel.id
-        if page.dialogue_mode == "moss_text":
-            for index, dialogue in enumerate(panel.dialogue):
-                if not dialogue.text.strip():
-                    continue
-                items.append(
-                    {
-                        "label": "text",
-                        "caption": _dialogue_caption(dialogue, page),
-                        "bbox": _text_bbox(panel, dialogue, index, page),
-                    }
-                )
-                if with_ids:
-                    items[-1].update(panel_id=panel.id, speaker_id=dialogue.speaker_id)
+        items.extend(_panel_items(panel, page, character_map, mode=slant_mode, with_ids=with_ids))
+    _validate_cut_regions(page, slant_mode, [item["bbox"] for item in items if item["label"] == "object"])
     return result
 
 
-__all__ = ["compile_page"]
+__all__ = ["compile_geometry_map", "compile_page"]

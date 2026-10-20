@@ -8,8 +8,9 @@ Implementation: src/soda_storyboard/templates.py and recipes.json.
 Changes: Chinese names/help, configurable gutters, LTR mirroring, explicit order,
 importance-based candidate ranking, seven-panel extensions (except the horizontal
 recipe), and deterministic geometry with mutation=0. Seed/mutation, technique
-advice, locks, insets, bleed and breakout are not ported. Staggered rectangles
-supply the asymmetric composition; no independent diagonal deformation is used.
+advice, locks, insets and bleed are not ported. Shared-seam skew geometry,
+maximum-area inscribed rectangles, polygon validation and overlay metadata are
+original Python implementations. No OpenKoma source code has been copied.
 No kumiko AGPL code is included. Full upstream MIT license follows.
 
 MIT License

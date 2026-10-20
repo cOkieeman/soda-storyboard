@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .compiler import compile_page
+from .compiler import compile_geometry_map, compile_page
+from .geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from .io import load_characters, load_page, load_project, read_json, write_json
 from .models import Character, Page, Panel, Project
 from .preview import render_preview
@@ -120,6 +121,40 @@ def command_character_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_page_skew(args: argparse.Namespace) -> int:
+    path = Path(args.page)
+    payload = read_json(path)
+    ids = [identifier.strip() for identifier in args.panels.split(",") if identifier.strip()]
+    panels = {panel["id"]: panel for panel in payload["panels"]}
+    if len(ids) <= 1 or len(set(ids)) != len(ids) or not set(ids) <= panels.keys():
+        raise ValueError("--panels 需要至少两个不同的、已存在的格子 id")
+    selected = [panels[identifier]["shape"] for identifier in ids]
+    bounds = [shape_bbox(shape) for shape in selected]
+    group = (
+        min(b[0] for b in bounds),
+        min(b[1] for b in bounds),
+        max(b[2] for b in bounds),
+        max(b[3] for b in bounds),
+    )
+    group_box = (group[0], group[1], group[2] - group[0], group[3] - group[1])
+    if any(
+        bbox_overlap(group_box, bbox_xywh(panel["shape"]))
+        for identifier, panel in panels.items()
+        if identifier not in ids
+    ):
+        raise ValueError("选中的格子之间还有其他格子，请选择完整的相邻组")
+    page = Page.from_dict(payload)
+    quads = skew_rectangles(selected, angle=args.angle, gap=page.panel_gap, axis=args.axis)
+    for identifier, quad in zip(ids, quads, strict=True):
+        panels[identifier]["shape"] = quad
+    report = validate_page(Page.from_dict(payload), _characters_near(path))
+    if report.errors:
+        raise ValueError(report.errors[0].message)
+    write_json(path, payload)
+    _emit({"path": str(path), "panels": ids, "angle": args.angle}, args.json)
+    return 0
+
+
 def command_template_list(args: argparse.Namespace) -> int:
     templates = builtin_templates(args.panels)
     _emit(templates, args.json)
@@ -154,6 +189,7 @@ def command_layout_suggest(args: argparse.Namespace) -> int:
         gap=args.gap if args.gap is not None else page.panel_gap if page else 24,
         reading_direction=args.direction or (page.reading_direction if page else "rtl"),
         pick=args.pick,
+        skew=args.skew,
     )
     if args.preview_dir:
         for index, result in enumerate(results, 1):
@@ -237,10 +273,23 @@ def command_compile(args: argparse.Namespace) -> int:
     payload.setdefault("color_mode", project.color_mode)
     page = Page.from_dict(payload)
     compiled = compile_page(
-        page, _characters_near(path), size_check=_parse_size(args.size_check), with_ids=args.with_ids
+        page,
+        _characters_near(path),
+        size_check=_parse_size(args.size_check),
+        with_ids=args.with_ids,
+        slant_mode=args.slant_mode,
     )
     if args.output:
         write_json(args.output, compiled)
+    target = Path(args.output) if args.output else path
+    if args.slant_mode == "cut" and any(panel.shape_type == "quad" for panel in page.panels):
+        cut_map = compile_geometry_map(page, slant_mode="cut")
+        write_json(
+            target.with_suffix(".cut.json"),
+            {key: value for key, value in cut_map.items() if key != "overlays"},
+        )
+    if args.with_ids:
+        write_json(target.with_suffix(".map.json"), compile_geometry_map(page, slant_mode=args.slant_mode))
     _emit(compiled, args.json)
     return 0
 
@@ -274,6 +323,13 @@ def build_parser() -> argparse.ArgumentParser:
     page_new.add_argument("--color-mode", choices=("monochrome", "color"))
     page_new.add_argument("--json", action="store_true")
     page_new.set_defaults(func=command_page_new)
+    page_skew = page_sub.add_parser("skew", help="倾斜相邻格子之间的共享分割线")
+    page_skew.add_argument("page")
+    page_skew.add_argument("--panels", required=True, help="逗号分隔的相邻格子 id")
+    page_skew.add_argument("--angle", type=float, default=8)
+    page_skew.add_argument("--axis", choices=("auto", "vertical", "horizontal"), default="auto")
+    page_skew.add_argument("--json", action="store_true")
+    page_skew.set_defaults(func=command_page_skew)
 
     character = subparsers.add_parser("character", help="创建角色卡")
     character_sub = character.add_subparsers(dest="character_command", required=True)
@@ -304,7 +360,8 @@ def build_parser() -> argparse.ArgumentParser:
     suggest.add_argument("--height", type=int, default=1536)
     suggest.add_argument("--templates")
     suggest.add_argument("--importance", help="逗号分隔的每格重要度，例如 3,2,1,1,1")
-    suggest.add_argument("--candidates", type=int, default=4)
+    suggest.add_argument("--candidates", type=int, default=6)
+    suggest.add_argument("--skew", type=float, help="斜切角度；0 只返回矩形，默认混合候选")
     suggest.add_argument("--gap", type=int)
     suggest.add_argument("--direction", choices=("rtl", "ltr"))
     suggest.add_argument("--pick", help="选择 template_id；--page 会写回所选候选，默认第一项")
@@ -333,6 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     compile_parser.add_argument("--output")
     compile_parser.add_argument("--size-check")
     compile_parser.add_argument("--with-ids", action="store_true", help="输出 panel_id、speaker_id 辅助字段")
+    compile_parser.add_argument("--slant-mode", choices=("cut", "hint", "rect"), default="cut")
     compile_parser.add_argument("--json", action="store_true")
     compile_parser.set_defaults(func=command_compile)
     return parser

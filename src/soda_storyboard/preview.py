@@ -5,8 +5,51 @@ from __future__ import annotations
 import warnings
 from collections.abc import Iterable, Mapping
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .models import Character, Page, Panel
+
+if TYPE_CHECKING:
+    from PIL import ImageDraw, ImageFont
+
+    from .models import Overlay
+
+
+def _draw_overlay(
+    draw: ImageDraw.ImageDraw,
+    overlay: Overlay,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: float,
+) -> None:
+    rect = overlay.rect
+    left, top, right, bottom = [round(v * scale) for v in (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h)]
+    dash = max(4, round(10 * scale))
+    for start, end in (
+        ((left, top), (right, top)),
+        ((right, top), (right, bottom)),
+        ((left, bottom), (right, bottom)),
+        ((left, top), (left, bottom)),
+    ):
+        distance = max(abs(end[0] - start[0]), abs(end[1] - start[1]))
+        for offset in range(0, distance, dash * 2):
+            finish = min(offset + dash, distance)
+            a = (
+                start[0] + (end[0] - start[0]) * offset / distance,
+                start[1] + (end[1] - start[1]) * offset / distance,
+            )
+            b = (
+                start[0] + (end[0] - start[0]) * finish / distance,
+                start[1] + (end[1] - start[1]) * finish / distance,
+            )
+            draw.line((a, b), fill="#059669", width=max(2, round(3 * scale)))
+    draw.text(
+        (left + 6 * scale, top + 6 * scale),
+        f"出格 {overlay.id}",
+        fill="#047857",
+        font=font,
+        stroke_width=2,
+        stroke_fill="white",
+    )
 
 
 def find_font(font: str | Path | None = None) -> Path | None:
@@ -30,6 +73,32 @@ def _character_names(panel: Panel, characters: Mapping[str, Character] | None) -
         characters.get(identifier, Character(identifier, identifier)).display_name
         for identifier in panel.character_ids
     )
+
+
+def _draw_dialogue(
+    draw: ImageDraw.ImageDraw,
+    panel: Panel,
+    origin: tuple[int, int],
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: float,
+) -> None:
+    left, top = origin
+
+    def s(value: float) -> int:
+        return round(value * scale)
+
+    for index, dialogue in enumerate(panel.dialogue):
+        bubble_left = left + s(12)
+        bubble_top = top + s(60 + index * 48)
+        bubble_right = bubble_left + max(s(120), s(min(260, 16 + len(dialogue.text) * 16)))
+        bubble_bottom = bubble_top + s(34)
+        draw.rounded_rectangle(
+            (bubble_left, bubble_top, bubble_right, bubble_bottom),
+            radius=max(3, s(8)),
+            outline="#dc2626",
+            width=max(1, s(2)),
+        )
+        draw.text((bubble_left + s(6), bubble_top + s(5)), dialogue.text[:18], fill="#991b1b", font=font)
 
 
 def render_preview(
@@ -98,20 +167,9 @@ def render_preview(
         draw.text((left + s(8), top + s(8)), title, fill="#111827", font=label_font)
         if detail:
             draw.text((left + s(8), top + s(32)), detail, fill="#374151", font=small_font)
-        for index, dialogue in enumerate(panel.dialogue):
-            bubble_left = left + s(12)
-            bubble_top = top + s(60 + index * 48)
-            bubble_right = bubble_left + max(s(120), s(min(260, 16 + len(dialogue.text) * 16)))
-            bubble_bottom = bubble_top + s(34)
-            draw.rounded_rectangle(
-                (bubble_left, bubble_top, bubble_right, bubble_bottom),
-                radius=max(3, s(8)),
-                outline="#dc2626",
-                width=max(1, s(2)),
-            )
-            draw.text(
-                (bubble_left + s(6), bubble_top + s(5)), dialogue.text[:18], fill="#991b1b", font=small_font
-            )
+        _draw_dialogue(draw, panel, (left, top), small_font, scale)
+    for overlay in sorted(page.overlays, key=lambda overlay: overlay.z_index):
+        _draw_overlay(draw, overlay, label_font, scale)
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image.save(output_path)
