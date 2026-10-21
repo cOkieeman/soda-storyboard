@@ -25,7 +25,7 @@
 
 一、分镜单格式（schema 和模型）
 1. **文字元素独立化**：页文件新增 `texts` 列表，每项包括 id、kind（`dialogue` / `narration` / `sfx` / `title` / `caption_tag`）、text（原文，可含 `\n`）、所属格子 id（可空）、说话人 id（dialogue 用）、direction（`vertical` / `horizontal`，默认跟随页面）、bubble（`speech` / `shout` / `thought` / `box` / `none`）、bbox（左上角原点像素矩形，可空）、style_hint（英文样式补充，可空）。旧格式里格子的 `dialogue` 仍然支持，编译时自动转成 texts。
-2. **主角大图**：overlays 新增 `mode`：`moss`（编译成 `label: "character"` 条目，让 MOSS 直接画出跨格的主角，范例的做法）或 `layer`（第 3 阶段抠图叠加，原有行为）。默认 `moss`。
+2. **跨格主角（可选手法）**：overlays 新增 `mode`：`moss`（编译成 `label: "character"` 条目，让 MOSS 直接画出跨格的人物，范例的做法）或 `layer`（第 3 阶段抠图叠加，原有行为）。新建 overlay 时默认 `moss`。overlays 本身是可选的，大多数页面没有。
 3. **英文描述字段**：格子新增 `caption_en`（可空）；角色卡已有 `appearance_en`，再加 `age`（可空，如 "20-year-old"）。页面和项目新增 `style_prompt`（一段英文画风描述，可空）和 `tags`（如 `["2girls", "sisters", "kitchen"]`）。
 
 二、编译器
@@ -42,7 +42,8 @@
 
 四、插件（skill）
 12. SKILL.md 和 references 按新写法更新：
-    - 拆格时除了格子，还要规划主角大图（是否用跨格主角）、旁白、拟声词、标题，并在线框上给出位置。
+    - 拆格时除了格子，也考虑台词、旁白、拟声词、标题放在哪里，并在线框上给出位置。
+    - 跨格主角、出格只是**可选手法**，不是每页都要：只在人物登场、情绪高潮、需要强调某个人的页面才提议，并说明为什么；日常对话、动作戏默认用普通格子。不要每页都塞一个主角大图。
     - 引导 AI 写英文 `caption_en` 和人物英文外观；用户只说中文也没关系，由 AI 翻译补全。
     - 画风：用户没给时，给 2～3 个英文画风段落让用户选（例如彩色厚涂插画风、清爽赛璐珞、黑白网点漫画），存进项目 `style_prompt`。不要擅自替用户定画风。
     - 避免把两个带 LoRA 的角色排进同一格；做不到时明确告诉用户风险（布丁页违反过）。
