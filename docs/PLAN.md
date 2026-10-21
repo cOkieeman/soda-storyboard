@@ -78,6 +78,11 @@ my-comic/
 - 打包：Claude Code 插件清单和 Codex skill 安装说明。先按官方文档核实两边当前的插件格式，不能凭记忆写。
 - 角色文件的建立和使用流程。
 
+### 当前进度与排期（2026-10-21 更新）
+- 已完成：P1、P1b、P1c、P2、P2b（插件可用；编译器按范例写法输出；火柴人草稿）。
+- 进行中（同时派给 Codex，文件互不重叠）：`docs/tasks/P3-production.md`（出图生产流程，代码在 `src/soda_storyboard/production/`）和 `docs/tasks/P4a-server.md`（编辑器本地服务，代码在 `src/soda_storyboard/server/`，接口文档 `editor/API.md`）。
+- P4a 完成后写 P4b（Gemini 前端任务书）；之后 P5（参考页提取版式）、P6（接入 Hub）。
+
 ### 第 3 阶段：ComfyUI 连接 + 生产流程（Codex）
 - 导入 API 格式工作流并做节点映射，自动认出 Soda-MOSS v2。直接调 ComfyUI 的 HTTP 接口（`/prompt`、`/history`、`/view`）。
 - `gen page`：一次多个种子出整页。
