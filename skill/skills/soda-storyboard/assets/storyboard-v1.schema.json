@@ -192,6 +192,9 @@
           "items": {
             "$ref": "#/$defs/figure"
           }
+        },
+        "production": {
+          "$ref": "#/$defs/production"
         }
       },
       "additionalProperties": true
@@ -351,6 +354,9 @@
           "type": "integer",
           "minimum": 1,
           "default": 10
+        },
+        "production": {
+          "$ref": "#/$defs/production"
         }
       },
       "additionalProperties": true
@@ -416,6 +422,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "comfy": {
+          "$ref": "#/$defs/comfy"
         }
       },
       "additionalProperties": true
@@ -564,6 +573,12 @@
             "string",
             "null"
           ]
+        },
+        "render_mode": {
+          "enum": [
+            "moss_text",
+            "lettering"
+          ]
         }
       },
       "additionalProperties": true
@@ -643,6 +658,185 @@
             "face",
             null
           ]
+        },
+        "bbox": {
+          "type": "object",
+          "description": "可选精确人物范围，页面左上角像素坐标，用于局部换人遮罩。",
+          "required": [
+            "x",
+            "y",
+            "w",
+            "h"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "h": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "comfy": {
+      "type": "object",
+      "description": "项目级 ComfyUI 配置；模型路径相对 ComfyUI 模型目录。",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "preset": {
+          "enum": [
+            "draft",
+            "final"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "minimal",
+            "v2"
+          ]
+        },
+        "workflow": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sft": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        },
+        "clip": {
+          "type": "string"
+        },
+        "vae": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "poll_interval": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cut_inset": {
+          "type": "number",
+          "minimum": 0
+        },
+        "border_width": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "render": {
+      "type": "object",
+      "required": [
+        "path",
+        "seed"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "meta": {
+          "type": "object"
+        },
+        "source_render": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "detail",
+            "swap",
+            "inpaint"
+          ]
+        },
+        "character_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "denoise": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "resolved_characters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mask": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lora": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "production": {
+      "type": "object",
+      "description": "路径相对故事项目根目录；派生图记录签名以避免复用旧底图的结果。",
+      "properties": {
+        "renders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/render"
+          }
+        },
+        "selected_render": {
+          "type": "string"
+        },
+        "selected": {
+          "type": "string"
+        },
+        "candidate_sheet": {
+          "type": "string"
+        },
+        "composed": {
+          "type": "object"
+        },
+        "lettered": {
+          "type": "object"
+        },
+        "overlays": {
+          "type": "object"
+        },
+        "split": {
+          "type": "object"
         }
       },
       "additionalProperties": true

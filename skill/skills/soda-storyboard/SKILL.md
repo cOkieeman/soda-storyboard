@@ -1,6 +1,6 @@
 ---
 name: soda-storyboard
-description: 与用户讨论一页日漫分镜，把片段想法拆格、选择版式、审阅线框、逐格修改并确认后编译 MOSS 布局。适用于新建或修改分镜单、角色卡和出图复查；不负责图像生成或 ComfyUI 执行。
+description: 与用户讨论日漫分镜、选择版式、审阅线框，确认后编译 MOSS 布局；用户需要时通过本机 ComfyUI 出候选图、重画、拼页、排字和导出。
 ---
 
 # Soda Storyboard 分镜讨论
@@ -12,7 +12,7 @@ description: 与用户讨论一页日漫分镜，把片段想法拆格、选择�
 - 此插件提供讨论流程，需要本机 Python 3.12+、uv 和已安装的 soda-storyboard CLI。先用 `soda-storyboard --help` 核对本机版本，涉及的子命令也先看帮助；帮助之外的执行命令都加 `--json`，读取结构化结果。
 - 如 CLI 不在 PATH，按仓库 README 的前置安装步骤告知用户，不自动安装依赖或改全局配置。若用户只运行仓库的 uv 项目环境，可用 `uv run --directory "<仓库绝对路径>" soda-storyboard` 作为命令前缀，此时所有项目、页面、参考图和输出参数用绝对路径。
 - 操作目标是用户的故事项目目录，不是安装后的插件缓存。先检查已有项目和文件，别用 init / new 覆盖它们。新项目才运行 `soda-storyboard init my-story --name "新故事" --direction rtl --json`；路径只是示例，换成实际目标。
-- 默认不联网、不调用 ComfyUI、不执行图像生成。草稿 PNG 是本地 Pillow 绘制的人物和文字布局预览；这项工作流不提交生成任务。用户拿来成图时按 [复查清单](references/review-checklist.md) 看图，不擅自改稿或宣称修图完成。
+- 分镜讨论和 preview 不调用 ComfyUI；preview PNG 是本地 Pillow 绘制的布局预览。整页确认后按第 7 节提议本机出图，每次只运行用户同意的数量和步骤。用户拿来成图时按 [复查清单](references/review-checklist.md) 看图。
 
 ## 1. 听片段并认识角色
 
@@ -72,7 +72,7 @@ soda-storyboard layout suggest --page my-story/pages/station-turn.json --pick he
 
 每格补上 `figures`：谁（character_id）、姿势（pose）、站位（position）、朝向（facing），framing 可留空让景别推断。人物取景的大小由 framing 决定。草稿会显示圆头十字线、身体四肢和角色名；矩形与斜切格都会裁住人物。用 `texts` 给对白、旁白、拟声词、标题单独定位，bbox 是左上角原点像素 x/y/w/h，竖排要留竖长框，长句按默认 10 字换列。草稿稳定使用青色格子与格内人物、红色跨格人物和标题框、绿色文字框，并直接写出原文。
 
-跨格主角和出格只是可选手法。只在人物登场、情绪高潮或需要强调某人时提议，并解释这一页为什么需要；日常对话和动作戏默认普通格子，绝不每页都塞主角大图。确需 MOSS 直接画跨格人物时，新增 overlay 必须显式写 `mode: "moss"`；要留给第 3 阶段抠图叠加时用 `mode: "layer"`。旧文件缺 mode 继续按 layer 解释。
+跨格主角和出格只是可选手法。只在人物登场、情绪高潮或需要强调某人时提议，并解释这一页为什么需要；日常对话和动作戏默认普通格子，绝不每页都塞主角大图。确需 MOSS 直接画跨格人物时，新增 overlay 必须显式写 `mode: "moss"`；要后期抠图叠加时用 `mode: "layer"`。旧文件缺 mode 继续按 layer 解释。
 
 ```shell
 soda-storyboard validate my-story/pages/station-turn.json --json
@@ -98,10 +98,51 @@ soda-storyboard validate my-story/pages/station-turn.json --json
 soda-storyboard compile my-story/pages/station-turn.json --output my-story/output/station-turn.moss.json --slant-mode cut --json
 ```
 
-交付页文件、线框和 MOSS JSON 的绝对路径。简短提醒：把 JSON 粘进 Soda-MOSS v2 的“JSON直通”框，工作流画布尺寸要与页面一致；斜切页的 `station-turn.moss.cut.json` 用于出图后按 quad 裁剪，第 3 阶段才会自动化；目前不要称已经裁剪。moss 模式 overlays 编译成 character 条目，交给 MOSS 直接画跨格人物；layer 模式仍是规划数据，透明人物图层留待后续生成与叠加。
+交付页文件、线框和 MOSS JSON 的绝对路径。手动使用时，把 JSON 粘进 Soda-MOSS v2 的“JSON直通”框，画布尺寸与页面一致；斜切页的 `station-turn.moss.cut.json` 保存 quad 裁剪几何。也可按第 7 节直接驱动本机 ComfyUI。moss 模式 overlays 由 MOSS 画跨格人物；layer 模式在 cutout 后叠加透明人物。
 
 preview 默认给带火柴人草稿；仅要旧纯框线版时用 `--style boxes`。尺寸核对只出现在 --json 命令报告或 --with-ids 的 map，不写进 --output 的 MOSS JSON，交付应使用输出文件。
 
-生产输出不要加 --with-ids。如用户要调试映射，可单独生成带 ids 的调试输出和 map，别覆盖已交付的干净 MOSS JSON。把多 LoRA 的主角色、需单独处理的格子一并说明，不替用户加载模型。
+生产输出不要加 --with-ids。如用户要调试映射，可单独生成带 ids 的调试输出和 map，别覆盖已交付的干净 MOSS JSON。把多 LoRA 的主角色、需单独处理的格子一并说明。
+
+## 7. 经用户同意后出图与生产
+
+整页确认并编译后，询问是否直接出草稿，建议默认 4 个种子、draft 预设。先说明 1024×1536 每张草稿约 40 秒，4 张约 160 秒；final 每张约 80 秒，排队和硬件会影响耗时。每次只跑用户同意的数量；用户已明确授权数量和步骤时直接执行，不重复确认，不擅自追加候选或重试生成。超时可能仍在服务端运行，先说明任务号，不自动再提交。
+
+先读配置并检查节点、模型列表（只检查，不出图）。使用用户提供的地址、模型和 LoRA 路径，不搜索磁盘或代替用户安装节点。默认后端 minimal 不依赖 v2 自定义节点；需要 v2 时让用户提供 API 工作流路径。
+
+```shell
+soda-storyboard comfy config --project my-story --json
+soda-storyboard comfy check --project my-story --json
+soda-storyboard gen page station-turn --project my-story --seeds 4 --preset draft --lora auto --json
+```
+
+gen 会自动编译。按返回的 meta.candidate_sheet 绝对路径嵌入候选拼图，标出种子与对应 path；没有图片展示能力就给可打开的路径并说明。**等待用户选图**，不能自动挑第一张。用返回的完整 path 替换下例 render.png：
+
+```shell
+soda-storyboard pick station-turn render.png --project my-story --json
+soda-storyboard plan station-turn --project my-story --json
+```
+
+向用户解释 plan：哪些格需要整格换人、哪些需要局部换人、斜切裁剪、出格抠图和排字。一次只加载一个人物 LoRA；auto 选出场最多的带 LoRA 角色，其他角色单独格用 swap 0.85，两人同格用 inpaint 0.85。detail 0.45 修细节。按用户同意逐步执行；每一步展示返回的图片，重画候选必须等待用户选择后 pick-panel。局部遮罩按 figures 位置估计，重叠或大动作时先检查返回的遮罩，有需要在 figure.bbox 填入更准确的页面坐标 x/y/w/h。重画保留 moss_text 文字框；提示词只能描述单张画面，不能带整页前缀。
+
+```shell
+soda-storyboard split station-turn --project my-story --json
+soda-storyboard redraw station-turn p3 --project my-story --mode detail --json
+soda-storyboard pick-panel station-turn p3 panel-render.png --project my-story --json
+soda-storyboard compose station-turn --project my-story --cut-inset 12 --border-width 3 --json
+soda-storyboard letter station-turn --project my-story --json
+soda-storyboard export station-turn --project my-story --format png --json
+```
+
+swap 加 --character 角色id；两人同格用 inpaint 子命令（同样指定页、格子和 --character）。每次生成前说明这一张的大概耗时。compose 使用选定格子结果，quad 向内裁剪并重画边框；letter 为 lettering 模式或 texts.render_mode=lettering 的文字排字，字体找不到时请用户提供字体文件并用 --font 指定；moss_text 可用 --text 指定文字 id（可重复）。不擅自重写台词。
+
+仅 mode=layer 的 overlay 使用 cutout；mode=moss 已由整页生成。cutout 先检查 BiRefNetRMBG / RMBG / rembg 节点，缺少时说明需安装 ComfyUI-RMBG 或提供透明 PNG，不自行安装。抠图生成同样需要说明耗时和取得用户同意。已有透明 PNG 可直接导入，不消耗生成次数。图层按 z_index 放在页面最上方，展示返回的 page_path。
+
+```shell
+soda-storyboard cutout station-turn hero --project my-story --png refs/hero-transparent.png --json
+soda-storyboard export my-story --format pdf --json
+```
+
+最终交付成品图和导出文件绝对路径；说明仍未选择的重画或未处理的图层。export 按页序取 lettered、composed、选定底图中有效的最高阶段；换底图或换格子后需要重新 compose / letter，不将旧派生图当成新成品。
 
 完整对话见 [车站示例](../../examples/station-dialogue.md)。

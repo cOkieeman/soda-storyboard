@@ -532,6 +532,9 @@ def build_parser() -> argparse.ArgumentParser:
     compile_parser.add_argument("--slant-mode", choices=("cut", "hint", "rect"), default="cut")
     compile_parser.add_argument("--json", action="store_true")
     compile_parser.set_defaults(func=command_compile)
+    from .production.cli import register_commands  # noqa: PLC0415 -- optional command registration
+
+    register_commands(subparsers)
     return parser
 
 

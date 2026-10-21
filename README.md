@@ -116,7 +116,7 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --slant
 | `hint` | quad 内的最大面积轴对齐矩形，整数坐标向内取整 | summary 加斜分割线，object 加 `slanted panel` | 无裁剪文件 |
 | `rect` | 原 quad 的外接矩形 | 不自动添加斜切描述 | 无裁剪文件，仅供调试，bbox 可能重叠 |
 
-`cut` 的矩形连同白色格间距覆盖整行或整列；`panel_gap=0` 时直接拼接。MOSS 先按普通矩形生成，quad 留待第 3 阶段裁剪。`.cut.json` 记录画布、坐标系、每格的 `panel_id`、`order`、原 `shape` / `quad`、`generation_rect`（左上角像素 `x,y,x2,y2`）和与 MOSS 相同的中心原点整数 `bbox`。例如输出 `page.moss.json` 对应 `page.moss.cut.json`。不指定 `--output` 时，旁路文件写在输入页旁，如 `page.cut.json`。没有 quad 的页不生成裁剪文件。
+`cut` 的矩形连同白色格间距覆盖整行或整列；`panel_gap=0` 时直接拼接。MOSS 先按普通矩形生成，quad 由生产流程的 compose 裁剪。`.cut.json` 记录画布、坐标系、每格的 `panel_id`、`order`、原 `shape` / `quad`、`generation_rect`（左上角像素 `x,y,x2,y2`）和与 MOSS 相同的中心原点整数 `bbox`。例如输出 `page.moss.json` 对应 `page.moss.cut.json`。不指定 `--output` 时，旁路文件写在输入页旁，如 `page.cut.json`。没有 quad 的页不生成裁剪文件。
 
 `--with-ids` 保留原来的 item 辅助 ID，同时写出同名 `.map.json`，列出每格、独立文字与出格图层。MOSS JSON 不包含 overlays 顶层字段，moss 模式会输出 character item。库函数 `compile_geometry_map(page, slant_mode="cut")` 可获得同样的映射数据。
 
@@ -142,9 +142,9 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --slant
 
 `id`、`character_id`、`rect` 为必填字段；`panel_id` 可为 null，`image_path` 可为 null。`z_index` 默认为 1，正整数表示在格子上方，数值越大越靠前；`status` 为 `planned`（默认）或 `approved`。未知扩展字段读写保留。校验器检查重复 ID、引用、层级、状态和画布边界；overlay 可以跨越所属格子的边框，但不能超出画布，角色必须出现在提供的角色卡表中。
 
-overlay 新增 `mode`：新建时应显式写 `moss`（Python Overlay 构造默认值），预览用红色大号人物，编译为 `label: "character"` 让 MOSS 直接画出跨格人物；`layer` 保留原有绿色虚线框和后期叠加规划。旧 JSON 缺省 mode 仍读成 layer，以保持兼容。两者都不参与格间重叠检查，不读取 image_path；透明图层生成、quad 裁剪和叠加仍属第 3 阶段。
+overlay 新增 `mode`：新建时应显式写 `moss`（Python Overlay 构造默认值），预览用红色大号人物，编译为 `label: "character"` 让 MOSS 直接画出跨格人物；`layer` 保留原有绿色虚线框和后期叠加规划。旧 JSON 缺省 mode 仍读成 layer，以保持兼容。两者都不参与格间重叠检查；preview 不读取 image_path，生产流程通过 cutout / compose 生成、裁剪和叠加图层。
 
-跨格主角是可选手法，多数页没有；仅在人物登场、情绪高潮或强调人物时提议并说明理由，日常对话、动作戏默认普通格子。斜切“先生成再裁”实测效果有限，功能保留。JSON 写法比底模和步数更影响成图；Base、SFT 都可用，SFT 偶有手部问题，草稿可用 25 步、定稿 50 步质量档。本工具不调用 ComfyUI。
+跨格主角是可选手法，多数页没有；仅在人物登场、情绪高潮或强调人物时提议并说明理由，日常对话、动作戏默认普通格子。斜切“先生成再裁”实测效果有限，功能保留。JSON 写法比底模和步数更影响成图；Base、SFT 都可用，SFT 偶有手部问题，草稿可用 25 步、定稿 50 步质量档。直接驱动 ComfyUI 的命令见下方“出图”章节。
 
 完整示例位于 `examples/slanted/`：上排三个斜切格，下方两条横格，加一个跨格图层。
 
@@ -156,7 +156,7 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --outpu
 
 ## 安装插件（Codex 优先，Claude Code 兼容）
 
-插件包根目录是 `skill/`，共用文件为 `skill/skills/soda-storyboard/SKILL.md`。这与早期计划中的 `skill/SKILL.md` 不同，是为遵守官方的 `skills/<名称>/SKILL.md` 结构；示例对话仍在 [skill/examples/station-dialogue.md](skill/examples/station-dialogue.md)。包内附带格式 schema、中文知识笔记及完整 NOTICE，不依赖安装后还能访问本仓库的 docs。插件只调用本地 CLI，没有 MCP 服务、账号登录或图像生成能力。
+插件包根目录是 `skill/`，共用文件为 `skill/skills/soda-storyboard/SKILL.md`。这与早期计划中的 `skill/SKILL.md` 不同，是为遵守官方的 `skills/<名称>/SKILL.md` 结构；示例对话仍在 [skill/examples/station-dialogue.md](skill/examples/station-dialogue.md)。包内附带格式 schema、中文知识笔记及完整 NOTICE，不依赖安装后还能访问本仓库的 docs。插件调用本地 CLI，无需账号登录；确认分镜后可通过 CLI 连接本机 ComfyUI 生成图片。
 
 ### 前置条件与命令行安装
 
@@ -210,7 +210,7 @@ claude plugin install soda-storyboard@soda-storyboard-local --scope local
 
 “用 Soda Storyboard 帮我把‘女孩在车站听见熟悉的声音，回头却没说出口’拆成一页日漫，先给我几个方案。”
 
-AI 会先让你选拆格，再展示 4～6 张版式线框供选择，之后逐格调整。可以说“只把第 3 格改成从背后看”；你确认整页满意后，才编译并给出要粘进 Soda-MOSS v2“JSON直通”框的布局 JSON。风格前缀由你指定，插件不会擅自补风格。它不会替你调用 ComfyUI；斜切裁剪、透明人物出格图层、自动重画仍属于第 3 阶段。
+AI 会先让你选拆格，再展示 4～6 张版式线框供选择，之后逐格调整。可以说“只把第 3 格改成从背后看”；你确认整页满意后，才编译并给出要粘进 Soda-MOSS v2“JSON直通”框的布局 JSON。风格前缀由你指定，插件不会擅自补风格。你也可以同意由插件直接调用本机 ComfyUI 出草稿，再逐步进行重画、裁剪、排字和出格图层叠加。
 
 ### 新增角色管理
 
@@ -232,6 +232,66 @@ soda-storyboard character list --project my-story --json
 - [Claude Code：安装管理](https://code.claude.com/docs/en/discover-plugins)：plugin-dir、local scope、reload、启用与更新。
 
 本轮实际验证包括官方 skill-creator 静态校验、清单路径与身份一致性、包内引用和 schema、自文档提取的全部 CLI 命令与 argparse 严格核对、示例 JSON 的逐格修改和编译，以及角色读写测试。当前宿主没有实际安装/加载这个新插件：本任务禁止修改全局配置，且当前聊天不能据此证明新会话的插件发现；Claude Code 也未安装。以上替代验证不等于动态宿主验收，最终应由用户按安装步骤在新聊天中确认名称出现、能调用且会停在三个确认点。
+
+## 出图
+
+需要本机 ComfyUI（默认 `http://127.0.0.1:8190`）及 MOSS 模型。程序通过 HTTP 提交、轮询、上传和下载，不需要 requests / websocket。以下 `my-story` 是已有故事项目目录，`station-turn` 是页面 id，也可传 `my-story/pages/station-turn.json`。
+
+```shell
+uv run soda-storyboard comfy config --project my-story --url http://127.0.0.1:8190 --model sft --preset draft --backend minimal --json
+uv run soda-storyboard comfy check --project my-story --json
+```
+
+`comfy config` 不带设置参数时查看配置；配置存入 `project.json` 的 `comfy`。可用 `--base` / `--sft` 改对应 UNET 文件名，用 `--clip` / `--vae` 改编码器和 VAE，用 `--timeout` 设置轮询超时秒数（默认 600），`--poll-interval` 设置轮询间隔（默认 1 秒）。模型文件名相对 ComfyUI 对应模型目录；默认值为：
+
+- SFT：`MOSS-Image\MOSS-Image-SFT\moss_image_sft_int8_convrot.safetensors`。
+- Base：`MOSS-Image\MOSS-Image-Base\moss_image_base_int8_convrot.safetensors`。
+- CLIP：`qwen3.5_9b_w4a8_gptq.safetensors`（moss_image 类型）。
+- VAE：`flux2-vae.safetensors`。
+
+`comfy check` 只读取 `/object_info` 检查当前后端节点、模型及角色 LoRA 文件列表，不提交任务。无法连接、节点或模型缺失时输出中文原因并返回状态码 2；服务端报错保留原文。自定义节点未公开文件列表时会报告“无法确认”。
+
+| 预设 | 步数 | 采样器 / 调度器 | CFG | SLG | 1024×1536 参考耗时 |
+| --- | --- | --- | --- | --- | --- |
+| draft | 25 | er_sde / simple | 2.5 | 无 | 每张约 40 秒 |
+| final | 50 | euler / simple | 3 | single_layers=22 | 每张约 80 秒 |
+
+默认 minimal 使用最小节点图。可选 v2 后端通过 `comfy config --backend v2 --workflow` 导入用户指定的 API JSON：程序填入布局、尺寸、种子、模型、质量参数和输出路径，插入单个 LoRA，清空原人物堆叠并关闭 SeedVR2。导入的是 API 格式，不是前端画布格式；参考节点表在 `docs/tasks/refs/README.md`。单格重画始终使用 minimal。
+
+```shell
+uv run soda-storyboard comfy config --project my-story --backend v2 --workflow workflows/soda-moss-api.json --json
+uv run soda-storyboard gen page station-turn --project my-story --seeds 4 --preset draft --model sft --lora auto --json
+uv run soda-storyboard pick station-turn render.png --project my-story --json
+uv run soda-storyboard plan station-turn --project my-story --json
+```
+
+gen 自动编译，不要求预先 compile。`--seeds N` 表示候选数量，每张随机选一个具体种子；preset 省略时 CLI 使用项目默认值。model 可选 base、sft 或自定义模型文件名；`--lora auto` 默认选出场最多的带 LoRA 角色（同票按 id），也可指定角色 id 或 none。一次最多加载一个人物 LoRA。结果存到 `pages/<页id>/renders/<时间>_<种子>.png`，记录种子、预设、模型、LoRA 和编译 JSON 哈希；返回 `meta.candidate_sheet` 是并排标种子的候选拼图。pick 的 render 参数换成返回的真实路径或唯一文件名；不接受未登记的图片。
+
+plan 可在选图前查看，选图后会列出需要换人的格子及角色、swap / inpaint 模式、斜切、出格图层和排字。不同候选可以随时重新 pick，旧格子选择和派生页会失效；候选记录仍保留。
+
+```shell
+uv run soda-storyboard split station-turn --project my-story --json
+uv run soda-storyboard redraw station-turn p3 --project my-story --mode detail --json
+uv run soda-storyboard redraw station-turn p3 --project my-story --mode swap --character girl --denoise 0.85 --json
+uv run soda-storyboard inpaint station-turn p1 --project my-story --character girl --denoise 0.85 --margin 24 --feather 16 --json
+uv run soda-storyboard pick-panel station-turn p3 panel-render.png --project my-story --json
+uv run soda-storyboard compose station-turn --project my-story --cut-inset 12 --border-width 3 --json
+uv run soda-storyboard letter station-turn --project my-story --json
+uv run soda-storyboard cutout station-turn hero --project my-story --json
+uv run soda-storyboard cutout station-turn hero --project my-story --png refs/hero-transparent.png --json
+uv run soda-storyboard export station-turn --project my-story --format png --json
+uv run soda-storyboard export my-story --format pdf --json
+```
+
+- split 按 bbox 切格，quad 使用外接矩形，并单独保存 quad-mask；文件放在 `pages/<页id>/panels/<格id>/`。
+- redraw 的 detail 默认 denoise=0.45，swap 默认 0.85，swap 仅适用于单人格；两人同格使用 inpaint。单格提示词不带整页前缀。moss_text 下生成后贴回原文字框，防止高降噪改字。每次生成是独立候选，pick-panel 后才用于拼页。
+- inpaint 按 figures 位置、余量和羽化生成遮罩，羽化后再次保护另一角色区域；支持 `figure.bbox` 精确指定人物范围（页面坐标 x/y/w/h）。返回 mask 路径供检查。位置推断不能替代真实人物分割，重叠人物需要人工调整范围。
+- compose 输出 `composed.png`；把选定格子贴回底图，quad 向内缩进默认 12 像素、外部填白并重画格框。默认缩进和边框可通过 comfy config 持久设置。
+- letter 输出 `lettered.png`，支持椭圆 speech、锯齿 shout、云形 thought、矩形 box 和无气泡 none，以及横排／竖排。按 Noto Sans CJK SC、思源黑体、微软雅黑顺序找字体，可用 `--font` 指定。默认处理 lettering 页或 `texts[].render_mode: "lettering"`；moss_text 页可重复传 `--text t1` 指定程序排字。
+- cutout 只处理 mode=layer 的 overlay，使用角色 LoRA 和单人纯色背景提示词；先检查 BiRefNetRMBG、RMBG、Image Remove Background (rembg)。均缺失时提示安装 ComfyUI-RMBG / rembg，也可 `--png` 导入透明 PNG。抠图节点的必填参数需有默认值或枚举值，且需返回含 alpha 的 IMAGE；否则提示提供透明 PNG。图层按 z_index 置于文字之上，重新生成可用的 composed / lettered 成品。
+- export 接受页 id、页 JSON 路径或项目目录，PNG 每页一张，PDF 合成一份。按 `project.json.pages` / `page_ids` 的声明顺序导出（字符串 id 或含 id/page_id 的对象）；未声明时按页面 order/page_number 再按自然 id 顺序。优先有效的 lettered，再 composed，最后选定底图，输出在 `exports/`。
+
+所有生成命令先在 stderr 说明数量和参考耗时，`--json` 的 stdout 仅含结构化结果；超时提示任务号，服务端任务可能仍在运行，不自动重提。公共接口在 `production/api.py`，不打印、不读取 CLI 参数，可供 P4a 调用。开发测试使用标准库假服务器，不连接真实 ComfyUI，也不占用显卡；真实模型质量、显存及自定义抠图节点兼容性需在用户机器验收。
 
 ## 开发检查
 
