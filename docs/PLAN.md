@@ -79,9 +79,9 @@ my-comic/
 - 角色文件的建立和使用流程。
 
 ### 当前进度与排期（2026-10-21 更新）
-- 已完成：P1、P1b、P1c、P2、P2b（插件可用；编译器按范例写法输出；火柴人草稿）。
-- 进行中（同时派给 Codex，文件互不重叠）：`docs/tasks/P3-production.md`（出图生产流程，代码在 `src/soda_storyboard/production/`）和 `docs/tasks/P4a-server.md`（编辑器本地服务，代码在 `src/soda_storyboard/server/`，接口文档 `editor/API.md`）。
-- P4a 完成后写 P4b（Gemini 前端任务书）；之后 P5（参考页提取版式）、P6（接入 Hub）。
+- 已完成并提交：P1、P1b、P1c、P2、P2b、P3（出图流程）、P4a（编辑器服务）、P4b（Gemini 编辑器前端）、P5（细节修正 + 参考页提取初版）。
+- 进行中：`docs/tasks/P5b-extract-real-pages.md`（参考页提取在真实页面上可用）；`docs/tasks/P6-standalone-plugin.md`（独立插件：前端随包发布、`soda-storyboard edit` 一键打开网页编辑器、安装说明、0.3.0）。两单文件不重叠，可同时进行。
+- 用户决定（2026-10-21）：先把独立插件做完整，Hub 接入（原第 6 阶段）往后放，改称 P7。
 
 ### 第 3 阶段：ComfyUI 连接 + 生产流程（Codex）
 - 导入 API 格式工作流并做节点映射，自动认出 Soda-MOSS v2。直接调 ComfyUI 的 HTTP 接口（`/prompt`、`/history`、`/view`）。
@@ -109,7 +109,7 @@ my-comic/
 - `extract-layout page.png`：OpenCV 检测格子（留白间隔检测、轮廓和四边形拟合、递归切分），按从右往左排阅读顺序，存进用户模板库，并出一张叠加预览图。
 - 可选 Magi 后端：用户自己安装后才启用，文档里写清楚它只限学术用途。
 
-### 第 6 阶段：接入 Soda Prompt Hub（Codex 做后端，Gemini 做原生 JS 前端；一个 PR）
+### 第 7 阶段（原第 6 阶段）：接入 Soda Prompt Hub（Codex 做后端，Gemini 做原生 JS 前端；一个 PR）
 - 按 Hub 的 `CLAUDE.md` 规范执行：store 加 routes 加 `create_app()` 装配，JSON 文件带 `format: "soda-storyboard-v1"`，ruff、ty、pytest 覆盖率 80%。
 - 引入第 1 阶段核心库的固定版本。
 - AI 拆格走 Hub 自己的模型连接，提示词带同一份知识；**用户确认后才保存**（Hub 的边界规定）。
