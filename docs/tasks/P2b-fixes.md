@@ -37,12 +37,21 @@
 9. **`size_check` 不再写进 MOSS JSON**：尺寸核对结果放进命令行 `--json` 输出（以及 `--with-ids` 的 map 文件）。MOSS JSON 只含 summary、items、bbox_coord_space、bbox_format。
 10. 编译结果要能复现参考写法：把 `pudding-example-style.moss.json` 反向整理成一份分镜单示例 `examples/pudding/`（角色、格子、texts、moss 模式 overlay、style_prompt），编译结果的结构（条目种类和数量、text 字段、bbox）要与参考 JSON 一致；caption 文字不要求逐字相同。
 
-三、线框预览
-11. 配色照范例的分镜稿：格子青色、主角（moss overlay）红色、文字框绿色并在框里写出原文（竖排就竖着写），标题框红色。这张图既给人看，也方便以后直接把线框图交给 AI 写 JSON。
+三、分镜草稿图（线框预览升级）
+11. 配色照范例的分镜稿：格子青色、跨格人物（moss overlay）红色、文字框绿色并在框里写出原文（竖排就竖着写），标题框红色。
+11b. **火柴人**：用户不满足于只有框框，草稿里每格要画出人物，像范例分镜稿那样：
+    - 格式：格子新增可选 `figures` 列表，每项包括 character_id、pose、position（在格子里的水平位置 0～1，或 `left` / `center` / `right`）、facing（`left` / `right` / `front` / `back`）、framing（`full` / `waist` / `bust` / `face`，可空，默认按格子景别推断：远景和全景画全身、中景画到腰、近景画到胸、特写只画头）。没有 figures 时，按 character_ids 自动排开（rtl 下第一个角色在右边）。
+    - 画法（Pillow 纯程序绘制，不调用任何模型）：圆头加十字参考线（标出脸朝向，和范例一样）、矩形或梯形躯干、线条或细长矩形的四肢；裙装角色可用梯形下摆（角色卡可加 `figure_hint: skirt`）。人物大小按 framing 缩放并裁在格子内；跨格人物（moss overlay）按 overlay 框画成大号人物，用红色。
+    - pose 预设至少包括：`stand`、`walk`、`run`、`sit`、`crouch`、`wave`、`point`、`arms_up`、`hands_clasped`、`hand_on_chin`、`lie`、`back_view`；未知值退回 `stand` 并在 validate 给 warning。
+    - 每个人物头上或脚边写角色名（小字），方便分辨。
+    - 简单道具和场景可以先用文字标注（如格子角落写"冰箱""车站"），不要求画出来。
+11c. 输出：`preview` 默认产出这种草稿图；保留 `--style boxes` 输出原来的纯框线版。草稿图要清晰到在 Codex 对话里缩小显示也能看懂（线条够粗、字够大）。
+11d. 这张草稿图也是以后"把分镜稿交给 AI 写 JSON"的输入，所以人物、文字框、格子的颜色区分要稳定。
 
 四、插件（skill）
 12. SKILL.md 和 references 按新写法更新：
     - 拆格时除了格子，也考虑台词、旁白、拟声词、标题放在哪里，并在线框上给出位置。
+    - 每格写出人物的 figures（谁、什么姿势、站在哪、朝哪边），出草稿图给用户看；用户说"让她坐下""换到左边"时只改对应人物，重新出图。
     - 跨格主角、出格只是**可选手法**，不是每页都要：只在人物登场、情绪高潮、需要强调某个人的页面才提议，并说明为什么；日常对话、动作戏默认用普通格子。不要每页都塞一个主角大图。
     - 引导 AI 写英文 `caption_en` 和人物英文外观；用户只说中文也没关系，由 AI 翻译补全。
     - 画风：用户没给时，给 2～3 个英文画风段落让用户选（例如彩色厚涂插画风、清爽赛璐珞、黑白网点漫画），存进项目 `style_prompt`。不要擅自替用户定画风。
@@ -53,7 +62,8 @@
 - `uv run ruff format --check .`、`uv run ruff check .`、`uv run pytest` 全部通过。
 - `uv run soda-storyboard compile examples/pudding/pages/<id>.json` 产出的 JSON：text 条目都有 `text` 字段；竖排文字框都是竖长形；有 character 条目；summary 以英文画风段落开头；不含 size_check。
 - 旧示例（station、slanted）照常能 validate / preview / compile。
-- 测试覆盖：texts 读写和旧 dialogue 转换、文字框尺寸估算（竖排 / 横排、自动换列）、方向与框形不符的 warning、moss / layer 两种 overlay 编译、size_check 不进 JSON、示例结构与参考一致。
+- `preview` 默认输出带火柴人的草稿图；`examples/pudding` 的草稿图里每格都有人物、文字框写出原文。
+- 测试覆盖：texts 读写和旧 dialogue 转换、文字框尺寸估算（竖排 / 横排、自动换列）、方向与框形不符的 warning、moss / layer 两种 overlay 编译、size_check 不进 JSON、示例结构与参考一致、figures 读写和默认推断、每种 pose 都能画出且不越出格子。
 
 遇到阻塞：停止越界操作，在结果中说明，不自行扩大范围。
 
