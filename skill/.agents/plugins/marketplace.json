@@ -1,0 +1,12 @@
+{
+  "name": "soda-storyboard-local",
+  "interface": {"displayName": "Soda Storyboard 本地插件"},
+  "plugins": [
+    {
+      "name": "soda-storyboard",
+      "source": {"source": "local", "path": "./"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}

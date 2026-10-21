@@ -1,0 +1,143 @@
+{
+  "format": "soda-storyboard-page-v1",
+  "id": "station-turn",
+  "canvas_width": 1024,
+  "canvas_height": 1536,
+  "reading_direction": "rtl",
+  "style_prefix": "clean 2D cel-shaded, crisp line art, screentone shading",
+  "description": "女孩在车站听见熟悉的声音，回头欲言又止。",
+  "panel_gap": 24,
+  "dialogue_mode": "moss_text",
+  "panels": [
+    {
+      "id": "p1",
+      "order": 1,
+      "shape": {
+        "type": "rect",
+        "x": 46.0,
+        "y": 46.0,
+        "w": 932.0,
+        "h": 651.4666666666667
+      },
+      "shot": "medium",
+      "angle": "eye",
+      "character_ids": [
+        "girl"
+      ],
+      "description": "站台上，女孩听见身后的呼唤，肩膀微微停住。",
+      "dialogue": [],
+      "sfx": [
+        "脚步声"
+      ],
+      "importance": 2,
+      "status": "approved"
+    },
+    {
+      "id": "p2",
+      "order": 2,
+      "shape": {
+        "type": "quad",
+        "points": [
+          [
+            497.9585968376183,
+            721.4666666666667
+          ],
+          [
+            978.0,
+            721.4666666666667
+          ],
+          [
+            978.0,
+            1093.7333333333333
+          ],
+          [
+            550.2772649028285,
+            1093.7333333333333
+          ]
+        ]
+      },
+      "shot": "close_up",
+      "angle": "eye",
+      "character_ids": [
+        "girl"
+      ],
+      "description": "女孩回头，眼神惊讶又克制，发梢被风吹起。",
+      "dialogue": [
+        {
+          "speaker_id": "girl",
+          "text": "……是你？",
+          "bubble": "speech"
+        }
+      ],
+      "sfx": [],
+      "importance": 3,
+      "status": "approved"
+    },
+    {
+      "id": "p3",
+      "order": 3,
+      "shape": {
+        "type": "quad",
+        "points": [
+          [
+            46.0,
+            721.4666666666667
+          ],
+          [
+            473.7227350971715,
+            721.4666666666667
+          ],
+          [
+            526.0414031623817,
+            1093.7333333333333
+          ],
+          [
+            46.0,
+            1093.7333333333333
+          ]
+        ]
+      },
+      "shot": "full",
+      "angle": "low",
+      "character_ids": [
+        "girl"
+      ],
+      "description": "从女孩背后低角度拍摄全身，列车驶过站台；她站在光影交界处，手指抓紧包带。",
+      "dialogue": [
+        {
+          "speaker_id": "girl",
+          "text": "我正要走。",
+          "bubble": "speech"
+        }
+      ],
+      "sfx": [
+        "轰——"
+      ],
+      "importance": 2,
+      "status": "approved"
+    },
+    {
+      "id": "p4",
+      "order": 4,
+      "shape": {
+        "type": "rect",
+        "x": 46.0,
+        "y": 1117.7333333333333,
+        "w": 932.0,
+        "h": 372.26666666666665
+      },
+      "shot": "long",
+      "angle": "high",
+      "character_ids": [
+        "girl"
+      ],
+      "description": "列车门即将关闭，女孩回头张口，却只留下一个迟疑的微笑。",
+      "dialogue": [],
+      "sfx": [
+        "嘟——"
+      ],
+      "importance": 1,
+      "status": "approved"
+    }
+  ]
+}

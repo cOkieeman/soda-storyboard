@@ -1,0 +1,5 @@
+{
+  "name": "soda-storyboard-local",
+  "owner": {"name": "soda-storyboard contributors"},
+  "plugins": [{"name": "soda-storyboard", "source": "./", "description": "日漫分镜讨论与 MOSS 布局编译"}]
+}

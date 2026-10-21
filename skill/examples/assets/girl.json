@@ -1,0 +1,23 @@
+{
+  "format": "soda-storyboard-character-v1",
+  "id": "girl",
+  "display_name": "澪",
+  "trigger_words": [
+    "girl_token"
+  ],
+  "appearance": {
+    "zh": "黑色短发"
+  },
+  "clothing": [
+    "浅色校服",
+    "帆布包"
+  ],
+  "reference_images": [
+    "refs/girl.png"
+  ],
+  "approved_images": [],
+  "lora": {
+    "path": "models/girl.safetensors",
+    "strength": 0.8
+  }
+}

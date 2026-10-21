@@ -6,13 +6,15 @@ import argparse
 import json
 import re
 import sys
+from copy import deepcopy
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
 from .compiler import compile_geometry_map, compile_page
 from .geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from .io import load_characters, load_page, load_project, read_json, write_json
-from .models import Character, Page, Panel, Project
+from .models import Character, Lora, Page, Panel, Project
 from .preview import render_preview
 from .templates import builtin_templates, suggest_layouts
 from .validation import validate_page
@@ -114,11 +116,126 @@ def command_character_new(args: argparse.Namespace) -> int:
         trigger_words=args.trigger or [],
         appearance_zh=args.appearance_zh,
         appearance_en=args.appearance_en,
+        lora=_character_lora(args, None),
+        clothing=args.outfit or [],
+        reference_images=args.reference or [],
     )
     target = Path(args.output) if args.output else root / "characters" / f"{args.id}.json"
     write_json(target, character)
     _emit({"path": str(target), "character": character.to_dict()}, args.json)
     return 0
+
+
+def _character_lora(args: argparse.Namespace, current: Lora | None) -> Lora | None:
+    if args.lora is None and args.lora_strength is None:
+        return current
+    path = args.lora if args.lora is not None else current.path if current else ""
+    if not path.strip():
+        raise ValueError("请提供 --lora 路径；没有 LoRA 时不能单独设置强度")
+    strength = args.lora_strength if args.lora_strength is not None else current.strength if current else 0.8
+    if not isfinite(strength):
+        raise ValueError("LoRA 强度必须为有限数值")
+    return Lora(path, strength)
+
+
+def _set_alias(payload: dict[str, Any], keys: tuple[str, ...], value: Any) -> None:
+    existing = [key for key in keys if key in payload]
+    for key in existing or [keys[0]]:
+        payload[key] = value
+
+
+def _set_appearance(payload: dict[str, Any], language: str, value: str) -> None:
+    flat_key = f"appearance_{language}"
+    appearance = payload.get("appearance")
+    if flat_key in payload:
+        payload[flat_key] = value
+    if isinstance(appearance, dict):
+        keys = ("zh", "cn") if language == "zh" else ("en",)
+        _set_alias(appearance, keys, value)
+    elif isinstance(appearance, str) and language == "zh":
+        payload["appearance"] = value
+    elif flat_key not in payload:
+        payload["appearance"] = {
+            **({"zh": appearance} if isinstance(appearance, str) else {}),
+            language: value,
+        }
+
+
+def _set_lora(payload: dict[str, Any], args: argparse.Namespace, lora: Lora | None) -> None:
+    if lora is None or (args.lora is None and args.lora_strength is None):
+        return
+    existing = payload.get("lora")
+    if isinstance(existing, dict):
+        if args.lora is not None:
+            _set_alias(existing, ("path", "model", "file"), lora.path)
+        if args.lora_strength is not None:
+            existing["strength"] = lora.strength
+    elif existing is None and payload.get("lora_path"):
+        if args.lora is not None:
+            payload["lora_path"] = lora.path
+        if args.lora_strength is not None:
+            payload["lora_strength"] = lora.strength
+    elif isinstance(existing, str) and args.lora_strength is None:
+        payload["lora"] = lora.path
+    else:
+        payload["lora"] = lora.to_dict()
+
+
+def _patch_character(payload: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    updated = deepcopy(payload)
+    for option, keys in (
+        ("name", ("display_name", "name")),
+        ("trigger", ("trigger_words", "triggers")),
+        ("outfit", ("clothing",)),
+        ("reference", ("reference_images", "references")),
+    ):
+        value = getattr(args, option)
+        if value is not None:
+            _set_alias(updated, keys, value)
+    for language in ("zh", "en"):
+        value = getattr(args, f"appearance_{language}")
+        if value is not None:
+            _set_appearance(updated, language, value)
+    _set_lora(updated, args, _character_lora(args, Character.from_dict(payload).lora))
+    Character.from_dict(updated)
+    return updated
+
+
+def command_character_set(args: argparse.Namespace) -> int:
+    for path in sorted((Path(args.project) / "characters").glob("*.json")):
+        payload = read_json(path)
+        if payload.get("id") == args.id:
+            updated = _patch_character(payload, args)
+            if updated != payload:
+                write_json(path, updated)
+            _emit({"path": str(path), "character": Character.from_dict(updated).to_dict()}, args.json)
+            return 0
+    message = f"项目中找不到角色 id：{args.id}"
+    raise FileNotFoundError(message)
+
+
+def command_character_list(args: argparse.Namespace) -> int:
+    characters = load_characters(Path(args.project) / "characters")
+    cards = [character.to_dict() for character in characters.values()]
+    if args.json:
+        _json_print(cards)
+    else:
+        for character in characters.values():
+            print(f"{character.id}: {character.display_name}")
+    return 0
+
+
+def _character_options(parser: argparse.ArgumentParser, *, editing: bool = False) -> None:
+    parser.add_argument("--project", default=".")
+    parser.add_argument("--name")
+    parser.add_argument("--trigger", action="append")
+    parser.add_argument("--appearance-zh", default=None if editing else "")
+    parser.add_argument("--appearance-en", default=None if editing else "")
+    parser.add_argument("--lora", help="LoRA 文件路径；只记录用户给出的路径，不搜索磁盘")
+    parser.add_argument("--lora-strength", type=float, help="LoRA 强度；新建 LoRA 默认 0.8")
+    parser.add_argument("--outfit", action="append", help="服装描述；可重复；set 时替换整个服装列表")
+    parser.add_argument("--reference", action="append", help="参考图路径；可重复；set 时替换整个参考图列表")
+    parser.add_argument("--json", action="store_true")
 
 
 def command_page_skew(args: argparse.Namespace) -> int:
@@ -334,15 +451,18 @@ def build_parser() -> argparse.ArgumentParser:
     character = subparsers.add_parser("character", help="创建角色卡")
     character_sub = character.add_subparsers(dest="character_command", required=True)
     character_new = character_sub.add_parser("new")
-    character_new.add_argument("--project", default=".")
+    _character_options(character_new)
     character_new.add_argument("--id", required=True)
-    character_new.add_argument("--name")
-    character_new.add_argument("--trigger", action="append")
-    character_new.add_argument("--appearance-zh", default="")
-    character_new.add_argument("--appearance-en", default="")
     character_new.add_argument("--output")
-    character_new.add_argument("--json", action="store_true")
     character_new.set_defaults(func=command_character_new)
+    character_set = character_sub.add_parser("set", help="只修改给出的角色字段")
+    character_set.add_argument("id")
+    _character_options(character_set, editing=True)
+    character_set.set_defaults(func=command_character_set)
+    character_list = character_sub.add_parser("list", help="列出项目里的角色")
+    character_list.add_argument("--project", default=".")
+    character_list.add_argument("--json", action="store_true")
+    character_list.set_defaults(func=command_character_list)
 
     template = subparsers.add_parser("template", help="查看模板")
     template_sub = template.add_subparsers(dest="template_command", required=True)

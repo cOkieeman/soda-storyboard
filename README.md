@@ -133,6 +133,85 @@ uv run soda-storyboard preview examples/slanted/pages/platform-dash.json --outpu
 uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --output examples/slanted/platform-dash.moss.json --with-ids
 ```
 
+## 安装插件（Codex 优先，Claude Code 兼容）
+
+插件包根目录是 `skill/`，共用文件为 `skill/skills/soda-storyboard/SKILL.md`。这与早期计划中的 `skill/SKILL.md` 不同，是为遵守官方的 `skills/<名称>/SKILL.md` 结构；示例对话仍在 [skill/examples/station-dialogue.md](skill/examples/station-dialogue.md)。包内附带格式 schema、中文知识笔记及完整 NOTICE，不依赖安装后还能访问本仓库的 docs。插件只调用本地 CLI，没有 MCP 服务、账号登录或图像生成能力。
+
+### 前置条件与命令行安装
+
+需要 Python 3.12+、uv，以及支持本地插件的 Codex 桌面端或 Claude Code。以下命令由用户自行执行，本任务不会修改全局配置。PowerShell 示例（macOS/Linux 按相同路径含义换成自己的 shell 写法）：
+
+```powershell
+Set-Location "E:/个人开发项目/soda-storyboard"
+uv sync --all-groups
+uv tool install --editable . --python 3.12
+soda-storyboard --help
+```
+
+uv tool 的可执行目录需已加入 PATH；不在 PATH 时，按 uv 给出的提示处理。也可仅用 `uv run --directory "<仓库绝对路径>" soda-storyboard`，但这会切换工作目录，故事项目、页面、图片和输出路径都应改为绝对路径，避免写进仓库或插件缓存。CLI 安装和插件安装是两个步骤，安装 skill 不会自动安装 Python 程序。
+
+### Codex 安装、启用、调用与更新
+
+`skill/plugin.json` 使用官方推荐的 portable Agent Plugins 清单；`skill/.codex-plugin/plugin.json` 提供仍受支持的 Codex 兼容清单。两者都指向同一个标准 skills 目录；这是需要本地执行器的桌面插件，不是网页端纯对话插件。
+
+包内 `skill/.agents/plugins/marketplace.json` 定义一个本地 marketplace，其 `source.path` 为相对于该 marketplace 根目录的 `./`。使用完整包目录作为根，而不是把 `.agents/plugins` 当根：
+
+```powershell
+codex plugin marketplace add "E:/个人开发项目/soda-storyboard/skill"
+```
+
+随后重启 Codex 桌面端，打开 Plugins Directory，选择“Soda Storyboard 本地插件”来源，安装并启用 Soda Storyboard，再开新聊天。桌面端可在输入框用 `@` 选择该 skill；Codex CLI/IDE 可用 `/skills` 找到它或用 `$soda-storyboard` 显式调用。名称可能带插件命名空间，以界面实际显示为准，也可以直接说“用 Soda Storyboard 帮我拆一页分镜”。
+
+部分 Codex CLI 版本提供 `codex plugin add soda-storyboard@soda-storyboard-local --json`；本机 `codex plugin add --help` 已确认该命令存在。不过当前官方打包指南仍推荐桌面端安装、测试本地插件，因此以以上桌面流程为主，不能把 CLI 子命令存在当成桌面已加载的证明。
+
+更新时先更新本地仓库、重新执行 uv sync；可编辑 CLI 会使用新源码。更新 marketplace 指向的 `skill/` 内容后，按官方本地插件说明重启桌面端，在目录中确认版本并重新开聊天。若宿主使用缓存副本而仍显示旧版本，在目录中重新安装该本地插件；不要只刷新当前对话就认为缓存已更新。发布新包时应同步提升三份 manifest 的 version。
+
+### Claude Code 安装、启用、调用与更新
+
+`skill/.claude-plugin/plugin.json` 是 Claude Code 的独立适配清单，自动发现同一份 `skills/soda-storyboard/SKILL.md`，没有复制一套工作流。先在 shell 临时加载一个会话，不必安装：
+
+```powershell
+claude --plugin-dir "E:/个人开发项目/soda-storyboard/skill"
+```
+
+会话中输入 `/soda-storyboard:soda-storyboard` 调用；也可自然语言请求。临时加载更新后重新启动该命令即可。需要持久安装时，在自己的故事项目目录执行以下用户操作（不要在插件缓存里执行）：
+
+```powershell
+claude plugin marketplace add "E:/个人开发项目/soda-storyboard/skill"
+claude plugin install soda-storyboard@soda-storyboard-local --scope local
+```
+
+再新开 Claude Code，或在已有交互会话执行 `/reload-plugins`。如插件已被禁用，可执行 `claude plugin enable soda-storyboard@soda-storyboard-local --scope local`。本地 scope 只为当前项目的当前用户启用；不修改团队共享设置。更新本地仓库后执行 `claude plugin update soda-storyboard@soda-storyboard-local`，再 `/reload-plugins` 或新开会话。也可始终使用临时 `--plugin-dir`，避免持久安装。
+
+可用 `claude plugin validate "E:/个人开发项目/soda-storyboard/skill"` 检查清单。此检查和动态加载仍需用户机器上安装 Claude Code；开发环境中没有该可执行文件。
+
+### 最短使用示例
+
+“用 Soda Storyboard 帮我把‘女孩在车站听见熟悉的声音，回头却没说出口’拆成一页日漫，先给我几个方案。”
+
+AI 会先让你选拆格，再展示 4～6 张版式线框供选择，之后逐格调整。可以说“只把第 3 格改成从背后看”；你确认整页满意后，才编译并给出要粘进 Soda-MOSS v2“JSON直通”框的布局 JSON。风格前缀由你指定，插件不会擅自补风格。它不会替你调用 ComfyUI；斜切裁剪、透明人物出格图层、自动重画仍属于第 3 阶段。
+
+### 新增角色管理
+
+```shell
+soda-storyboard character new --project my-story --id girl --name "澪" --lora "models/girl.safetensors" --outfit "浅色校服" --reference "refs/front.png" --json
+soda-storyboard character set girl --project my-story --lora-strength 0.75 --appearance-zh "黑色短发" --json
+soda-storyboard character list --project my-story --json
+```
+
+`new` 新建 LoRA 默认强度为 0.8；`set` 的 id 是位置参数，只改给出的字段。改路径而没给强度时保留已有强度；没 LoRA 不能单设强度。trigger、outfit、reference 都可重复，set 时用给出的整个列表替换，未给列表原样保留。set 按角色 id 查找，不要求文件名与 id 相同，也不会为不存在的角色新建文件。LoRA 和参考图路径只保存，不搜索或读取对应模型/图片。
+
+### 文档来源与验证边界
+
+官方文档查阅日期：**2026-10-21**。清单结构、路径边界、安装与调用方式依据下列已读取页面，未按记忆猜格式：
+
+- [OpenAI：Package your plugin](https://developers.openai.com/plugins/build/plugins)：portable 清单、Codex 兼容清单、本地 marketplace、桌面安装与更新。
+- [OpenAI：Agent Skills](https://developers.openai.com/codex/skills/)：标准 SKILL.md、技能发现与调用；[桌面专用插件](https://developers.openai.com/plugins/deploy/desktop-only)：requires_local_executor。
+- [Claude Code：插件清单](https://code.claude.com/docs/en/plugins-reference)：独立清单、标准目录、路径约束与 validate。
+- [Claude Code：安装管理](https://code.claude.com/docs/en/discover-plugins)：plugin-dir、local scope、reload、启用与更新。
+
+本轮实际验证包括官方 skill-creator 静态校验、清单路径与身份一致性、包内引用和 schema、自文档提取的全部 CLI 命令与 argparse 严格核对、示例 JSON 的逐格修改和编译，以及角色读写测试。当前宿主没有实际安装/加载这个新插件：本任务禁止修改全局配置，且当前聊天不能据此证明新会话的插件发现；Claude Code 也未安装。以上替代验证不等于动态宿主验收，最终应由用户按安装步骤在新聊天中确认名称出现、能调用且会停在三个确认点。
+
 ## 开发检查
 
 ```bash
