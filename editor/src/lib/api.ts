@@ -244,7 +244,7 @@ export async function layoutSuggest(
   options: { candidates?: number; skew?: number } = {}
 ): Promise<{ candidates: LayoutCandidate[]; version: string }> {
   const { data } = await request<{ candidates: LayoutCandidate[]; version: string }>(
-    `/api/pages/${encodeURIComponent(id)}/layout-suggest`,
+    `/api/pages/${encodeURIComponent(id)}/layout-suggest?style=sketch`,
     {
       method: "POST",
       body: JSON.stringify(options)
@@ -362,8 +362,12 @@ export function getPreviewUrl(id: string, style: "sketch" | "boxes" = "sketch", 
   return `/api/pages/${encodeURIComponent(id)}/preview.png?${query.toString()}`;
 }
 
-export function connectEvents(onEvent: (event: SseEvent) => void): () => void {
+export function connectEvents(
+  onEvent: (event: SseEvent) => void,
+  onConnectionChange: (connected: boolean) => void
+): () => void {
   const eventSource = new EventSource(`${API_BASE}/api/events`);
+  eventSource.onopen = () => onConnectionChange(true);
 
   eventSource.addEventListener("ready", (e) => {
     try {
@@ -402,10 +406,12 @@ export function connectEvents(onEvent: (event: SseEvent) => void): () => void {
   });
 
   eventSource.onerror = (err) => {
+    onConnectionChange(false);
     console.warn("SSE connection error, EventSource will reconnect automatically", err);
   };
 
   return () => {
     eventSource.close();
+    onConnectionChange(false);
   };
 }

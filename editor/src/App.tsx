@@ -28,6 +28,22 @@ export default function App() {
     init();
   }, [init]);
 
+  useEffect(() => {
+    const onHashChange = () => {
+      const pageId = new URLSearchParams(window.location.hash.slice(1)).get("page");
+      const state = useEditorStore.getState();
+      if (state.initialized && pageId && pageId !== state.activePageId) {
+        if (state.pages.some((page) => page.id === pageId)) {
+          state.selectPage(pageId);
+        } else {
+          state.setNotice(`页面 ${pageId} 不存在`);
+        }
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   // Global keyboard shortcuts (Ctrl+S, Delete, Escape)
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

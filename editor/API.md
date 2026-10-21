@@ -12,7 +12,15 @@ ID、ETag、任务 ID、时间和候选 ID 是运行时值，示例不可当作�
 - 文件响应中的 `path` 是项目内相对路径。JSON 内保留未知字段，前端应以完整对象读改写，保留未编辑字段。预览与编译沿用 CLI 的项目默认值继承：缺省 text_direction/color_mode/tags 从项目读取，空 style_prompt 也继承项目；这不会单独改写分镜 JSON。
 - 服务生成文件先写同目录临时文件，再原子替换；同一服务进程内的编辑请求串行写盘。核心校验及预览/版式/编译直接复用现有库。
 - 服务无认证，只接受回环 Host；供本机单个服务进程管理一个项目。不要给同一个项目启动多个服务。CLI 不配合服务锁：保存会在校验后及替换前再次检查版本，但操作系统不提供与任意外部写入者之间的原子 compare-and-swap，外部工具应使用原子写入，并避免在同一瞬间争写。
-- 静态资源来自 `--static` 目录；无 SPA 路由回退，前端可使用 HashRouter。
+- 静态资源默认来自包内 `soda_storyboard/web`，`--static` 可覆盖；无 SPA 路由回退。`/#page=<页id>` 返回首页，由前端选择页面；切页更新 hash。
+
+### 服务身份与一键启动
+
+`GET /api/health` 返回 `{service: "soda-storyboard", version: "0.3.0", project_dir: "<项目绝对路径>", pid: 1234, instance_id: "<本次启动标识>"}`。端口管理和停止逻辑使用此接口，不能仅凭 PID 或端口结束进程。
+
+`soda-storyboard edit [项目目录] --detach --page <页id> --json` 启动或复用本项目服务并打开浏览器；`--no-browser` 只输出地址。启动结果为 `{url, port, pid, reused}`。记录保存在项目 `.soda/server.json`；`--stop --json` 核对项目、PID、实例标识后停止并返回 stopped 和提示，核对不上时不结束进程。
+
+版式候选 `POST /api/pages/{id}/layout-suggest?style=sketch` 默认用火柴人草稿缩略图，支持 style=boxes；也可在 JSON 请求体指定 style，查询参数优先。
 
 ### 1.1 错误码
 

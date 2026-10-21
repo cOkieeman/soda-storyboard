@@ -9,6 +9,11 @@ build/
 *.egg-info/
 *.png
 
+# Shipped editor files are package data; editor/dist remains ignored.
+!src/soda_storyboard/web/
+!src/soda_storyboard/web/**
+.soda/
+
 # editor (Node)
 editor/node_modules/
 *.tsbuildinfo

@@ -7,10 +7,14 @@ import importlib
 import ipaddress
 import json
 import mimetypes
+import os
 import queue
 import socket
 import sys
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.metadata import version
+from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -65,8 +69,9 @@ class Server(ThreadingHTTPServer):
         if ":" in host:
             self.address_family = socket.AF_INET6
         self.store = Store(Path(project_dir))
+        self.instance_id = uuid.uuid4().hex
         self.static = (
-            Path(static).resolve() if static else Path(__file__).resolve().parents[3] / "editor" / "dist"
+            Path(static).resolve() if static else Path(str(files("soda_storyboard").joinpath("web")))
         )
         # Bind before starting background threads, so a failed bind leaks no workers.
         super().__init__((host, port), Handler)
@@ -228,7 +233,18 @@ class Handler(BaseHTTPRequestHandler):
     def route(self, path: str, query: dict, body: dict) -> None:  # noqa: C901, PLR0912 -- explicit route table
         store = self.server.store
         method = self.command
-        if path == "/api/project" and method == "GET":
+        if path == "/api/health" and method == "GET":
+            self.send(
+                200,
+                {
+                    "service": "soda-storyboard",
+                    "version": version("soda-storyboard"),
+                    "project_dir": str(store.root),
+                    "pid": os.getpid(),
+                    "instance_id": self.server.instance_id,
+                },
+            )
+        elif path == "/api/project" and method == "GET":
             self.send(200, store.project())
         elif path == "/api/project" and method == "PATCH":
             self.send(200, store.patch_project(body))
@@ -320,7 +336,11 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "compile" and method == "POST":
             self.send(200, store.compile(page_id, body))
         elif action == "layout-suggest" and method == "POST":
-            self.json_response(store.suggest(page_id, body))
+            self.json_response(
+                store.suggest(
+                    page_id, {**body, "style": query.get("style", [body.get("style", "sketch")])[0]}
+                )
+            )
         elif action == "layout-apply" and method == "POST":
             self.json_response(store.apply(page_id, body.get("candidate_id", ""), version))
         elif action == "skew" and method == "POST":
@@ -438,7 +458,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/" and not (self.server.static / "index.html").is_file():
                 self.send(
                     200,
-                    "前端尚未构建；请先使用 /api/pages 或构建 editor/dist。".encode(),
+                    "前端尚未构建；请运行 uv run python scripts/build_editor.py 后重试。".encode(),
                     "text/plain; charset=utf-8",
                 )
                 return
@@ -481,12 +501,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=8780)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--static")
+    parser.add_argument("--instance-id", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
     try:
         server = Server(args.project_dir, args.port, args.host, args.static)
+        if args.instance_id:
+            server.instance_id = args.instance_id
         host = f"[{args.host}]" if ":" in args.host else args.host
         print(f"编辑器服务：http://{host}:{server.server_port}", flush=True)  # noqa: T201
         try:

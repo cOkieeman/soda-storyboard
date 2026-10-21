@@ -248,6 +248,9 @@ class Store:
             return {"moss": compiled, "path": relative, "paths": paths}
 
     def suggest(self, page_id: str, options: dict) -> dict:
+        style = options.get("style", "sketch")
+        if style not in {"sketch", "boxes"}:
+            raise APIError(400, "style 必须是 sketch 或 boxes")
         with self.lock:
             current = self.page(page_id)
             page = Page.from_dict(current["page"])
@@ -288,7 +291,7 @@ class Store:
                     raise APIError(400, "画布过大，无法生成候选预览")
                 relative = f".server/layouts/{batch}-{index}.png"
                 render_preview(
-                    preview_page, self.path(relative), self.character_map(), style="boxes", scale=0.25
+                    preview_page, self.path(relative), self.character_map(), style=style, scale=0.25
                 )
                 candidate_id = f"{batch}-{index}"
                 entry = {

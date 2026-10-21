@@ -2,17 +2,70 @@
 
 `soda-storyboard` 是一个轻量的 Python 分镜单工具：用 JSON 描述一页日漫分镜，校验格子几何和角色引用，生成 Pillow 人物/文字草稿预览，并编译成 MOSS-Image 的 Layout Prompt JSON。
 
-## 安装与运行
+## 安装
 
-```bash
-uv sync --all-groups
-uv run soda-storyboard init my-story
-uv run soda-storyboard validate examples/station/pages/station-turn.json --json
-uv run soda-storyboard preview examples/station/pages/station-turn.json --output /tmp/station.png
-uv run soda-storyboard compile examples/station/pages/station-turn.json --output /tmp/station.moss.json
+需要 Python 3.12+、[uv](https://docs.astral.sh/uv/) 和支持本地插件的 Codex 桌面端或 Claude Code。网页编辑器已随 Python 包发布，**不需要 Node，也不需要手动构建前端**。只有出图需要另外运行 ComfyUI 并准备 MOSS 模型；拆分镜、草稿和网页编辑可独立使用。
+
+```powershell
+uv tool install git+https://github.com/cOkieeman/soda-storyboard
+soda-storyboard --help
 ```
 
-也可以直接运行 `python -m soda_storyboard`。CLI 的 stdout/stderr 始终使用 UTF-8，`--json` 会输出机器可读结果，Windows 默认 GBK 终端下也可按 UTF-8 解码。
+uv 尚未找到 Python 3.12+ 时，可在安装命令末尾加 `--python 3.12`。安装后在新终端检查命令可用。更新使用同一条安装命令并加 `--force`。Git 安装需要 Git 和网络；本轮只做了离线构建与本地验证，没有在线验证从 GitHub 安装。
+
+### 在 Codex 和 Claude Code 中启用插件
+
+Python CLI 和宿主插件分别安装。获取仓库中的 `skill/` 文件夹（例如下载 GitHub ZIP 并解压，或用下列命令），保留其中的隐藏清单目录；不需要构建前端。
+
+```powershell
+git clone https://github.com/cOkieeman/soda-storyboard
+```
+
+在 Codex 中，将下面路径换成实际解压/克隆后的绝对路径：
+
+```powershell
+codex plugin marketplace add "C:/你的目录/soda-storyboard/skill"
+```
+
+重启 Codex 桌面端，在 Plugins Directory 选择“Soda Storyboard 本地插件”来源，安装并启用 Soda Storyboard，再开新聊天。输入 `@` 找到插件技能；CLI/IDE 可用 `/skills` 或 `$soda-storyboard` 调用，名称以宿主界面为准。
+
+Claude Code 可以临时加载：
+
+```powershell
+claude --plugin-dir "C:/你的目录/soda-storyboard/skill"
+```
+
+在会话中输入 `/soda-storyboard:soda-storyboard`。需要为故事项目持久启用时，在故事项目目录执行：
+
+```powershell
+claude plugin marketplace add "C:/你的目录/soda-storyboard/skill"
+claude plugin install soda-storyboard@soda-storyboard-local --scope local
+```
+
+重新开会话或执行 `/reload-plugins`。两种宿主共用同一份 SKILL.md；Python 工具负责本地文件和服务，插件负责讨论流程。宿主安装步骤沿用仓库已有的官方文档核对结果，本轮受离线约束未重新联网核实或在新宿主会话动态加载。
+
+### 从一个片段到打开编辑器、出图
+
+1. 在新聊天说：“用 Soda Storyboard 把姐妹争最后一杯布丁拆成一页漫画，先给我几个方案。”按提示选择画风、拆格和版式，AI 保存故事项目。
+2. 说“打开这一页的网页编辑器”。AI 执行 `soda-storyboard edit my-story --detach --page page-01 --json`（换成实际目录和页 id），浏览器直接选中该页。你可以拖格子、人物和文字框，修改自动写回磁盘。
+3. 网页显示保存完成后，说“我在网页改过了，继续”。AI 必须重读页文件，再修改和预览。整页确认后可编译 MOSS JSON，或按下方“出图”配置 ComfyUI，明确同意候选数量后生成，例如“出 4 张 draft 候选”。
+
+无需 AI 也可直接使用：
+
+```powershell
+soda-storyboard init my-story --json
+soda-storyboard page new --project my-story --id page-01 --json
+soda-storyboard edit my-story --detach --page page-01 --json
+soda-storyboard edit my-story --stop --json
+```
+
+### 编辑器服务
+
+edit 的项目目录默认是当前目录，端口默认 8780；同项目服务会复用，端口被其他项目或程序占用时自动换空闲端口。--no-browser 只输出地址；--detach 在后台启动并立即返回，适合 AI 调用。不加 --detach 时命令会等待服务结束，可按 Ctrl+C 停止。
+
+--json 启动结果含 url、port、pid、reused。`.soda/server.json` 保存运行状态，--stop 用 `/api/health` 核对项目绝对路径、PID 和启动实例后才停止；不匹配时只提示。init 会生成 `.soda/.gitignore`，旧项目第一次 edit 时补上；运行状态不应提交。用户不再需要编辑器时可让 AI 关闭服务。
+
+CLI 输出 UTF-8，也支持 `python -m soda_storyboard`。文件接口与网页共用项目 JSON；本阶段不接 Soda Prompt Hub。
 
 ## 文件格式
 
@@ -154,63 +207,11 @@ uv run soda-storyboard preview examples/slanted/pages/platform-dash.json --outpu
 uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --output examples/slanted/platform-dash.moss.json --with-ids
 ```
 
-## 安装插件（Codex 优先，Claude Code 兼容）
+## 插件结构与角色管理
 
-插件包根目录是 `skill/`，共用文件为 `skill/skills/soda-storyboard/SKILL.md`。这与早期计划中的 `skill/SKILL.md` 不同，是为遵守官方的 `skills/<名称>/SKILL.md` 结构；示例对话仍在 [skill/examples/station-dialogue.md](skill/examples/station-dialogue.md)。包内附带格式 schema、中文知识笔记及完整 NOTICE，不依赖安装后还能访问本仓库的 docs。插件调用本地 CLI，无需账号登录；确认分镜后可通过 CLI 连接本机 ComfyUI 生成图片。
+插件根目录是 `skill/`，共用流程为 `skill/skills/soda-storyboard/SKILL.md`，包含 schema、知识笔记、示例及 NOTICE。`skill/plugin.json` 为 portable 清单，.codex-plugin 和 .claude-plugin 为宿主适配清单；三份版本保持一致。完整示例见 [车站对话](skill/examples/station-dialogue.md)。安装步骤见上文。
 
-### 前置条件与命令行安装
-
-需要 Python 3.12+、uv，以及支持本地插件的 Codex 桌面端或 Claude Code。以下命令由用户自行执行，本任务不会修改全局配置。PowerShell 示例（macOS/Linux 按相同路径含义换成自己的 shell 写法）：
-
-```powershell
-Set-Location "E:/个人开发项目/soda-storyboard"
-uv sync --all-groups
-uv tool install --editable . --python 3.12
-soda-storyboard --help
-```
-
-uv tool 的可执行目录需已加入 PATH；不在 PATH 时，按 uv 给出的提示处理。也可仅用 `uv run --directory "<仓库绝对路径>" soda-storyboard`，但这会切换工作目录，故事项目、页面、图片和输出路径都应改为绝对路径，避免写进仓库或插件缓存。CLI 安装和插件安装是两个步骤，安装 skill 不会自动安装 Python 程序。
-
-### Codex 安装、启用、调用与更新
-
-`skill/plugin.json` 使用官方推荐的 portable Agent Plugins 清单；`skill/.codex-plugin/plugin.json` 提供仍受支持的 Codex 兼容清单。两者都指向同一个标准 skills 目录；这是需要本地执行器的桌面插件，不是网页端纯对话插件。
-
-包内 `skill/.agents/plugins/marketplace.json` 定义一个本地 marketplace，其 `source.path` 为相对于该 marketplace 根目录的 `./`。使用完整包目录作为根，而不是把 `.agents/plugins` 当根：
-
-```powershell
-codex plugin marketplace add "E:/个人开发项目/soda-storyboard/skill"
-```
-
-随后重启 Codex 桌面端，打开 Plugins Directory，选择“Soda Storyboard 本地插件”来源，安装并启用 Soda Storyboard，再开新聊天。桌面端可在输入框用 `@` 选择该 skill；Codex CLI/IDE 可用 `/skills` 找到它或用 `$soda-storyboard` 显式调用。名称可能带插件命名空间，以界面实际显示为准，也可以直接说“用 Soda Storyboard 帮我拆一页分镜”。
-
-部分 Codex CLI 版本提供 `codex plugin add soda-storyboard@soda-storyboard-local --json`；本机 `codex plugin add --help` 已确认该命令存在。不过当前官方打包指南仍推荐桌面端安装、测试本地插件，因此以以上桌面流程为主，不能把 CLI 子命令存在当成桌面已加载的证明。
-
-更新时先更新本地仓库、重新执行 uv sync；可编辑 CLI 会使用新源码。更新 marketplace 指向的 `skill/` 内容后，按官方本地插件说明重启桌面端，在目录中确认版本并重新开聊天。若宿主使用缓存副本而仍显示旧版本，在目录中重新安装该本地插件；不要只刷新当前对话就认为缓存已更新。发布新包时应同步提升三份 manifest 的 version。
-
-### Claude Code 安装、启用、调用与更新
-
-`skill/.claude-plugin/plugin.json` 是 Claude Code 的独立适配清单，自动发现同一份 `skills/soda-storyboard/SKILL.md`，没有复制一套工作流。先在 shell 临时加载一个会话，不必安装：
-
-```powershell
-claude --plugin-dir "E:/个人开发项目/soda-storyboard/skill"
-```
-
-会话中输入 `/soda-storyboard:soda-storyboard` 调用；也可自然语言请求。临时加载更新后重新启动该命令即可。需要持久安装时，在自己的故事项目目录执行以下用户操作（不要在插件缓存里执行）：
-
-```powershell
-claude plugin marketplace add "E:/个人开发项目/soda-storyboard/skill"
-claude plugin install soda-storyboard@soda-storyboard-local --scope local
-```
-
-再新开 Claude Code，或在已有交互会话执行 `/reload-plugins`。如插件已被禁用，可执行 `claude plugin enable soda-storyboard@soda-storyboard-local --scope local`。本地 scope 只为当前项目的当前用户启用；不修改团队共享设置。更新本地仓库后执行 `claude plugin update soda-storyboard@soda-storyboard-local`，再 `/reload-plugins` 或新开会话。也可始终使用临时 `--plugin-dir`，避免持久安装。
-
-可用 `claude plugin validate "E:/个人开发项目/soda-storyboard/skill"` 检查清单。此检查和动态加载仍需用户机器上安装 Claude Code；开发环境中没有该可执行文件。
-
-### 最短使用示例
-
-“用 Soda Storyboard 帮我把‘女孩在车站听见熟悉的声音，回头却没说出口’拆成一页日漫，先给我几个方案。”
-
-AI 会先让你选拆格，再展示 4～6 张版式线框供选择，之后逐格调整。可以说“只把第 3 格改成从背后看”；你确认整页满意后，才编译并给出要粘进 Soda-MOSS v2“JSON直通”框的布局 JSON。风格前缀由你指定，插件不会擅自补风格。你也可以同意由插件直接调用本机 ComfyUI 出草稿，再逐步进行重画、裁剪、排字和出格图层叠加。
+更新插件时先更新下载/克隆的仓库，再重启 Codex 并在目录确认版本；宿主仍使用旧缓存时重新安装插件。Claude Code 可运行 `claude plugin update soda-storyboard@soda-storyboard-local` 后重载，或重新启动临时加载命令。仅刷新旧聊天不能证明插件已更新。
 
 ### 新增角色管理
 
@@ -224,14 +225,7 @@ soda-storyboard character list --project my-story --json
 
 ### 文档来源与验证边界
 
-官方文档查阅日期：**2026-10-21**。清单结构、路径边界、安装与调用方式依据下列已读取页面，未按记忆猜格式：
-
-- [OpenAI：Package your plugin](https://developers.openai.com/plugins/build/plugins)：portable 清单、Codex 兼容清单、本地 marketplace、桌面安装与更新。
-- [OpenAI：Agent Skills](https://developers.openai.com/codex/skills/)：标准 SKILL.md、技能发现与调用；[桌面专用插件](https://developers.openai.com/plugins/deploy/desktop-only)：requires_local_executor。
-- [Claude Code：插件清单](https://code.claude.com/docs/en/plugins-reference)：独立清单、标准目录、路径约束与 validate。
-- [Claude Code：安装管理](https://code.claude.com/docs/en/discover-plugins)：plugin-dir、local scope、reload、启用与更新。
-
-本轮实际验证包括官方 skill-creator 静态校验、清单路径与身份一致性、包内引用和 schema、自文档提取的全部 CLI 命令与 argparse 严格核对、示例 JSON 的逐格修改和编译，以及角色读写测试。当前宿主没有实际安装/加载这个新插件：本任务禁止修改全局配置，且当前聊天不能据此证明新会话的插件发现；Claude Code 也未安装。以上替代验证不等于动态宿主验收，最终应由用户按安装步骤在新聊天中确认名称出现、能调用且会停在三个确认点。
+安装说明沿用此前核对的 [OpenAI 插件打包指南](https://developers.openai.com/plugins/build/plugins)、[Agent Skills](https://developers.openai.com/codex/skills/)、[Claude 插件清单](https://code.claude.com/docs/en/plugins-reference) 和 [安装管理](https://code.claude.com/docs/en/discover-plugins)。本轮不访问网络，没有实际安装或加载宿主插件；清单、路径、包内引用、文档 CLI 命令由本地测试检查。最终需在新聊天确认技能可发现、可调用，并会等待拆格、版式和整页三个确认点。
 
 ## 出图
 
@@ -305,11 +299,33 @@ uv run soda-storyboard layout suggest --panels 5 --templates my-story/templates 
 
 模板写入 `<项目>/templates/`，只包含几何、原图文件名、UTC 识别日期和格数，**不复制原图**。每次保存创建新模板，不覆盖已有模板。`layout suggest --templates` 会优先展示标有“来自参考页”的候选，也可用返回的 template_id 配合 `--pick` 选择。模板的阅读方向会随目标页方向调整；矩形和四边形都会按目标 gap 向内缩进。合成测试页和叠加图见 `examples/layout-extract/`，可用 `uv run python examples/layout-extract/generate_samples.py` 重建。
 
-算法只使用 Pillow 和标准库：缩到长边最多 800 像素、中值去噪、自动灰度阈值、留白投影递归 XY 切分、连通格框凸包及四角直边拟合。排除面积小于 1.5% 的区域和圆形/嵌套气泡；不可靠的近似格框退回矩形并降低置信度。适合具有可见格框和留白的页面；无框、严重破损/重叠格框、跨格插画、复杂标题装饰、明显透视和大角度旋转可能漏检或误检，需要人工确认。单图上限 3200 万像素。
+算法只使用 Pillow 和标准库，缩到长边最多 800 像素处理，单图上限 3200 万像素。除原有留白递归切分和连通轮廓拟合外，新增按局部对比度追踪横竖直线段、窄留白和四边支持度的检测；画面画到边缘、3～6 像素窄缝、黑色／灰色／浅彩色细框，以及部分被人物或气泡遮住的格框均可识别。原有轮廓拟合继续处理轻微旋转和斜切；四边闭合且含画面内容的格中格会保留，阅读顺序为先行后列、行内 RTL，嵌入小格紧随所属大格。面积小于页面 1.5% 的区域仍会被忽略。
+
+结果新增 `reliable` 和 `warnings`；无格或有低置信度格时会明确提示“识别不可靠，建议手动调整”。`confidence` 是几何证据评分，不是识别正确的概率。格框被遮住、标题覆盖底边或下方出血时，可按相邻格的边界估计范围；重复的双侧行布局中，中央分隔线若完全被跨格人物挡住，会按对称位置估计，置信度为 0.45。此类橙色虚线框尤其需要手动确认，不能从不可见像素保证原始分格。
+
+嵌入格和相互重叠的格子可提取并保存几何；现有 `layout suggest` 的无重叠检查仍会拒绝这类模板，需先手动调整为不重叠的版式再复用。
+
+适用于以矩形为主、仍有直线格框或浅色留白证据的漫画页。无框自由构图、严重重叠、复杂背景中的矩形、明显透视、大角度旋转，以及缩小后不足一像素或几乎与纸色相同的细框仍可能漏检或误检。嵌入小格与矩形文字框按内部是否主要为纸白区分，因此大片空白的黑白嵌入格可能漏检，带底色的矩形文字框可能误检。生成示例新增 `dense-narrow`、`cross-frame`、`pale-occluded` 和 `inset`，涵盖画满边缘、窄缝、浅色框、人物／气泡跨格和格中格；真实样本只从本地忽略目录 `docs/tasks/refs/extract-samples/` 读取，缺少样本时对应测试跳过，不复制或分发原图。
 
 角色卡可选 `role_en`（CLI `character new/set --role-en "the older sister"`），文字 caption 优先用它，否则用 display_name。程序排字和草稿图共用竖排标点与均衡分列，显式换行保留；连续英文和数字整体缩放横排，两位数字占一个竖中横排单元。`.cut.json` 的像素坐标四舍五入到整数。
 
-## 开发检查
+## 开发者
+
+开发需要 Python 3.12+、uv，修改前端还需要 Node/npm。首次从源码开发：
+
+```powershell
+uv sync --all-groups
+cd editor
+npm install
+cd ..
+uv run python scripts/build_editor.py
+```
+
+已有 node_modules 时可离线构建。**每次修改前端后必须运行 `uv run python scripts/build_editor.py`**，并提交 `src/soda_storyboard/web/`。脚本重建 editor/dist 后替换包内静态目录，写入构建时间、前端版本及源码哈希；测试发现哈希不一致会提示重新构建。哈希按 LF 统一换行，涵盖 src 和前端构建配置。安装 wheel 没有 editor/src 时跳过源码比对。
+
+服务默认使用包内资源；热更新开发可用 `uv run soda-storyboard-serve examples/pudding --static editor/dist`，另在 editor 目录运行 npm run dev。`uv build --offline` 可离线构建发行包（需要本机已缓存 uv_build）；wheel 默认收集 soda_storyboard 包内数据，无需用户另配静态目录。
+
+
 
 ```bash
 uv run ruff format --check .

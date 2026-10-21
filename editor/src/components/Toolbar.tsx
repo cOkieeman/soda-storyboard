@@ -7,6 +7,7 @@ export default function Toolbar() {
   const isSaving = useEditorStore((state) => state.isSaving);
   const hasUnsavedChanges = useEditorStore((state) => state.hasUnsavedChanges);
   const lastSavedTime = useEditorStore((state) => state.lastSavedTime);
+  const sseConnected = useEditorStore((state) => state.sseConnected);
 
   const saveCurrentPage = useEditorStore((state) => state.saveCurrentPage);
   const openLayoutModal = useEditorStore((state) => state.openLayoutModal);
@@ -73,6 +74,9 @@ export default function Toolbar() {
 
       {/* Save Status & Action */}
       <div className="flex items-center gap-3">
+        <span role="status" className="font-mono text-xs text-[var(--muted)]" title={sseConnected ? "SSE 已连接，文件修改会自动同步" : "SSE 断开，正在重连"}>
+          {sseConnected ? "● 与 AI 同步中" : "○ 断开重连中"}
+        </span>
         <div className="font-mono text-xs">
           {isSaving ? (
             <span className="text-[var(--signal)] animate-pulse">正在写盘保存...</span>

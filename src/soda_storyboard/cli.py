@@ -16,6 +16,7 @@ from .geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from .io import load_characters, load_page, load_project, read_json, write_json
 from .models import Character, Lora, Page, Panel, Project
 from .preview import render_preview
+from .server.common import APIError
 from .templates import builtin_templates, suggest_layouts
 from .validation import validate_page
 
@@ -79,6 +80,8 @@ def command_init(args: argparse.Namespace) -> int:
     root.mkdir(parents=True, exist_ok=True)
     for directory in ("pages", "characters", "templates"):
         (root / directory).mkdir(exist_ok=True)
+    (root / ".soda").mkdir(exist_ok=True)
+    (root / ".soda/.gitignore").write_text("*\n!.gitignore\n", encoding="utf-8")
     project = Project(
         name=args.name or root.name,
         default_canvas_width=args.width,
@@ -566,6 +569,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .production.cli import register_commands  # noqa: PLC0415 -- optional command registration
 
     register_commands(subparsers)
+    from .edit import register_command  # noqa: PLC0415 -- keep command registration together
+
+    register_command(subparsers)
     return parser
 
 
@@ -577,7 +583,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (APIError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         if getattr(args, "json", False):
             _json_print({"error": str(exc)})
         else:

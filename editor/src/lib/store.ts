@@ -131,6 +131,7 @@ type EditorState = {
 
   // Lifecycle
   initialized: boolean;
+  sseConnected: boolean;
   disconnectSse: (() => void) | null;
   autoSaveTimer: any;
 
@@ -230,6 +231,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   notice: null,
   noticeHistory: [],
   initialized: false,
+  sseConnected: false,
   disconnectSse: null,
   autoSaveTimer: null,
 
@@ -255,9 +257,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         set({ characterDetails: charMap });
       }).catch(console.error);
 
-      // Select first page
+      const requestedPage = new URLSearchParams(window.location.hash.slice(1)).get("page");
       if (pages.length > 0) {
-        await get().selectPage(pages[0].id);
+        const initialPage = pages.find((page) => page.id === requestedPage)?.id || pages[0].id;
+        await get().selectPage(initialPage);
+        if (requestedPage && requestedPage !== initialPage) {
+          get().setNotice(`页面 ${requestedPage} 不存在，已打开 ${initialPage}`);
+        }
       }
 
       // Connect SSE
@@ -302,7 +308,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             get().setNotice(`任务失败: ${job.error || job.message || "未知错误"}`);
           }
         }
-      });
+      }, (connected) => set({ sseConnected: connected }));
 
       set({ disconnectSse: disconnect });
     } catch (err: any) {
@@ -315,7 +321,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     // If has unsaved changes, prompt save or preserve
     if (state.hasUnsavedChanges) {
-      await state.saveCurrentPage();
+      if (!(await state.saveCurrentPage())) {
+        window.history.replaceState(null, "", `#page=${encodeURIComponent(state.activePageId)}`);
+        return;
+      }
     }
 
     try {
@@ -336,6 +345,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           activePageId: pageId
         }
       });
+
+      window.history.replaceState(null, "", `#page=${encodeURIComponent(pageId)}`);
 
       // Fetch renders
       apiGetRenders(pageId).then((r) => {

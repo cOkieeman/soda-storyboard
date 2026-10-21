@@ -1,6 +1,6 @@
 [project]
 name = "soda-storyboard"
-version = "0.1.0"
+version = "0.3.0"
 description = "结构化日漫分镜单与 MOSS 布局编译工具"
 requires-python = ">=3.12"
 license-files = ["NOTICE"]

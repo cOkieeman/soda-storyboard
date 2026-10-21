@@ -688,3 +688,14 @@ def test_cli_rejects_public_host(client: Client, capsys: pytest.CaptureFixture) 
     assert "回环地址" in capsys.readouterr().err
     with pytest.raises(APIError, match="回环地址"):
         Server(client.root, port=0, host="192.168.1.2")
+
+
+def test_candidate_previews_default_to_sketch(client: Client) -> None:
+    def candidate_image(query: str) -> bytes:
+        status, _, result = client.call("POST", PAGE_URL + "/layout-suggest" + query, {"candidates": 1})
+        assert status == 200
+        return client.call("GET", result["candidates"][0]["preview_url"])[2]
+
+    assert candidate_image("") == candidate_image("?style=sketch")
+    assert candidate_image("?style=sketch") != candidate_image("?style=boxes")
+    assert client.call("POST", PAGE_URL + "/layout-suggest?style=invalid", {"candidates": 1})[0] == 400
