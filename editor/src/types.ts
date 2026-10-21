@@ -69,6 +69,7 @@ export type Bubble = {
   background: string;
   borderColor: string;
   borderWidth: number;
+  tailTip?: [number, number] | null;
   // Raw fields from SodaText
   sodaData?: SodaText;
 };
@@ -191,6 +192,7 @@ export type SodaText = {
   bubble: BubbleStyle;
   bbox: RectShape | null;
   style_hint?: string | null;
+  tail_tip?: [number, number] | null;
   [key: string]: any;
 };
 
@@ -243,6 +245,7 @@ export type CharacterSummary = {
   id: string;
   display_name: string;
   has_lora: boolean;
+  figure_hint?: string;
 };
 
 export type SodaCharacter = {
@@ -372,8 +375,39 @@ export type SseEvent =
         change: "modified" | "added" | "deleted";
         page_id: string | null;
         version: string | null;
-        source: string;
+        source?: string;
+        client_id?: string;
         message: string;
       };
     }
   | { type: "job"; data: Job };
+
+// ==========================================
+// Sketch Geometry Types (P4c Item 1)
+// ==========================================
+
+export type Primitive =
+  | { type: "circle"; cx: number; cy: number; r: number; width?: number; fill?: string | null }
+  | { type: "line"; points: [number, number][]; width: number }
+  | { type: "polygon"; points: [number, number][]; fill: string | null; stroke?: string; width?: number };
+
+export type SketchFigure = {
+  character_id: string;
+  label: string;
+  color: string;
+  primitives: Primitive[];
+  label_at: [number, number];
+};
+
+export type SketchPanel = {
+  panel_id: string;
+  clip: [number, number][];
+  figures: SketchFigure[];
+};
+
+export type SketchGeometry = {
+  version: string;
+  canvas: [number, number];
+  panels: SketchPanel[];
+};
+

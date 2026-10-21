@@ -10,6 +10,7 @@ import LayoutModal from "./components/modals/LayoutModal";
 import PreviewModal from "./components/modals/PreviewModal";
 import CompileModal from "./components/modals/CompileModal";
 import GenerateModal from "./components/modals/GenerateModal";
+import CommandPalette from "./components/modals/CommandPalette";
 
 import { useEditorStore } from "./lib/store";
 
@@ -19,6 +20,11 @@ export default function App() {
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
   const selectItem = useEditorStore((state) => state.selectItem);
   const notice = useEditorStore((state) => state.notice);
+  const openCommandPalette = useEditorStore((state) => state.openCommandPalette);
+  const selection = useEditorStore((state) => state.selection);
+  const updateBubble = useEditorStore((state) => state.updateBubble);
+  const updatePanel = useEditorStore((state) => state.updatePanel);
+  const project = useEditorStore((state) => state.project);
 
   const canvasEditorRef = useRef<CanvasEditorHandle | null>(null);
 
@@ -61,7 +67,37 @@ export default function App() {
         return;
       }
 
+      // Ctrl+K / Cmd+K: Command Palette
+      if (cmdOrCtrl && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openCommandPalette();
+        return;
+      }
+
       if (isInput) return;
+
+      // Arrow Key Nudging for selected panel or bubble
+      if (selection && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+        const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+
+        if (selection.kind === "text" || selection.kind === "bubble") {
+          const activePage = project.pages[0];
+          const bubble = activePage?.bubbles.find((b) => b.id === selection.id);
+          if (bubble) {
+            updateBubble(bubble.id, { x: bubble.x + dx, y: bubble.y + dy });
+          }
+        } else if (selection.kind === "panel") {
+          const activePage = project.pages[0];
+          const panel = activePage?.panels.find((p) => p.id === selection.id);
+          if (panel) {
+            updatePanel(panel.id, { x: panel.x + dx, y: panel.y + dy });
+          }
+        }
+        return;
+      }
 
       // Delete / Backspace: Delete current selection
       if (event.key === "Delete" || event.key === "Backspace") {
@@ -119,6 +155,7 @@ export default function App() {
       <PreviewModal />
       <CompileModal />
       <GenerateModal />
+      <CommandPalette />
     </div>
   );
 }

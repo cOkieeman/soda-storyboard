@@ -4,6 +4,7 @@ import {
   LayoutCandidate,
   PageSummary,
   RenderListResponse,
+  SketchGeometry,
   SodaCharacter,
   SodaPage,
   SodaProject,
@@ -13,6 +14,23 @@ import {
 } from "../types";
 
 export const API_BASE = "";
+
+function getOrCreateClientId(): string {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      const stored = window.sessionStorage.getItem("soda_client_id");
+      if (stored) return stored;
+      const created = `client_${Math.random().toString(36).slice(2, 10)}`;
+      window.sessionStorage.setItem("soda_client_id", created);
+      return created;
+    }
+  } catch {
+    // fallback
+  }
+  return `client_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export const CLIENT_ID = getOrCreateClientId();
 
 export class ApiError extends Error {
   status: number;
@@ -32,6 +50,8 @@ async function request<T>(
 ): Promise<{ data: T; status: number; headers: Headers }> {
   const url = `${API_BASE}${endpoint}`;
   const headers = new Headers(options.headers || {});
+
+  headers.set("X-Client-Id", CLIENT_ID);
 
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -352,6 +372,17 @@ export async function cancelJob(id: string): Promise<Job> {
     body: JSON.stringify({})
   });
   return data;
+}
+
+export async function getSketchGeometry(id: string): Promise<SketchGeometry | null> {
+  try {
+    const { data } = await request<SketchGeometry>(
+      `/api/pages/${encodeURIComponent(id)}/sketch-geometry`
+    );
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 export function getPreviewUrl(id: string, style: "sketch" | "boxes" = "sketch", version?: string): string {

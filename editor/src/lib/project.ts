@@ -264,6 +264,7 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
       background: t.bubble === "none" ? "rgba(255,255,255,0)" : "#ffffff",
       borderColor: t.bubble === "none" ? "transparent" : "#171815",
       borderWidth: t.bubble === "none" ? 0 : 2,
+      tailTip: t.tail_tip ?? null,
       sodaData: t
     };
   });
@@ -278,7 +279,12 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
 }
 
 // Convert OpenKoma ProjectPage back to SodaPage preserving unknown fields
-export function projectPageToSodaPage(page: ProjectPage, baseSodaPage: SodaPage): SodaPage {
+export function projectPageToSodaPage(
+  page: ProjectPage,
+  baseSodaPage: SodaPage,
+  dirtyPanelIds?: Set<string>,
+  dirtyBubbleIds?: Set<string>
+): SodaPage {
   // Deep clone base page to keep all original metadata, tags, overlays, etc.
   const cloned: SodaPage = JSON.parse(JSON.stringify(baseSodaPage));
 
@@ -298,29 +304,44 @@ export function projectPageToSodaPage(page: ProjectPage, baseSodaPage: SodaPage)
       figures: []
     };
 
+    // If panel is not marked dirty and existing has a valid shape, keep original float shape untouched!
+    if (dirtyPanelIds && !dirtyPanelIds.has(p.id) && existing.shape) {
+      return {
+        ...existing,
+        id: p.id,
+        order: p.order,
+        description: p.sodaData?.description ?? existing.description,
+        caption_en: p.sodaData?.caption_en ?? existing.caption_en,
+        shot: p.sodaData?.shot ?? existing.shot,
+        angle: p.sodaData?.angle ?? existing.angle,
+        character_ids: p.sodaData?.character_ids ?? existing.character_ids,
+        figures: p.sodaData?.figures ?? existing.figures
+      };
+    }
+
     const isRect =
-      Math.abs(p.shape.topLeft - 0) < 0.005 &&
-      Math.abs(p.shape.topRight - 1) < 0.005 &&
-      Math.abs(p.shape.bottomRight - 1) < 0.005 &&
-      Math.abs(p.shape.bottomLeft - 0) < 0.005;
+      Math.abs(p.shape.topLeft - 0) < 0.0001 &&
+      Math.abs(p.shape.topRight - 1) < 0.0001 &&
+      Math.abs(p.shape.bottomRight - 1) < 0.0001 &&
+      Math.abs(p.shape.bottomLeft - 0) < 0.0001;
 
     let shape;
     if (isRect) {
       shape = {
         type: "rect" as const,
-        x: Math.round(p.x * 10) / 10,
-        y: Math.round(p.y * 10) / 10,
-        w: Math.round(p.width * 10) / 10,
-        h: Math.round(p.height * 10) / 10
+        x: Number(p.x.toFixed(4)),
+        y: Number(p.y.toFixed(4)),
+        w: Number(p.width.toFixed(4)),
+        h: Number(p.height.toFixed(4))
       };
     } else {
       shape = {
         type: "quad" as const,
         points: [
-          [Math.round((p.x + p.width * p.shape.topLeft) * 10) / 10, Math.round(p.y * 10) / 10],
-          [Math.round((p.x + p.width * p.shape.topRight) * 10) / 10, Math.round(p.y * 10) / 10],
-          [Math.round((p.x + p.width * p.shape.bottomRight) * 10) / 10, Math.round((p.y + p.height) * 10) / 10],
-          [Math.round((p.x + p.width * p.shape.bottomLeft) * 10) / 10, Math.round((p.y + p.height) * 10) / 10]
+          [Number((p.x + p.width * p.shape.topLeft).toFixed(4)), Number(p.y.toFixed(4))],
+          [Number((p.x + p.width * p.shape.topRight).toFixed(4)), Number(p.y.toFixed(4))],
+          [Number((p.x + p.width * p.shape.bottomRight).toFixed(4)), Number((p.y + p.height).toFixed(4))],
+          [Number((p.x + p.width * p.shape.bottomLeft).toFixed(4)), Number((p.y + p.height).toFixed(4))]
         ] as [
           [number, number],
           [number, number],
@@ -334,7 +355,13 @@ export function projectPageToSodaPage(page: ProjectPage, baseSodaPage: SodaPage)
       ...existing,
       id: p.id,
       order: p.order,
-      shape
+      shape,
+      description: p.sodaData?.description ?? existing.description,
+      caption_en: p.sodaData?.caption_en ?? existing.caption_en,
+      shot: p.sodaData?.shot ?? existing.shot,
+      angle: p.sodaData?.angle ?? existing.angle,
+      character_ids: p.sodaData?.character_ids ?? existing.character_ids,
+      figures: p.sodaData?.figures ?? existing.figures
     };
   });
 
@@ -348,18 +375,28 @@ export function projectPageToSodaPage(page: ProjectPage, baseSodaPage: SodaPage)
       bubble: "speech"
     };
 
+    let bbox = (existing as any).bbox;
+    if (!dirtyBubbleIds || dirtyBubbleIds.has(b.id) || !bbox) {
+      bbox = {
+        type: "rect" as const,
+        x: Number(b.x.toFixed(4)),
+        y: Number(b.y.toFixed(4)),
+        w: Number(b.width.toFixed(4)),
+        h: Number(b.height.toFixed(4))
+      };
+    }
+
     return {
       ...existing,
       id: b.id,
       text: b.text,
       direction: b.direction,
-      bbox: {
-        type: "rect" as const,
-        x: Math.round(b.x * 10) / 10,
-        y: Math.round(b.y * 10) / 10,
-        w: Math.round(b.width * 10) / 10,
-        h: Math.round(b.height * 10) / 10
-      }
+      speaker_id: b.sodaData?.speaker_id ?? existing.speaker_id,
+      panel_id: b.sodaData?.panel_id ?? existing.panel_id,
+      kind: b.sodaData?.kind ?? existing.kind,
+      bubble: b.sodaData?.bubble ?? existing.bubble,
+      tail_tip: b.tailTip !== undefined ? b.tailTip : (existing as any).tail_tip,
+      bbox
     };
   });
 
