@@ -124,14 +124,14 @@ def convex_polygon(shape: Any) -> list[tuple[float, float]]:
     return points if polygon_area(points) > 0 else list(reversed(points))
 
 
-def polygons_overlap(first: Any, second: Any) -> bool:
+def polygons_overlap(first: Any, second: Any, *, tolerance: float = 0) -> bool:
     """Positive-area convex polygon overlap using separating axes."""
     a, b = shape_polygon(first), shape_polygon(second)
     for polygon in (a, b):
         for start, end in zip(polygon, [*polygon[1:], polygon[0]], strict=True):
             nx, ny = end[1] - start[1], start[0] - end[0]
             pa, pb = ([x * nx + y * ny for x, y in points] for points in (a, b))
-            if min(max(pa), max(pb)) - max(min(pa), min(pb)) <= 1e-8:
+            if min(max(pa), max(pb)) - max(min(pa), min(pb)) <= tolerance * hypot(nx, ny) + 1e-8:
                 return False
     return True
 
@@ -234,7 +234,7 @@ def skew_rectangles(
     result: list[dict[str, Any]] = [{} for _ in shapes]
     for index, points in zip(indices, polygons, strict=True):
         output_points = [(points[i][1], points[i][0]) for i in (0, 3, 2, 1)] if transposed else points
-        result[index] = {"type": "quad", "points": [[x, y] for x, y in output_points]}
+        result[index] = {"type": "quad", "points": [[round(x, 2), round(y, 2)] for x, y in output_points]}
     return result
 
 

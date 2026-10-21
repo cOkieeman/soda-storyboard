@@ -37,7 +37,7 @@ def test_shared_vertical_seams_keep_true_distance() -> None:
     quads = geometry.skew_rectangles(rectangles, angle=8, gap=24)
     assert len(quads) == 3
     assert all(quad["type"] == "quad" for quad in quads)
-    assert geometry.shape_distance(quads[0], quads[1]) >= 24 - 1e-7
+    assert geometry.shape_distance(quads[0], quads[1]) >= 24 - 0.02
 
 
 def _inside(point: tuple[float, float], polygon: list[tuple[float, float]]) -> bool:
@@ -64,7 +64,7 @@ def test_slanted_candidates_are_bounded_separated_and_keep_order(
             assert all(0 <= x <= 1024 and 0 <= y <= 1536 for x, y in geometry.shape_polygon(panel))
         for first, second in combinations(panels, 2):
             assert not geometry.polygons_overlap(first, second)
-            assert geometry.shape_distance(first, second) >= 24 - 1e-6
+            assert geometry.shape_distance(first, second) >= 24 - 0.02
         boxes = [geometry.shape_bbox(p) for p in panels]
         top = [box for box in boxes if box[1] == min(b[1] for b in boxes)]
         side = max if direction == "rtl" else min
@@ -97,7 +97,7 @@ def test_midline_regions_tile_working_band_and_real_gutters(axis: str, gap: int)
         if gap == 0:
             assert first[end] == pytest.approx(second[start])
     for first, second in pairwise(quads):
-        assert geometry.shape_distance(first, second) == pytest.approx(gap)
+        assert geometry.shape_distance(first, second) == pytest.approx(gap, abs=0.02)
 
 
 @pytest.mark.parametrize(

@@ -7,7 +7,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .figures import draw_figure, panel_figures
+from .figures import draw_figure, draw_primitives, panel_figure_geometry
 from .geometry import inscribed_rect, shape_bbox
 from .lettering import layout_texts, text_lines, vertical_columns
 from .models import Character, Figure, Page, Panel
@@ -207,28 +207,16 @@ def _paste_panel_figures(  # noqa: PLR0913 -- explicit local drawing context
 ) -> None:
     from PIL import Image, ImageChops, ImageDraw  # noqa: PLC0415
 
-    x, y, x2, y2 = [round(v * scale) for v in shape_bbox(panel.shape)]
-    layer = Image.new("RGBA", (max(1, x2 - x), max(1, y2 - y)))
-    for figure in panel_figures(panel, page):
-        draw_figure(
-            layer,
-            figure,
-            characters.get(figure.character_id),
-            shot=panel.shot,
-            color=PANEL_COLOR,
-            font=font,
-            show_name=False,
-        )
+    layer = Image.new("RGBA", image.size)
+    data = panel_figure_geometry(panel, page, characters, font=font, scale=scale)
+    for geometry in data["figures"]:
+        draw_primitives(layer, geometry, font=font)
     mask = Image.new("L", layer.size)
     md = ImageDraw.Draw(mask)
-    points = (
-        [(round(px * scale) - x, round(py * scale) - y) for px, py in panel.shape["points"]]
-        if panel.shape_type == "quad"
-        else [(0, 0), (x2 - x - 1, 0), (x2 - x - 1, y2 - y - 1), (0, y2 - y - 1)]
-    )
+    points = [tuple(p) for p in data["clip"]]
     md.polygon(points, fill=255)
     layer.putalpha(ImageChops.multiply(layer.getchannel("A"), mask))
-    image.paste(layer, (x, y), layer)
+    image.paste(layer, (0, 0), layer)
 
 
 def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path | None, scale: float) -> None:
@@ -343,12 +331,25 @@ def _render_sketch(  # noqa: PLR0912 -- labels, figures, overlays and lettering 
         _draw_text_box(image, text, page, font_path, scale)
     draw = ImageDraw.Draw(image)
     occupied = [tuple(v * scale for v in shape_bbox(t.bbox)) for t in layout_texts(page) if t.bbox]
+    for panel in page.panels:
+        occupied.extend(
+            draw.textbbox(
+                tuple(figure["label_at"]),
+                figure["label"],
+                font=label_font,
+                anchor="lt",
+                stroke_width=1,
+            )
+            for figure in panel_figure_geometry(panel, page, character_map, font=label_font, scale=scale)[
+                "figures"
+            ]
+            if figure["label_visible"]
+        )
     for panel in sorted(page.panels, key=lambda p: p.order):
         label_shape = inscribed_rect(panel.shape) if panel.shape_type == "quad" else panel.shape
         bounds = tuple(v * scale for v in shape_bbox(label_shape))
         labels = [
             (f"{panel.order}  {panel.description[:16]}", str(panel.order)),
-            (_character_names(panel, character_map), ""),
         ]
         for full, fallback in labels:
             for label in dict.fromkeys((full, fallback)):

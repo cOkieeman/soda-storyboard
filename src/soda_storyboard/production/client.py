@@ -24,7 +24,12 @@ type JSON = dict[str, Any]
 
 class ComfyClient:
     def __init__(
-        self, url: str = "http://127.0.0.1:8190", *, timeout: float = 600, poll_interval: float = 1
+        self,
+        url: str = "http://127.0.0.1:8190",
+        *,
+        timeout: float = 600,
+        poll_interval: float = 1,
+        log_directory: str | Path | None = None,
     ) -> None:
         parsed = urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -36,6 +41,30 @@ class ComfyClient:
         self.url = url.rstrip("/")
         self.timeout = timeout
         self.poll_interval = poll_interval
+        self.log_directory = Path(log_directory) if log_directory else None
+
+    def _diagnostic(self, detail: object) -> str:
+        if self.log_directory is None:
+            return ""
+        self.log_directory.mkdir(parents=True, exist_ok=True)
+        path = self.log_directory / f"comfy-{uuid.uuid4().hex}.json"
+        path.write_text(json.dumps(detail, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return f"；完整日志：{path}"
+
+    def _execution_error(self, prompt_id: str, history: JSON) -> ProductionError:
+        error = next(
+            (
+                m[1]
+                for m in history.get("status", {}).get("messages", [])
+                if len(m) > 1 and m[0] in {"execution_error", "execution_interrupted"}
+            ),
+            {},
+        )
+        name = error.get("node_type") or error.get("node_id") or "未知节点"
+        brief = " ".join(str(error.get("exception_message", "执行中断或生成失败")).split())[:200]
+        return ProductionError(
+            f"ComfyUI 节点 {name} 生成失败，任务号 {prompt_id}：{brief}" + self._diagnostic(history)
+        )
 
     def _request(
         self,
@@ -54,7 +83,9 @@ class ComfyClient:
                 return response.read()
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            msg = f"ComfyUI 请求失败（HTTP {exc.code}）：{detail}"
+            msg = f"ComfyUI 请求失败（HTTP {exc.code}）：{' '.join(detail.split())[:240]}" + self._diagnostic(
+                detail
+            )
             raise ProductionError(msg) from exc
         except (URLError, OSError, TimeoutError) as exc:
             msg = f"无法连接 ComfyUI：{self.url}；请检查地址及服务是否启动。原始错误：{exc}"
@@ -66,7 +97,7 @@ class ComfyClient:
         try:
             result = json.loads(raw)
         except (ValueError, UnicodeError) as exc:
-            msg = f"ComfyUI 返回了无效 JSON：{raw[:500]!r}"
+            msg = "ComfyUI 返回了无效 JSON" + self._diagnostic(raw.decode("utf-8", errors="replace"))
             raise ProductionError(msg) from exc
         if not isinstance(result, dict):
             msg = "ComfyUI 返回格式错误：需要 JSON 对象"
@@ -82,7 +113,14 @@ class ComfyClient:
     def submit(self, graph: JSON) -> str:
         result = self._json("/prompt", {"prompt": graph, "client_id": uuid.uuid4().hex})
         if result.get("error") or result.get("node_errors") or not result.get("prompt_id"):
-            raise ProductionError("ComfyUI 拒绝任务：" + json.dumps(result, ensure_ascii=False))
+            node_id = next(iter(result.get("node_errors", {})), "")
+            name = graph.get(node_id, {}).get("class_type", "未知节点")
+            detail = result.get("error") or result.get("node_errors") or "未返回任务号"
+            if isinstance(detail, dict):
+                detail = detail.get("message", detail.get("exception_message", detail))
+            brief = " ".join(str(detail).split())[:200]
+            msg = f"ComfyUI 节点 {name} 拒绝任务（尚无任务号）：{brief}" + self._diagnostic(result)
+            raise ProductionError(msg)
         return str(result["prompt_id"])
 
     def wait(self, prompt_id: str, *, progress: Progress = None, output_node: str = "10") -> list[JSON]:
@@ -98,7 +136,7 @@ class ComfyClient:
                     for message in status.get("messages", [])
                     if message
                 ):
-                    raise ProductionError("ComfyUI 生成失败：" + json.dumps(history, ensure_ascii=False))
+                    raise self._execution_error(prompt_id, history)
                 outputs = history.get("outputs", {})
                 images = outputs.get(output_node, {}).get("images", [])
                 if images and status.get("completed", True):
@@ -106,7 +144,10 @@ class ComfyClient:
                         progress({"stage": "completed", "prompt_id": prompt_id})
                     return images
                 if status.get("completed"):
-                    msg = f"ComfyUI 任务已完成，但输出节点 {output_node} 没有图片：{history}"
+                    msg = (
+                        f"ComfyUI 任务号 {prompt_id} 已完成，但输出节点 {output_node} 没有图片"
+                        + self._diagnostic(history)
+                    )
                     raise ProductionError(msg)
             if progress:
                 progress({"stage": "waiting", "prompt_id": prompt_id})
@@ -152,6 +193,8 @@ class ComfyClient:
     def run(
         self, graph: JSON, destination: str | Path, *, progress: Progress = None, output_node: str = "10"
     ) -> Path:
+        if self.log_directory is None:
+            self.log_directory = Path(destination).parent / "logs"
         prompt_id = self.submit(graph)
         if progress:
             progress({"stage": "submitted", "prompt_id": prompt_id})

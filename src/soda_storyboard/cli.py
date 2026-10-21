@@ -377,7 +377,12 @@ def _characters_near(page_path: Path) -> dict[str, Character]:
 def command_validate(args: argparse.Namespace) -> int:
     path = Path(args.page)
     page = _page_for(path)
-    report = validate_page(page, _characters_near(path), max_dialogue_chars=args.max_dialogue_chars)
+    report = validate_page(
+        page,
+        _characters_near(path),
+        max_dialogue_chars=args.max_dialogue_chars,
+        geometry_tolerance=args.geometry_tolerance,
+    )
     _emit(report.to_dict(), args.json)
     return report.exit_code
 
@@ -546,6 +551,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser("validate", help="校验分镜页")
     validate.add_argument("page")
     validate.add_argument("--max-dialogue-chars", type=int, default=20)
+    validate.add_argument("--geometry-tolerance", type=float, help="几何容差像素；默认读取页面设置或 0.5")
     validate.add_argument("--json", action="store_true")
     validate.set_defaults(func=command_validate)
 

@@ -210,7 +210,8 @@ def load_user_templates(directory: str | Path | None) -> list[dict[str, Any]]:
 
 
 def _check_slots(slots: list[dict[str, Any]], width: int, height: int, gap: int) -> None:
-    tolerance = 1e-7
+    # Two-decimal skew vertices can shorten a true edge distance by <0.02 px.
+    tolerance = 0.02
     for index, slot in enumerate(slots):
         convex_polygon(slot)
         x, y, w, h = bbox_xywh(slot)
@@ -356,7 +357,7 @@ def suggest_layouts(
 
 def _mirror(shape: dict[str, Any], width: int) -> dict[str, Any]:
     if shape["type"] == "quad":
-        return {"type": "quad", "points": [[width - x, y] for x, y in reversed(shape["points"])]}
+        return {"type": "quad", "points": [[round(width - x, 2), y] for x, y in reversed(shape["points"])]}
     return {**shape, "x": width - shape["x"] - shape["w"]}
 
 

@@ -2981,13 +2981,13 @@ data: {"refresh":true}
 
 ```
 
-后台每秒比较项目内图片/JSON 的 mtime_ns 与大小；不监视隐藏目录（包括 .server/.trash/.git）。直接 pages/*.json 的事件带 page_id 和最新版本；非页面文件 page_id/version 为 null；删除时 version 为 null。不能可靠区分 CLI、AI、编辑器自身写入，所以 source 固定 unknown，前端只能提示“页面已在外部修改”，不要编造“AI 刚修改了第 3 格”。编辑器自身保存产生的事件可按 version 与已知保存结果相同去重。文件极短暂的中间状态及一秒内反复修改会合并；CLI 写到半途的非法 JSON 会在后续扫描重试。
+后台每秒比较项目内图片/JSON 的 mtime_ns 与大小；不监视隐藏目录（包括 .server/.trash/.git）。直接 pages/*.json 的事件带 page_id 和最新版本；非页面文件 page_id/version 为 null；删除时 version 为 null。0.3.1 起，成功的页面 PUT 立即发布 source="editor" 并带 client_id；其他文件写入通过轮询发布 source="external"、client_id=null。external 无法进一步区分 CLI、AI 或其他程序，不要编造“AI 刚修改了第 3 格”。编辑器自己保存产生的事件可按 client_id 与 version 去重。文件极短暂的中间状态及一秒内反复外部修改会合并；CLI 写到半途的非法 JSON 会在后续扫描重试。
 
 外部修改事件（change 还可为 added/deleted）：
 
 ```text
 event: file_changed
-data: {"path": "pages/pudding.json", "change": "modified", "page_id": "pudding", "version": "\"1792553078596086800-5569a2f3cb30516e3cd6e9760422c0b0c256ffaa79ff023ba27b10ba2d8ea50a\"", "source": "unknown", "message": "页面已在外部修改"}
+data: {"path": "pages/pudding.json", "change": "modified", "page_id": "pudding", "version": "\"1792553078596086800-5569a2f3cb30516e3cd6e9760422c0b0c256ffaa79ff023ba27b10ba2d8ea50a\"", "source": "external", "client_id": null, "message": "页面已在外部修改"}
 
 ```
 
@@ -2995,7 +2995,7 @@ data: {"path": "pages/pudding.json", "change": "modified", "page_id": "pudding",
 
 ```text
 event: file_changed
-data: {"path": "pages/pudding.json", "change": "deleted", "page_id": "pudding", "version": null, "source": "unknown", "message": "页面已在外部修改"}
+data: {"path": "pages/pudding.json", "change": "deleted", "page_id": "pudding", "version": null, "source": "external", "client_id": null, "message": "页面已在外部修改"}
 
 ```
 
@@ -3038,7 +3038,7 @@ Access-Control-Request-Headers: Content-Type, If-Match
 ```http
 Access-Control-Allow-Origin: http://localhost:5173
 Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
-Access-Control-Allow-Headers: Content-Type, If-Match
+Access-Control-Allow-Headers: Content-Type, If-Match, X-Client-Id
 Access-Control-Max-Age: 600
 Vary: Origin
 ```
@@ -3215,3 +3215,32 @@ Vary: Origin
 `POST /api/templates`：发送 JSON `{ "extraction_id": "<提取返回的id>", "name": "可选模板名" }`；name 若提供须为 1～120 字符。201 返回 `{template, path}`，path 是项目内 `templates/<新id>.json`。模板只保存归一化格子几何、来源文件名、UTC extracted_at、格数和阅读方向，source=reference、source_label=“来自参考页”；不复制上传原图。每次保存产生新 id。缺图/非法输入/空格子结果为 400，未找到 extraction_id 为 404。先展示预览供用户确认，再调用保存接口。
 
 上传原始字节只在内存使用；`.server/extractions/` 缓存叠加预览（含参考页画面）和几何结果，重启后 extraction_id 仍可使用。不再需要参考预览时可在服务停止后删除该缓存目录；已保存的 templates 不受影响。前端暂不接入这两个接口。
+
+## 15. 0.3.1 几何与写入来源补充
+
+### GET /api/pages/{id}/sketch-geometry
+
+只读，无请求体，不连接 ComfyUI。200 响应包含与当前 Page GET 相同的 `version`，也以 ETag 返回；`canvas` 为 `[width,height]`。
+
+```json
+{"version":"<页面版本>","canvas":[1024,1536],"panels":[{"panel_id":"p1","clip":[[40,40],[480,40],[480,400],[40,400]],"figures":[{"character_id":"girl","label":"女孩","color":"#00a8c4","primitives":[{"type":"circle","cx":260,"cy":120,"r":25,"width":4,"fill":null},{"type":"line","points":[[240,160],[280,160]],"width":4}],"label_at":[260,48]}]}]}
+```
+
+坐标均为页面像素，左上角原点；panels 按 order 排序，figures 保留人物顺序。clip 是沿边界排列的四点多边形，rect 也展开为四点。前端先 clip 再画人物与标签；缩放时对坐标、半径、线宽一起缩放。circle 的 fill=null 表示空心，非 null 表示填充人物 color；line 的 points 为折线。polygon 的 points 为闭合轮廓，fill=null 表示空心，非 null 表示填色。统一使用 figure.color 描边，width 是页面像素；标签位于 label_at，左边、顶边对齐（label_anchor="lt"），label_visible=false 时空间不足而隐藏，基准字号22px（白色1px描边）。未知扩展字段应忽略。
+
+接口与 PNG 草稿通过 figures.py 的同一套姿势/景框/朝向/站位计算生成图元；默认排开的缺省 figures 和未知姿势回退也相同。标签由后端确定名字与位置。这个接口只描述每格人物，页级文字、格框和 overlays 继续从 Page 数据绘制。没有人物时 figures=[]，页不存在404。
+
+### 页面 PUT / SSE
+
+页面与角色 PUT 支持可选 `X-Client-Id` 请求头（最多128字符，缺省null）；开发来源的OPTIONS允许这个头。页面先完成版本检查、校验与原子写入，成功后才发 file_changed；角色PUT同样标为editor，但其page_id/version为null：
+
+```text
+event: file_changed
+data: {"path":"pages/pudding.json","change":"modified","page_id":"pudding","version":"<PUT返回的version>","source":"editor","client_id":"当前浏览器生成的id","message":"页面已由编辑器保存"}
+```
+
+每个浏览器会话生成自己的客户端id，并在PUT时携带。接到自己id和已知version的事件时不弹“外部修改”；其他编辑器id可提示另一个编辑器保存，source=external提示外部文件修改。外部程序写入发生在本服务PUT之后时，仍独立作为external事件，不能仅按文件名长期记来源。PUT失败不会发editor成功事件。
+
+### 几何容差
+
+页面 `geometry_tolerance` 为非负有限像素值，缺省0.5，适用于间距、越界和重叠。页面PUT与validate共用同一校验；`POST /api/pages/{id}/validate` 可在请求体传 geometry_tolerance 覆盖本次校验。0为严格模式。宽高为正、凸四边形及连续order等结构要求不使用容差放宽。斜格顶点由生成器保留两位小数，允许旧编辑器一位小数往返。

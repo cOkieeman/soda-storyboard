@@ -1,6 +1,6 @@
 {
   "name": "soda-storyboard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "与没有漫画基础的用户讨论日漫分镜，选择版式、审阅线框并确认后编译 MOSS 布局。",
   "author": {"name": "soda-storyboard contributors"}
 }

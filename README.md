@@ -13,6 +13,8 @@ soda-storyboard --help
 
 uv 尚未找到 Python 3.12+ 时，可在安装命令末尾加 `--python 3.12`。安装后在新终端检查命令可用。更新使用同一条安装命令并加 `--force`。Git 安装需要 Git 和网络；本轮只做了离线构建与本地验证，没有在线验证从 GitHub 安装。
 
+如果安装器提示工具目录不在 PATH，运行 `uv tool update-shell`，关闭并重开终端后再检查。也可直接使用安装器显示的工具目录下 `soda-storyboard.exe` 的绝对路径运行 `--help`（其他系统使用对应可执行文件）。不要将“包安装成功”当成当前终端已能找到命令。
+
 ### 在 Codex 和 Claude Code 中启用插件
 
 Python CLI 和宿主插件分别安装。获取仓库中的 `skill/` 文件夹（例如下载 GitHub ZIP 并解压，或用下列命令），保留其中的隐藏清单目录；不需要构建前端。
@@ -25,11 +27,15 @@ git clone https://github.com/cOkieeman/soda-storyboard
 
 ```powershell
 codex plugin marketplace add "C:/你的目录/soda-storyboard/skill"
+codex plugin add soda-storyboard@soda-storyboard-local
+codex plugin list
 ```
 
 重启 Codex 桌面端，在 Plugins Directory 选择“Soda Storyboard 本地插件”来源，安装并启用 Soda Storyboard，再开新聊天。输入 `@` 找到插件技能；CLI/IDE 可用 `/skills` 或 `$soda-storyboard` 调用，名称以宿主界面为准。
 
-Claude Code 可以临时加载：
+上面的命令行方式可代替目录中的安装操作。`plugin add` 的格式是 `插件名@市场id`，本仓库市场 id 为 `soda-storyboard-local`；以添加市场源后的实际结果为准。`plugin list --json` 可核对 `installed`（文件已安装）和 `enabled`（宿主已启用）。这两项不证明旧聊天已加载：重启宿主并开新会话，能在 `@` 或技能列表中选择并调用，才完成“新会话已加载”的检查。已安装时在目录中核对状态即可，不必重复安装。
+
+Claude Code 需要先安装 Claude Code CLI，并确认 `claude --help` 可用，然后可以临时加载：
 
 ```powershell
 claude --plugin-dir "C:/你的目录/soda-storyboard/skill"
@@ -68,6 +74,8 @@ edit 的项目目录默认是当前目录，端口默认 8780；同项目服务�
 CLI 输出 UTF-8，也支持 `python -m soda_storyboard`。文件接口与网页共用项目 JSON；本阶段不接 Soda Prompt Hub。
 
 ## 文件格式
+
+几何校验默认容差为 0.5 像素，覆盖格间距、越界和多边形重叠，避免网页小数舍入产生误报；宽高仍必须为正、四边形仍必须非退化且为凸多边形。页文件可设置 `geometry_tolerance`，CLI `validate --geometry-tolerance` 可覆盖；设为 0 使用严格几何检查。斜切生成顶点保留两位小数，生成器用 0.02 像素误差预算检查这种舍入，保存/校验时使用上述统一容差。
 
 项目目录包含 `project.json`、`pages/*.json`、`characters/*.json` 和可选的 `templates/*.json`。页文件使用 `soda-storyboard-page-v1`，画布尺寸必须是 16 的倍数。格子的 `shape` 支持左上角原点像素坐标的 `rect` 和四点 `quad`。`order` 从 1 连续编号；`dialogue_mode` 为 `moss_text` 时台词会编译为文字 item，`lettering` 时只编译画面 object。
 
@@ -280,6 +288,10 @@ uv run soda-storyboard export my-story --format pdf --json
 - split 按 bbox 切格，quad 使用外接矩形，并单独保存 quad-mask；文件放在 `pages/<页id>/panels/<格id>/`。
 - redraw 的 detail 默认 denoise=0.45，swap 默认 0.85，swap 仅适用于单人格；两人同格使用 inpaint。单格提示词不带整页前缀。moss_text 下生成后贴回原文字框，防止高降噪改字。每次生成是独立候选，pick-panel 后才用于拼页。
 - inpaint 按 figures 位置、余量和羽化生成遮罩，羽化后再次保护另一角色区域；支持 `figure.bbox` 精确指定人物范围（页面坐标 x/y/w/h）。返回 mask 路径供检查。位置推断不能替代真实人物分割，重叠人物需要人工调整范围。
+
+局部重绘前先运行 `soda-storyboard inpaint station-turn p1 --project my-story --character girl --mask-only --json`，查看返回的 `mask` 和红色叠加 `preview`。这个模式只写遮罩与预览，不连接 ComfyUI、不提交采样、不登记重画候选；确认范围后再运行不带 `--mask-only` 的命令。估时以 1024×1536、25 步约 40 秒为基准，按实际像素数和步数成比例换算，排队、模型加载和硬件另计。
+
+抠图在采样前检查节点 required/optional 输入与 IMAGE 输出，填入契约中声明的默认值。缺必填参数或节点不兼容时直接提示 `cutout --png` 导入透明图，不先消耗采样。ComfyUI 执行失败时终端只显示节点、任务号和简短原因，完整诊断保存在故事项目的 `logs/comfy/`。
 - compose 输出 `composed.png`；把选定格子贴回底图，quad 向内缩进默认 12 像素、外部填白并重画格框。默认缩进和边框可通过 comfy config 持久设置。
 - letter 输出 `lettered.png`，支持椭圆 speech、锯齿 shout、云形 thought、矩形 box 和无气泡 none，以及横排／竖排。按 Noto Sans CJK SC、思源黑体、微软雅黑顺序找字体，可用 `--font` 指定。默认处理 lettering 页或 `texts[].render_mode: "lettering"`；moss_text 页可重复传 `--text t1` 指定程序排字。
 - cutout 只处理 mode=layer 的 overlay，使用角色 LoRA 和单人纯色背景提示词；先检查 BiRefNetRMBG、RMBG、Image Remove Background (rembg)。均缺失时提示安装 ComfyUI-RMBG / rembg，也可 `--png` 导入透明 PNG。抠图节点的必填参数需有默认值或枚举值，且需返回含 alpha 的 IMAGE；否则提示提供透明 PNG。图层按 z_index 置于文字之上，重新生成可用的 composed / lettered 成品。

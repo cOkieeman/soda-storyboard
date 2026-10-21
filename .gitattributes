@@ -1,0 +1,15 @@
+# Keep source fingerprints and patches independent of checkout platform.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.ttc binary
+*.safetensors binary

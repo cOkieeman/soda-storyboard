@@ -20,7 +20,7 @@ class Events:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.stopped = threading.Event()
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.clients: set[queue.Queue] = set()
         self.files = self.scan()
         self.thread = threading.Thread(target=self.watch, daemon=True, name="storyboard-watch")
@@ -68,41 +68,63 @@ class Events:
 
     def watch(self) -> None:
         while not self.stopped.wait(1):
-            current = self.scan()
-            for relative in sorted(self.files.keys() | current.keys()):
-                if self.files.get(relative) == current.get(relative):
-                    continue
-                change = (
-                    "deleted"
-                    if relative not in current
-                    else "modified"
-                    if relative in self.files
-                    else "added"
-                )
-                page_id = None
-                version = None
-                path = Path(relative)
-                if path.parent == Path("pages") and path.suffix == ".json":
-                    page_id = path.stem
-                    if change != "deleted":
-                        try:
-                            _, version = snapshot(inside(self.root, relative))
-                        except (OSError, ValueError, APIError):
-                            # Retry a temporarily incomplete CLI write on the next scan.
-                            current.pop(relative, None)
-                            continue
-                self.publish(
-                    "file_changed",
-                    {
-                        "path": relative,
-                        "change": change,
-                        "page_id": page_id,
-                        "version": version,
-                        "source": "unknown",
-                        "message": "页面已在外部修改" if page_id else "项目文件已修改",
-                    },
-                )
-            self.files = current
+            with self.lock:
+                self.poll()
+
+    def editor_changed(self, relative: str, version: str, client_id: str | None) -> None:
+        """Called under lock after PUT, before the watcher can attribute its write."""
+        path = inside(self.root, relative)
+        is_page = Path(relative).parent == Path("pages")
+        _, current_version = snapshot(path)
+        if version == current_version:
+            stat = path.stat()
+            self.files[relative] = (stat.st_mtime_ns, stat.st_size)
+        self.publish(
+            "file_changed",
+            {
+                "path": relative,
+                "change": "modified",
+                "page_id": Path(relative).stem if is_page else None,
+                "version": version if is_page else None,
+                "source": "editor",
+                "client_id": client_id,
+                "message": "页面已由编辑器保存" if is_page else "项目文件已由编辑器保存",
+            },
+        )
+
+    def poll(self) -> None:
+        current = self.scan()
+        for relative in sorted(self.files.keys() | current.keys()):
+            if self.files.get(relative) == current.get(relative):
+                continue
+            change = (
+                "deleted" if relative not in current else "modified" if relative in self.files else "added"
+            )
+            page_id = None
+            version = None
+            path = Path(relative)
+            if path.parent == Path("pages") and path.suffix == ".json":
+                page_id = path.stem
+                if change != "deleted":
+                    try:
+                        _, version = snapshot(inside(self.root, relative))
+                    except (OSError, ValueError, APIError):
+                        # Retry a temporarily incomplete CLI write on the next scan.
+                        current.pop(relative, None)
+                        continue
+            self.publish(
+                "file_changed",
+                {
+                    "path": relative,
+                    "change": change,
+                    "page_id": page_id,
+                    "version": version,
+                    "source": "external",
+                    "client_id": None,
+                    "message": "页面已在外部修改" if page_id else "项目文件已修改",
+                },
+            )
+        self.files = current
 
     def close(self) -> None:
         self.stopped.set()

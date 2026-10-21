@@ -443,11 +443,32 @@ def inpaint_panel(  # noqa: PLR0913 -- explicit mask geometry options
     denoise: float = 0.85,
     margin: int = 24,
     feather: int = 16,
+    mask_only: bool = False,
     progress: Progress = None,
 ) -> dict:
     if not 0 <= denoise <= 1:
         msg = "denoise 必须在 0 到 1 之间"
         raise ProductionError(msg)
+    if mask_only:
+        state = PageState(project_dir, page_id)
+        state.panel(panel_id)
+        panel = next(p for p in state.page.panels if p.id == panel_id)
+        original = _panel_source(state, panel)
+        mask = figure_mask(panel, state.page, character_id, margin=margin, feather=feather)
+        folder = state.directory / "panels" / identifier(panel_id)
+        folder.mkdir(parents=True, exist_ok=True)
+        token = stamp()
+        path, preview = folder / f"{token}_mask.png", folder / f"{token}_mask-preview.png"
+        mask.save(path)
+        tint = Image.blend(original, Image.new("RGB", original.size, "red"), 0.4)
+        Image.composite(tint, original, mask).save(preview)
+        return {
+            "panel_id": panel_id,
+            "character_id": character_id,
+            "mask": str(path),
+            "preview": str(preview),
+            "mask_only": True,
+        }
     return _redraw(
         PageState(project_dir, page_id),
         panel_id,
@@ -518,9 +539,10 @@ def compose_with_options(
     sources = {p.id: _panel_source(state, p) for p in state.page.panels}
     # Clear all quad bounding rectangles first; repaste EVERY panel afterwards,
     # so a neighbouring panel cannot be erased by another quad's white fill.
-    for panel in state.page.panels:
-        if panel.shape_type == "quad":
-            image.paste("white", panel_box(panel))
+    if any(p.shape_type == "quad" for p in state.page.panels):
+        # Cut-mode pages are rebuilt on paper. This also removes old borders
+        # outside panel bboxes, including margins and gutters between rows.
+        image = Image.new("RGB", _canvas(state), "white")
     for panel in sorted(state.page.panels, key=lambda p: p.order):
         x, y, _, _ = panel_box(panel)
         image.paste(sources[panel.id], (x, y), quad_mask(panel, inset=inset))
@@ -607,24 +629,29 @@ def export(project_dir: str | Path, page_ids: list[str] | None = None, fmt: str 
 
 def _remove_background_node(definition: JSON, class_name: str) -> tuple[JSON, int]:
     inputs = {}
-    for key, spec in definition.get("input", {}).get("required", {}).items():
+    contract = definition.get("input", {})
+    required = contract.get("required", {})
+    for key, spec in {**contract.get("optional", {}), **required}.items():
+        if not isinstance(spec, (list, tuple)) or not spec:
+            msg = f"抠图节点 {class_name} 的参数 {key} 契约无效，请用 cutout --png 导入已抠好的透明 PNG"
+            raise ProductionError(msg)
         kind = spec[0]
         options = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
         if kind == "IMAGE":
             inputs[key] = ["9", 0]
         elif "default" in options:
             inputs[key] = options["default"]
-        elif isinstance(kind, list) and kind:
+        elif key in required and isinstance(kind, list) and kind:
             inputs[key] = kind[0]
-        else:
-            msg = f"抠图节点 {class_name} 的必填参数 {key} 没有默认值，请提供已抠好的 PNG"
+        elif key in required:
+            msg = f"抠图节点 {class_name} 的必填参数 {key} 没有默认值，请用 cutout --png 导入已抠好的透明 PNG"
             raise ProductionError(msg)
     if not any(isinstance(v, list) and v == ["9", 0] for v in inputs.values()):
-        msg = f"抠图节点 {class_name} 未声明 IMAGE 输入，请提供已抠好的 PNG"
+        msg = f"抠图节点 {class_name} 未声明 IMAGE 输入，请用 cutout --png 导入已抠好的透明 PNG"
         raise ProductionError(msg)
     outputs = definition.get("output", [])
     if "IMAGE" not in outputs:
-        msg = f"抠图节点 {class_name} 未声明 IMAGE 输出，请提供已抠好的 PNG"
+        msg = f"抠图节点 {class_name} 未声明 IMAGE 输出，请用 cutout --png 导入已抠好的透明 PNG"
         raise ProductionError(msg)
     return node(class_name, **inputs), outputs.index("IMAGE")
 

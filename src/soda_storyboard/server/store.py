@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from soda_storyboard.compiler import compile_geometry_map, compile_page
+from soda_storyboard.figures import sketch_geometry
 from soda_storyboard.geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from soda_storyboard.io import load_character, load_project, read_json, save_page, write_json
 from soda_storyboard.models import Character, Page, Project
@@ -109,6 +110,13 @@ class Store:
     def page(self, page_id: str) -> dict:
         value, version = snapshot(self.page_path(page_id))
         return {"page": value, "version": version}
+
+    def sketch_geometry(self, page_id: str) -> dict:
+        current = self.page(page_id)
+        return {
+            "version": current["version"],
+            **sketch_geometry(self.render_page(page_id, raw=current["page"]), self.character_map()),
+        }
 
     def match(self, page_id: str, version: str | None) -> dict:
         current = self.page(page_id)
@@ -214,10 +222,10 @@ class Store:
         finally:
             target.unlink(missing_ok=True)
 
-    def render_page(self, page_id: str) -> Page:
+    def render_page(self, page_id: str, *, raw: dict | None = None) -> Page:
         """Apply the same project-level render defaults as CLI _page_for."""
-        path = self.page_path(page_id)
-        raw, _ = snapshot(path)
+        if raw is None:
+            raw, _ = snapshot(self.page_path(page_id))
         page = Page.from_dict(raw)
         project = load_project(self.path("project.json"))
         for key in ("text_direction", "color_mode", "tags"):

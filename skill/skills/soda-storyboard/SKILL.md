@@ -139,7 +139,7 @@ soda-storyboard pick station-turn render.png --project my-story --json
 soda-storyboard plan station-turn --project my-story --json
 ```
 
-向用户解释 plan：哪些格需要整格换人、哪些需要局部换人、斜切裁剪、出格抠图和排字。一次只加载一个人物 LoRA；auto 选出场最多的带 LoRA 角色，其他角色单独格用 swap 0.85，两人同格用 inpaint 0.85。detail 0.45 修细节。按用户同意逐步执行；每一步展示返回的图片，重画候选必须等待用户选择后 pick-panel。局部遮罩按 figures 位置估计，重叠或大动作时先检查返回的遮罩，有需要在 figure.bbox 填入更准确的页面坐标 x/y/w/h。重画保留 moss_text 文字框；提示词只能描述单张画面，不能带整页前缀。
+向用户解释 plan：哪些格需要整格换人、哪些需要局部换人、斜切裁剪、出格抠图和排字。一次只加载一个人物 LoRA；auto 选出场最多的带 LoRA 角色，其他角色单独格用 swap 0.85，两人同格用 inpaint 0.85。detail 0.45 修细节。按用户同意逐步执行；每一步展示返回的图片，重画候选必须等待用户选择后 pick-panel。局部重绘先运行 `soda-storyboard inpaint station-turn p3 --project my-story --character girl --mask-only --json`（换成实际页、格和角色），嵌入返回的 mask 和 preview，让用户确认范围后再去掉 --mask-only 提交采样。这个预览步骤不连接 ComfyUI，也不消耗生成张数。遮罩按 figures 位置估计，重叠或大动作时在 figure.bbox 填入更准确的页面坐标 x/y/w/h，重新预览。重画保留 moss_text 文字框；提示词只能描述单张画面，不能带整页前缀。
 
 ```shell
 soda-storyboard split station-turn --project my-story --json
@@ -150,7 +150,7 @@ soda-storyboard letter station-turn --project my-story --json
 soda-storyboard export station-turn --project my-story --format png --json
 ```
 
-swap 加 --character 角色id；两人同格用 inpaint 子命令（同样指定页、格子和 --character）。每次生成前说明这一张的大概耗时。compose 使用选定格子结果，quad 向内裁剪并重画边框；letter 为 lettering 模式或 texts.render_mode=lettering 的文字排字，字体找不到时请用户提供字体文件并用 --font 指定；moss_text 可用 --text 指定文字 id（可重复）。不擅自重写台词。
+swap 加 --character 角色id；两人同格用 inpaint 子命令（同样指定页、格子和 --character）。每次生成前说明这一张的大概耗时，按实际宽高和步数估算：40 秒 × 宽×高/(1024×1536) × 步数/25。compose 使用选定格子结果，quad 向内裁剪并重画边框；letter 为 lettering 模式或 texts.render_mode=lettering 的文字排字，字体找不到时请用户提供字体文件并用 --font 指定；moss_text 可用 --text 指定文字 id（可重复）。不擅自重写台词。
 
 仅 mode=layer 的 overlay 使用 cutout；mode=moss 已由整页生成。cutout 先检查 BiRefNetRMBG / RMBG / rembg 节点，缺少时说明需安装 ComfyUI-RMBG 或提供透明 PNG，不自行安装。抠图生成同样需要说明耗时和取得用户同意。已有透明 PNG 可直接导入，不消耗生成次数。图层按 z_index 放在页面最上方，展示返回的 page_path。
 

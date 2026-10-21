@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from dataclasses import field as dc_field
+from math import isfinite
 from typing import Any
 
 from .geometry import convex_polygon, polygons_overlap, shape_distance
@@ -387,6 +388,7 @@ def validate_page(
     *,
     max_dialogue_chars: int = 20,
     min_gap: float | None = None,
+    geometry_tolerance: float | None = None,
 ) -> ValidationReport:
     """Validate a page and return structured errors/warnings.
 
@@ -395,6 +397,14 @@ def validate_page(
     and dialogue checks still run.
     """
 
+    if geometry_tolerance is None:
+        geometry_tolerance = _get(
+            page, "geometry_tolerance", _get(page, "extra", {}).get("geometry_tolerance", 0.5)
+        )
+    tolerance = float(geometry_tolerance)
+    if not isfinite(tolerance) or tolerance < 0:
+        message = "geometry_tolerance must be finite and nonnegative"
+        raise ValueError(message)
     report = ValidationReport()
     panels = _panels(page)
     width, height = canvas_size(page)
@@ -418,7 +428,7 @@ def validate_page(
                 panel_id=panel_id,
                 field_name="shape",
             )
-        if x < 0 or y < 0 or x + w > width or y + h > height:
+        if x < -tolerance or y < -tolerance or x + w > width + tolerance or y + h > height + tolerance:
             report.add(
                 "error",
                 "panel_out_of_bounds",
@@ -468,8 +478,8 @@ def validate_page(
     if configured_gap is None:
         configured_gap = _get(page, "panel_gap", _get(page, "gutter", 0)) or 0
     configured_gap = max(0.0, _number(configured_gap))
-    _validate_polygons(panels, boxes, configured_gap, report)
-    _validate_overlays(page, panels, char_map, report)
+    _validate_polygons(panels, boxes, configured_gap, report, tolerance)
+    _validate_overlays(page, panels, char_map, report, tolerance)
 
     if _reading_mismatch(page, panels, boxes):
         direction = str(_get(page, "reading_direction", "rtl") or "rtl").lower()
@@ -544,7 +554,7 @@ def validate_page(
                 details={"swap_count": swaps},
             )
 
-    _validate_storytelling(page, char_map, report, max_dialogue_chars=max_dialogue_chars)
+    _validate_storytelling(page, char_map, report, max_dialogue_chars=max_dialogue_chars, tolerance=tolerance)
     return report
 
 
@@ -557,7 +567,11 @@ def _validation_shape(panel: Any, box: tuple[float, float, float, float]) -> dic
 
 
 def _validate_polygons(
-    panels: list[Any], boxes: list[tuple[float, float, float, float]], gap: float, report: ValidationReport
+    panels: list[Any],
+    boxes: list[tuple[float, float, float, float]],
+    gap: float,
+    report: ValidationReport,
+    tolerance: float,
 ) -> None:
     shapes = []
     for panel, box in zip(panels, boxes, strict=True):
@@ -572,11 +586,11 @@ def _validate_polygons(
         for second in shapes[index + 1 :]:
             if first is None or second is None:
                 continue
-            if polygons_overlap(first, second):
+            if polygons_overlap(first, second, tolerance=tolerance):
                 report.add(
                     "error", "panel_overlap", "格子之间存在重叠", details={"first": first, "second": second}
                 )
-            elif shape_distance(first, second) + 1e-7 < gap:
+            elif shape_distance(first, second) + tolerance + 1e-7 < gap:
                 report.add(
                     "error",
                     "panel_gap_too_small",
@@ -586,7 +600,7 @@ def _validate_polygons(
 
 
 def _validate_overlays(
-    page: Any, panels: list[Any], characters: dict[str, Any], report: ValidationReport
+    page: Any, panels: list[Any], characters: dict[str, Any], report: ValidationReport, tolerance: float
 ) -> None:
     width, height = canvas_size(page)
     panel_ids = {_panel_id(panel, i) for i, panel in enumerate(panels)}
@@ -608,7 +622,14 @@ def _validate_overlays(
                 "error", "unknown_overlay_character", "出格图层引用了不存在的角色", field_name="overlays"
             )
         x, y, w, h = panel_bbox({"shape": _get(overlay, "rect", {})})
-        if not (0 <= x < x + w <= width and 0 <= y < y + h <= height):
+        if not (
+            w > 0
+            and h > 0
+            and -tolerance <= x
+            and x + w <= width + tolerance
+            and -tolerance <= y
+            and y + h <= height + tolerance
+        ):
             report.add("error", "overlay_out_of_bounds", "出格图层必须在画布内", field_name="overlays")
         if _get(overlay, "status", "planned") not in {"planned", "approved"}:
             report.add("error", "invalid_overlay_status", "出格图层状态无效", field_name="overlays")
@@ -617,7 +638,12 @@ def _validate_overlays(
 
 
 def _validate_storytelling(
-    page: Any, characters: dict[str, Any], report: ValidationReport, *, max_dialogue_chars: int
+    page: Any,
+    characters: dict[str, Any],
+    report: ValidationReport,
+    *,
+    max_dialogue_chars: int,
+    tolerance: float,
 ) -> None:
     from .models import POSES  # noqa: PLC0415
 
@@ -668,7 +694,14 @@ def _validate_storytelling(
         )
         if box:
             x, y, w, h = box
-            if not (0 <= x < x + w <= width and 0 <= y < y + h <= height):
+            if not (
+                w > 0
+                and h > 0
+                and -tolerance <= x
+                and x + w <= width + tolerance
+                and -tolerance <= y
+                and y + h <= height + tolerance
+            ):
                 report.add(
                     "error", "text_out_of_bounds", "文字框必须在画布内且宽高为正", field_name="texts.bbox"
                 )

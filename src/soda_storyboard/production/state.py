@@ -134,7 +134,10 @@ class PageState:
 
     def client(self) -> ComfyClient:
         return ComfyClient(
-            self.config["url"], timeout=self.config["timeout"], poll_interval=self.config["poll_interval"]
+            self.config["url"],
+            timeout=self.config["timeout"],
+            poll_interval=self.config["poll_interval"],
+            log_directory=self.root / "logs" / "comfy",
         )
 
     def signature(self) -> str:

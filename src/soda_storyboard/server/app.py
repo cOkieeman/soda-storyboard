@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from soda_storyboard.io import load_character, load_page
 from soda_storyboard.validation import validate_page
 
-from .common import APIError, identifier, inside, json_default
+from .common import APIError, identifier, inside, json_default, snapshot
 from .events import IMAGE_TYPES, Events
 from .jobs import Jobs
 from .store import Store
@@ -174,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
                     204,
                     b"",
                     Access_Control_Allow_Methods="GET, POST, PUT, PATCH, DELETE, OPTIONS",
-                    Access_Control_Allow_Headers="Content-Type, If-Match",
+                    Access_Control_Allow_Headers="Content-Type, If-Match, X-Client-Id",
                     Access_Control_Max_Age="600",
                 )
                 return
@@ -230,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
         headers = {"ETag": result["version"]} if "version" in result else {}
         self.send(status, result, **headers)
 
-    def route(self, path: str, query: dict, body: dict) -> None:  # noqa: C901, PLR0912 -- explicit route table
+    def route(self, path: str, query: dict, body: dict) -> None:  # noqa: C901, PLR0912, PLR0915 -- explicit route table
         store = self.server.store
         method = self.command
         if path == "/api/health" and method == "GET":
@@ -264,7 +264,13 @@ class Handler(BaseHTTPRequestHandler):
                     {"character": load_character(store.path(f"characters/{character_id}.json")).to_dict()},
                 )
             elif method == "PUT":
-                self.send(200, store.save_character(body, character_id))
+                client_id = self.editor_client_id()
+                relative = f"characters/{character_id}.json"
+                with self.server.events.lock:
+                    result = store.save_character(body, character_id)
+                    _, file_version = snapshot(store.path(relative))
+                    self.server.events.editor_changed(relative, file_version, client_id)
+                self.send(200, result)
             else:
                 raise APIError(405, "角色接口只支持 GET、PUT")
         elif path == "/api/templates" and method == "GET":
@@ -295,6 +301,12 @@ class Handler(BaseHTTPRequestHandler):
         else:
             raise APIError(404, "接口不存在或请求方法不支持")
 
+    def editor_client_id(self) -> str | None:
+        client_id = self.headers.get("X-Client-Id")
+        if client_id is not None and len(client_id) > 128:
+            raise APIError(400, "X-Client-Id 最多 128 字符")
+        return client_id
+
     def page_route(self, path: str, query: dict, body: dict) -> None:  # noqa: C901, PLR0912 -- page action dispatch
         store = self.server.store
         parts = path.split("/")
@@ -305,7 +317,11 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET":
                 self.json_response(store.page(page_id))
             elif method == "PUT":
-                self.json_response(store.save(page_id, body, version))
+                client_id = self.editor_client_id()
+                with self.server.events.lock:
+                    result = store.save(page_id, body, version)
+                    self.server.events.editor_changed(f"pages/{page_id}.json", result["version"], client_id)
+                self.json_response(result)
             elif method == "DELETE":
                 self.send(200, store.delete(page_id, version))
             else:
@@ -317,12 +333,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         if len(parts) != 5:
             raise APIError(404, "页面接口不存在")
-        if action == "validate" and method == "POST":
+        if action == "sketch-geometry" and method == "GET":
+            self.json_response(store.sketch_geometry(page_id))
+        elif action == "validate" and method == "POST":
             page = load_page(store.page_path(page_id))
             self.send(
                 200,
                 validate_page(
-                    page, store.character_map(), max_dialogue_chars=body.get("max_dialogue_chars", 20)
+                    page,
+                    store.character_map(),
+                    max_dialogue_chars=body.get("max_dialogue_chars", 20),
+                    geometry_tolerance=body.get("geometry_tolerance"),
                 ).to_dict(),
             )
         elif action == "preview.png" and method == "GET":

@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING, Any
 
 from . import api
 from .check import check
-from .state import configure
+from .graphs import PRESETS
+from .imaging import panel_size
+from .state import PageState, configure
 
 if TYPE_CHECKING:
     import argparse
@@ -25,12 +27,22 @@ def _context(args: argparse.Namespace) -> tuple[Path, str]:
     return Path(args.project), args.page
 
 
-def _estimate(count: int, preset: str) -> None:
-    seconds = count * (80 if preset == "final" else 40)
-    print(f"将生成 {count} 张图片，1024×1536 预计约 {seconds} 秒（排队和硬件会影响耗时）。", file=sys.stderr)
+def _estimate(count: int, preset: str, width: int, height: int) -> None:
+    steps = PRESETS[preset]["steps"]
+    seconds = max(1, round(count * 40 * width * height / (1024 * 1536) * steps / 25))
+    print(
+        f"将生成 {count} 张图片，{width}×{height}、{steps} 步预计约 {seconds} 秒（排队和硬件会影响耗时）。",
+        file=sys.stderr,
+    )
 
 
-def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912 -- one thin branch per public operation
+def _panel_dimensions(state: PageState, panel_id: str) -> tuple[int, int]:
+    state.panel(panel_id)
+    panel = next(p for p in state.page.panels if p.id == panel_id)
+    return tuple(max(16, round(v / 16) * 16) for v in panel_size(panel))
+
+
+def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915 -- one thin branch per public operation
     action = args.production_action
     if action == "config":
         updates = {
@@ -69,8 +81,9 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912 -- one thin
     else:
         root, page_id = _context(args)
         if action == "generate":
-            preset = args.preset or configure(root)["preset"]
-            _estimate(args.seeds, preset)
+            state = PageState(root, page_id)
+            preset = args.preset or state.config["preset"]
+            _estimate(args.seeds, preset, state.page.canvas_width, state.page.canvas_height)
             result = api.generate_page(
                 root, page_id, seeds=args.seeds, preset=preset, model=args.model, lora=args.lora
             )
@@ -81,12 +94,15 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912 -- one thin
         elif action == "split":
             result = api.split_page(root, page_id)
         elif action == "redraw":
-            _estimate(1, configure(root)["preset"])
+            state = PageState(root, page_id)
+            _estimate(1, state.config["preset"], *_panel_dimensions(state, args.panel))
             result = api.redraw_panel(
                 root, page_id, args.panel, mode=args.mode, character_id=args.character, denoise=args.denoise
             )
         elif action == "inpaint":
-            _estimate(1, configure(root)["preset"])
+            if not args.mask_only:
+                state = PageState(root, page_id)
+                _estimate(1, state.config["preset"], *_panel_dimensions(state, args.panel))
             result = api.inpaint_panel(
                 root,
                 page_id,
@@ -95,6 +111,7 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912 -- one thin
                 denoise=args.denoise,
                 margin=args.margin,
                 feather=args.feather,
+                mask_only=args.mask_only,
             )
         elif action == "pick-panel":
             result = api.pick_panel(root, page_id, args.panel, args.render)
@@ -106,7 +123,15 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912 -- one thin
             result = api.letter_with_options(root, page_id, font=args.font, text_ids=args.text)
         elif action == "cutout":
             if not args.png:
-                _estimate(1, configure(root)["preset"])
+                state = PageState(root, page_id)
+                overlay = next((o for o in state.page.overlays if o.id == args.overlay), None)
+                if overlay:
+                    _estimate(
+                        1,
+                        state.config["preset"],
+                        max(16, round(overlay.rect.w / 16) * 16),
+                        max(16, round(overlay.rect.h / 16) * 16),
+                    )
             result = api.cutout(root, page_id, args.overlay, png=args.png)
         else:
             msg = f"未知生产命令：{action}"
@@ -169,6 +194,9 @@ def register_commands(subparsers: argparse._SubParsersAction) -> None:
     inpaint.add_argument("--denoise", type=float, default=0.85)
     inpaint.add_argument("--margin", type=int, default=24)
     inpaint.add_argument("--feather", type=int, default=16)
+    inpaint.add_argument(
+        "--mask-only", action="store_true", help="只保存遮罩和叠加预览，不连接 ComfyUI 或提交采样"
+    )
     panel_pick = _common(subparsers.add_parser("pick-panel", help="选定格子重画候选"), "pick-panel")
     panel_pick.add_argument("panel")
     panel_pick.add_argument("render")
