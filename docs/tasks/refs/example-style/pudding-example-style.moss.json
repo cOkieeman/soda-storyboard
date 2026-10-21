@@ -1,0 +1,152 @@
+{
+  "summary": {
+    "meta": [
+      "comic",
+      "multi_panel",
+      "digital_painting"
+    ],
+    "canvas": "multi_panel",
+    "caption": "High-taste, fully colored 2D anime digital painting comic page in Japanese manga layout, read right to left, clean white gutters, crisp clean line art with soft cel shading and gentle painterly highlights, bright warm kitchen daylight, fresh pastel palette of lemon yellow, soft pink and cool grey, expressive comedic facial expressions, crisp Chinese comic text in clean white speech bubbles and narration boxes, zero rough sketch lines, 2girls, sisters, home kitchen, open refrigerator, pudding cup, slapstick comedy."
+  },
+  "items": [
+    {
+      "label": "object",
+      "caption": "Top-right panel: inside a bright home kitchen at night snack time, the younger sister: a petite 14-year-old girl with bouncy pink twin tails, big round amber eyes, rosy cheeks, an oversized bright yellow hoodie with the hood down crouches in front of the open refrigerator, happily eating a caramel pudding cup with a small spoon, the fridge light glowing on her face.",
+      "bbox": [
+        -744,
+        8,
+        -268,
+        488
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Top-left panel: the older sister: a tall 20-year-old young woman with straight glossy black shoulder-length bob hair, thin silver-framed glasses, calm sharp dark eyes, a crisp white blouse under a soft grey knit vest stands frozen in the kitchen doorway, one hand still on the door frame, her glasses glinting, staring at the empty pudding shelf in disbelief.",
+      "bbox": [
+        -744,
+        -488,
+        -268,
+        -12
+      ]
+    },
+    {
+      "label": "character",
+      "caption": "Main center character focus breaking across the middle panels: the younger sister: a petite 14-year-old girl with bouncy pink twin tails, big round amber eyes, rosy cheeks, an oversized bright yellow hoodie with the hood down turns around in total panic, caramel pudding smeared at the corner of her lips, eyes wide with sweat drops, both hands raised and waving defensively while hiding the empty pudding cup behind her back.",
+      "bbox": [
+        -298,
+        -292,
+        422,
+        288
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Middle-right small vertical panel: low-angle close-up of the older sister: a tall 20-year-old young woman with straight glossy black shoulder-length bob hair, thin silver-framed glasses, calm sharp dark eyes, a crisp white blouse under a soft grey knit vest pushing up her glasses with one finger, a cold, thin smile, a dark aura behind her as she slowly steps forward.",
+      "bbox": [
+        -228,
+        228,
+        312,
+        488
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Middle-left small vertical panel: extreme close-up of an empty caramel pudding cup with a tiny spoon lying on the kitchen counter, a little label written 'sister's' on the lid.",
+      "bbox": [
+        -228,
+        -488,
+        312,
+        -232
+      ]
+    },
+    {
+      "label": "object",
+      "caption": "Bottom wide panel: comedic chase, the younger sister: a petite 14-year-old girl with bouncy pink twin tails, big round amber eyes, rosy cheeks, an oversized bright yellow hoodie with the hood down bursts out of the frame to the left with her pink twin tails and hoodie strings flying straight up in fright, speed lines behind her; the older sister: a tall 20-year-old young woman with straight glossy black shoulder-length bob hair, thin silver-framed glasses, calm sharp dark eyes, a crisp white blouse under a soft grey knit vest chases from the right, glasses flashing white.",
+      "bbox": [
+        442,
+        -488,
+        744,
+        488
+      ]
+    },
+    {
+      "label": "text",
+      "caption": "Clean vertical Chinese narration text in a white narration box on the right edge of the top-right panel.",
+      "text": "冰箱里的布丁\n是姐姐的宝贝",
+      "bbox": [
+        -724,
+        408,
+        -438,
+        478
+      ]
+    },
+    {
+      "label": "text",
+      "caption": "Bold comic sound effect text near the pudding cup in the top-right panel.",
+      "text": "吧唧",
+      "bbox": [
+        -388,
+        48,
+        -298,
+        148
+      ]
+    },
+    {
+      "label": "text",
+      "caption": "Clean vertical Chinese dialogue text in a white speech bubble next to the older sister in the top-left panel.",
+      "text": "……你在吃什么？",
+      "bbox": [
+        -718,
+        -472,
+        -438,
+        -402
+      ]
+    },
+    {
+      "label": "text",
+      "caption": "Clean vertical Chinese dialogue text in a jagged panicked speech bubble beside the younger sister's head.",
+      "text": "是……是冰箱\n自己打开的！",
+      "bbox": [
+        -268,
+        -262,
+        12,
+        -142
+      ]
+    },
+    {
+      "label": "text",
+      "caption": "Clean vertical Chinese dialogue text in a small white speech bubble at the top of the middle-right panel.",
+      "text": "哦？",
+      "bbox": [
+        -208,
+        408,
+        -88,
+        478
+      ]
+    },
+    {
+      "label": "text",
+      "caption": "Large bold comic sound effect text with speed lines in the bottom panel.",
+      "text": "咻——！",
+      "bbox": [
+        462,
+        -452,
+        552,
+        -232
+      ]
+    },
+    {
+      "label": "text",
+      "caption": "Clean vertical Chinese dialogue text in an angry speech bubble near the older sister in the bottom panel.",
+      "text": "站住！",
+      "bbox": [
+        457,
+        388,
+        632,
+        468
+      ]
+    }
+  ],
+  "bbox_coord_space": "abs_centralized",
+  "bbox_format": "yxyx"
+}
