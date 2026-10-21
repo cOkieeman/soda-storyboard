@@ -3,56 +3,196 @@
   "$id": "https://soda-storyboard.local/schema/storyboard-v1.schema.json",
   "title": "soda-storyboard v1",
   "oneOf": [
-    {"$ref": "#/$defs/project"},
-    {"$ref": "#/$defs/page"},
-    {"$ref": "#/$defs/character"}
+    {
+      "$ref": "#/$defs/project"
+    },
+    {
+      "$ref": "#/$defs/page"
+    },
+    {
+      "$ref": "#/$defs/character"
+    }
   ],
   "$defs": {
     "rect": {
       "type": "object",
-      "required": ["type", "x", "y", "w", "h"],
+      "required": [
+        "type",
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
       "properties": {
-        "type": {"const": "rect"},
-        "x": {"type": "number"}, "y": {"type": "number"},
-        "w": {"type": "number", "exclusiveMinimum": 0},
-        "h": {"type": "number", "exclusiveMinimum": 0}
+        "type": {
+          "const": "rect"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
       },
       "additionalProperties": false
     },
     "quad": {
       "type": "object",
-      "required": ["type", "points"],
+      "required": [
+        "type",
+        "points"
+      ],
       "properties": {
-        "type": {"const": "quad"},
-        "points": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "minItems": 2, "maxItems": 2}}
+        "type": {
+          "const": "quad"
+        },
+        "points": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
       },
       "additionalProperties": false
     },
     "dialogue": {
       "type": "object",
-      "required": ["speaker_id", "text", "bubble"],
+      "required": [
+        "speaker_id",
+        "text",
+        "bubble"
+      ],
       "properties": {
-        "speaker_id": {"type": "string"},
-        "text": {"type": "string"},
-        "bubble": {"enum": ["speech", "shout", "thought", "narration"]},
-        "position": {"type": "string"}
+        "speaker_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "bubble": {
+          "enum": [
+            "speech",
+            "shout",
+            "thought",
+            "narration"
+          ]
+        },
+        "position": {
+          "type": "string"
+        }
       },
       "additionalProperties": true
     },
     "panel": {
       "type": "object",
-      "required": ["id", "order", "shape"],
+      "required": [
+        "id",
+        "order",
+        "shape"
+      ],
       "properties": {
-        "id": {"type": "string"}, "order": {"type": "integer", "minimum": 1},
-        "shape": {"oneOf": [{"$ref": "#/$defs/rect"}, {"$ref": "#/$defs/quad"}]},
-        "shot": {"enum": ["extreme_long", "long", "full", "medium", "close_up", "extreme_close_up"]},
-        "angle": {"enum": ["eye", "high", "low", "bird", "worm", "dutch"]},
-        "character_ids": {"type": "array", "items": {"type": "string"}},
-        "description": {"type": "string"},
-        "dialogue": {"type": "array", "items": {"$ref": "#/$defs/dialogue"}},
-        "sfx": {"type": "array", "items": {"type": "string"}},
-        "importance": {"type": "integer", "minimum": 1, "maximum": 3},
-        "status": {"enum": ["draft", "approved", "needs_redraw"]}
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "shape": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/rect"
+            },
+            {
+              "$ref": "#/$defs/quad"
+            }
+          ]
+        },
+        "shot": {
+          "enum": [
+            "extreme_long",
+            "long",
+            "full",
+            "medium",
+            "close_up",
+            "extreme_close_up"
+          ]
+        },
+        "angle": {
+          "enum": [
+            "eye",
+            "high",
+            "low",
+            "bird",
+            "worm",
+            "dutch"
+          ]
+        },
+        "character_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "dialogue": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dialogue"
+          }
+        },
+        "sfx": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "importance": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "approved",
+            "needs_redraw"
+          ]
+        },
+        "caption_en": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "figures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/figure"
+          }
+        }
       },
       "additionalProperties": true
     },
@@ -101,54 +241,409 @@
             "string",
             "null"
           ]
+        },
+        "mode": {
+          "enum": [
+            "moss",
+            "layer"
+          ],
+          "description": "New overlays should explicitly use moss; a missing mode in legacy JSON means layer."
         }
       },
       "additionalProperties": true
     },
     "page": {
       "type": "object",
-      "required": ["format", "id", "canvas_width", "canvas_height", "panels"],
+      "required": [
+        "format",
+        "id",
+        "canvas_width",
+        "canvas_height",
+        "panels"
+      ],
       "properties": {
-        "format": {"const": "soda-storyboard-page-v1"}, "id": {"type": "string"},
-        "canvas_width": {"type": "integer", "multipleOf": 16, "minimum": 16},
-        "canvas_height": {"type": "integer", "multipleOf": 16, "minimum": 16},
-        "reading_direction": {"enum": ["rtl", "ltr"]},
-        "style_prefix": {"type": "string"}, "description": {"type": "string"},
-        "panel_gap": {"type": "number", "minimum": 0},
-        "text_direction": {"enum": ["vertical", "horizontal"]},
-        "color_mode": {"enum": ["monochrome", "color"]},
-        "dialogue_mode": {"enum": ["moss_text", "lettering"]},
-        "overlays": {"type": "array", "items": {"$ref": "#/$defs/overlay"}},
-        "panels": {"type": "array", "items": {"$ref": "#/$defs/panel"}}
+        "format": {
+          "const": "soda-storyboard-page-v1"
+        },
+        "id": {
+          "type": "string"
+        },
+        "canvas_width": {
+          "type": "integer",
+          "multipleOf": 16,
+          "minimum": 16
+        },
+        "canvas_height": {
+          "type": "integer",
+          "multipleOf": 16,
+          "minimum": 16
+        },
+        "reading_direction": {
+          "enum": [
+            "rtl",
+            "ltr"
+          ]
+        },
+        "style_prefix": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "panel_gap": {
+          "type": "number",
+          "minimum": 0
+        },
+        "text_direction": {
+          "enum": [
+            "vertical",
+            "horizontal"
+          ]
+        },
+        "color_mode": {
+          "enum": [
+            "monochrome",
+            "color"
+          ]
+        },
+        "dialogue_mode": {
+          "enum": [
+            "moss_text",
+            "lettering"
+          ]
+        },
+        "overlays": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/overlay"
+          }
+        },
+        "panels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/panel"
+          }
+        },
+        "style_prompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "texts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/text"
+          }
+        },
+        "text_font_size": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 42
+        },
+        "text_max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        }
       },
       "additionalProperties": true
     },
     "project": {
       "type": "object",
-      "required": ["format", "name"],
+      "required": [
+        "format",
+        "name"
+      ],
       "properties": {
-        "format": {"const": "soda-storyboard-project-v1"}, "name": {"type": "string"},
-        "default_style_prefix": {"type": "string"},
-        "default_canvas_width": {"type": "integer", "multipleOf": 16, "minimum": 16},
-        "default_canvas_height": {"type": "integer", "multipleOf": 16, "minimum": 16},
-        "reading_direction": {"enum": ["rtl", "ltr"]},
-        "text_direction": {"enum": ["vertical", "horizontal"]},
-        "color_mode": {"enum": ["monochrome", "color"]},
-        "default_dialogue_mode": {"enum": ["moss_text", "lettering"]}
+        "format": {
+          "const": "soda-storyboard-project-v1"
+        },
+        "name": {
+          "type": "string"
+        },
+        "default_style_prefix": {
+          "type": "string"
+        },
+        "default_canvas_width": {
+          "type": "integer",
+          "multipleOf": 16,
+          "minimum": 16
+        },
+        "default_canvas_height": {
+          "type": "integer",
+          "multipleOf": 16,
+          "minimum": 16
+        },
+        "reading_direction": {
+          "enum": [
+            "rtl",
+            "ltr"
+          ]
+        },
+        "text_direction": {
+          "enum": [
+            "vertical",
+            "horizontal"
+          ]
+        },
+        "color_mode": {
+          "enum": [
+            "monochrome",
+            "color"
+          ]
+        },
+        "default_dialogue_mode": {
+          "enum": [
+            "moss_text",
+            "lettering"
+          ]
+        },
+        "style_prompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       },
       "additionalProperties": true
     },
     "character": {
       "type": "object",
-      "required": ["format", "id", "display_name"],
+      "required": [
+        "format",
+        "id",
+        "display_name"
+      ],
       "properties": {
-        "format": {"const": "soda-storyboard-character-v1"}, "id": {"type": "string"},
-        "display_name": {"type": "string"}, "trigger_words": {"type": "array", "items": {"type": "string"}},
-        "lora": {"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}, "strength": {"type": "number"}}},
-        "appearance": {"type": "object", "additionalProperties": {"type": "string"}},
-        "clothing": {"type": "array", "items": {"type": "string"}},
-        "reference_images": {"type": "array", "items": {"type": "string"}},
-        "approved_images": {"type": "array", "items": {"type": "string"}}
+        "format": {
+          "const": "soda-storyboard-character-v1"
+        },
+        "id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "trigger_words": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lora": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "strength": {
+              "type": "number"
+            }
+          }
+        },
+        "appearance": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "clothing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reference_images": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "approved_images": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "age": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "figure_hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "text": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "dialogue",
+            "narration",
+            "sfx",
+            "title",
+            "caption_tag"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "panel_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "speaker_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "vertical",
+            "horizontal",
+            null
+          ]
+        },
+        "bubble": {
+          "enum": [
+            "speech",
+            "shout",
+            "thought",
+            "box",
+            "none"
+          ],
+          "default": "speech"
+        },
+        "bbox": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/text_rect"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "style_hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "text_rect": {
+      "type": "object",
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "properties": {
+        "type": {
+          "const": "rect"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "figure": {
+      "type": "object",
+      "required": [
+        "character_id"
+      ],
+      "properties": {
+        "character_id": {
+          "type": "string"
+        },
+        "pose": {
+          "type": "string",
+          "default": "stand",
+          "description": "stand/walk/run/sit/crouch/wave/point/arms_up/hands_clasped/hand_on_chin/lie/back_view; unknown values warn and render stand."
+        },
+        "position": {
+          "oneOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ]
+            }
+          ]
+        },
+        "facing": {
+          "enum": [
+            "left",
+            "right",
+            "front",
+            "back"
+          ]
+        },
+        "framing": {
+          "enum": [
+            "full",
+            "waist",
+            "bust",
+            "face",
+            null
+          ]
+        }
       },
       "additionalProperties": true
     }

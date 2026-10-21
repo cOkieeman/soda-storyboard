@@ -1,0 +1,14 @@
+{
+  "format": "soda-storyboard-character-v1",
+  "id": "older",
+  "display_name": "姐姐",
+  "trigger_words": [],
+  "clothing": [],
+  "reference_images": [],
+  "approved_images": [],
+  "appearance": {
+    "en": "a tall young woman with straight glossy black shoulder-length bob hair, thin silver-framed glasses, calm sharp dark eyes, a crisp white blouse under a soft grey knit vest"
+  },
+  "age": "20-year-old",
+  "figure_hint": "skirt"
+}

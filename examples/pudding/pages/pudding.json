@@ -1,0 +1,329 @@
+{
+  "format": "soda-storyboard-page-v1",
+  "id": "pudding",
+  "canvas_width": 1024,
+  "canvas_height": 1536,
+  "reading_direction": "rtl",
+  "style_prefix": "",
+  "description": "A younger sister eats the older sister's pudding, panics and runs away.",
+  "panel_gap": 20,
+  "dialogue_mode": "moss_text",
+  "text_direction": "vertical",
+  "color_mode": "color",
+  "panels": [
+    {
+      "id": "p1",
+      "order": 1,
+      "shape": {
+        "type": "rect",
+        "x": 520.0,
+        "y": 24.0,
+        "w": 480.0,
+        "h": 476.0
+      },
+      "shot": "full",
+      "angle": "eye",
+      "character_ids": [
+        "younger"
+      ],
+      "description": "冰箱前偷吃布丁",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft",
+      "caption_en": "Top-right panel: inside a bright home kitchen at night snack time, the younger sister: a petite 14-year-old girl with bouncy pink twin tails, big round amber eyes, rosy cheeks, an oversized bright yellow hoodie with the hood down crouches in front of the open refrigerator, happily eating a caramel pudding cup with a small spoon, the fridge light glowing on her face.",
+      "figures": [
+        {
+          "character_id": "younger",
+          "pose": "crouch",
+          "position": "center",
+          "facing": "front",
+          "framing": null
+        }
+      ]
+    },
+    {
+      "id": "p2",
+      "order": 2,
+      "shape": {
+        "type": "rect",
+        "x": 24.0,
+        "y": 24.0,
+        "w": 476.0,
+        "h": 476.0
+      },
+      "shot": "medium",
+      "angle": "eye",
+      "character_ids": [
+        "older"
+      ],
+      "description": "姐姐站在门口",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft",
+      "caption_en": "Top-left panel: the older sister: a tall 20-year-old young woman with straight glossy black shoulder-length bob hair, thin silver-framed glasses, calm sharp dark eyes, a crisp white blouse under a soft grey knit vest stands frozen in the kitchen doorway, one hand still on the door frame, her glasses glinting, staring at the empty pudding shelf in disbelief.",
+      "figures": [
+        {
+          "character_id": "older",
+          "pose": "stand",
+          "position": "center",
+          "facing": "front",
+          "framing": null
+        }
+      ]
+    },
+    {
+      "id": "p3",
+      "order": 3,
+      "shape": {
+        "type": "rect",
+        "x": 740.0,
+        "y": 540.0,
+        "w": 260.0,
+        "h": 540.0
+      },
+      "shot": "close_up",
+      "angle": "eye",
+      "character_ids": [
+        "older"
+      ],
+      "description": "姐姐推眼镜",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft",
+      "caption_en": "Middle-right small vertical panel: low-angle close-up of the older sister: a tall 20-year-old young woman with straight glossy black shoulder-length bob hair, thin silver-framed glasses, calm sharp dark eyes, a crisp white blouse under a soft grey knit vest pushing up her glasses with one finger, a cold, thin smile, a dark aura behind her as she slowly steps forward.",
+      "figures": [
+        {
+          "character_id": "older",
+          "pose": "hand_on_chin",
+          "position": "center",
+          "facing": "front",
+          "framing": null
+        }
+      ]
+    },
+    {
+      "id": "p4",
+      "order": 4,
+      "shape": {
+        "type": "rect",
+        "x": 24.0,
+        "y": 540.0,
+        "w": 256.0,
+        "h": 540.0
+      },
+      "shot": "extreme_close_up",
+      "angle": "eye",
+      "character_ids": [
+        "younger"
+      ],
+      "description": "妹妹捧着空布丁杯",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft",
+      "caption_en": "Middle-left small vertical panel: extreme close-up of the younger sister, a petite 14-year-old girl with bouncy pink twin tails, big round amber eyes, rosy cheeks, an oversized bright yellow hoodie with the hood down, holding an empty caramel pudding cup with a tiny spoon near her chin.",
+      "figures": [
+        {
+          "character_id": "younger",
+          "pose": "hands_clasped",
+          "position": "center",
+          "facing": "front",
+          "framing": null
+        }
+      ]
+    },
+    {
+      "id": "p5",
+      "order": 5,
+      "shape": {
+        "type": "rect",
+        "x": 24.0,
+        "y": 1210.0,
+        "w": 976.0,
+        "h": 302.0
+      },
+      "shot": "full",
+      "angle": "eye",
+      "character_ids": [
+        "younger",
+        "older"
+      ],
+      "description": "妹妹逃跑，姐姐追赶",
+      "dialogue": [],
+      "sfx": [],
+      "importance": 1,
+      "status": "draft",
+      "caption_en": "Bottom wide panel: comedic chase, the younger sister: a petite 14-year-old girl with bouncy pink twin tails, big round amber eyes, rosy cheeks, an oversized bright yellow hoodie with the hood down bursts out of the frame to the left with her pink twin tails and hoodie strings flying straight up in fright, speed lines behind her; the older sister: a tall 20-year-old young woman with straight glossy black shoulder-length bob hair, thin silver-framed glasses, calm sharp dark eyes, a crisp white blouse under a soft grey knit vest chases from the right, glasses flashing white.",
+      "figures": [
+        {
+          "character_id": "younger",
+          "pose": "run",
+          "position": 0.36,
+          "facing": "left",
+          "framing": null
+        },
+        {
+          "character_id": "older",
+          "pose": "run",
+          "position": 0.74,
+          "facing": "left",
+          "framing": null
+        }
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "text": "冰箱里的布丁\n是姐姐的宝贝",
+      "kind": "narration",
+      "panel_id": "p1",
+      "speaker_id": null,
+      "direction": "vertical",
+      "bubble": "box",
+      "bbox": {
+        "type": "rect",
+        "x": 920,
+        "y": 44,
+        "w": 70,
+        "h": 286
+      },
+      "style_hint": null
+    },
+    {
+      "id": "t2",
+      "text": "吧唧",
+      "kind": "sfx",
+      "panel_id": "p1",
+      "speaker_id": null,
+      "direction": "horizontal",
+      "bubble": "none",
+      "bbox": {
+        "type": "rect",
+        "x": 560,
+        "y": 380,
+        "w": 100,
+        "h": 90
+      },
+      "style_hint": "near the pudding cup"
+    },
+    {
+      "id": "t3",
+      "text": "……你在吃什么？",
+      "kind": "dialogue",
+      "panel_id": "p2",
+      "speaker_id": "older",
+      "direction": "vertical",
+      "bubble": "speech",
+      "bbox": {
+        "type": "rect",
+        "x": 40,
+        "y": 50,
+        "w": 70,
+        "h": 280
+      },
+      "style_hint": null
+    },
+    {
+      "id": "t4",
+      "text": "是……是冰箱\n自己打开的！",
+      "kind": "dialogue",
+      "panel_id": null,
+      "speaker_id": "younger",
+      "direction": "vertical",
+      "bubble": "shout",
+      "bbox": {
+        "type": "rect",
+        "x": 250,
+        "y": 500,
+        "w": 120,
+        "h": 280
+      },
+      "style_hint": null
+    },
+    {
+      "id": "t5",
+      "text": "哦？",
+      "kind": "dialogue",
+      "panel_id": "p3",
+      "speaker_id": "older",
+      "direction": "vertical",
+      "bubble": "speech",
+      "bbox": {
+        "type": "rect",
+        "x": 920,
+        "y": 560,
+        "w": 70,
+        "h": 120
+      },
+      "style_hint": null
+    },
+    {
+      "id": "t6",
+      "text": "咻——！",
+      "kind": "sfx",
+      "panel_id": "p5",
+      "speaker_id": null,
+      "direction": "horizontal",
+      "bubble": "none",
+      "bbox": {
+        "type": "rect",
+        "x": 60,
+        "y": 1230,
+        "w": 220,
+        "h": 90
+      },
+      "style_hint": null
+    },
+    {
+      "id": "t7",
+      "text": "站住！",
+      "kind": "dialogue",
+      "panel_id": "p5",
+      "speaker_id": "older",
+      "direction": "vertical",
+      "bubble": "shout",
+      "bbox": {
+        "type": "rect",
+        "x": 900,
+        "y": 1225,
+        "w": 80,
+        "h": 175
+      },
+      "style_hint": null
+    }
+  ],
+  "style_prompt": "High-taste, fully colored 2D anime digital painting comic page, crisp clean line art with soft cel shading and gentle painterly highlights, bright warm kitchen daylight, fresh pastel palette of lemon yellow, soft pink and cool grey, expressive comedic facial expressions, zero rough sketch lines.",
+  "tags": [
+    "2girls",
+    "sisters",
+    "home kitchen",
+    "open refrigerator",
+    "pudding cup",
+    "slapstick comedy"
+  ],
+  "text_font_size": 42,
+  "text_max_chars": 10,
+  "overlays": [
+    {
+      "id": "panic",
+      "character_id": "younger",
+      "rect": {
+        "type": "rect",
+        "x": 220,
+        "y": 470,
+        "w": 580,
+        "h": 720
+      },
+      "panel_id": "p2",
+      "z_index": 1,
+      "description": "turns around in total panic, caramel pudding at the corner of her lips, eyes wide with sweat drops, both hands raised defensively while hiding the empty pudding cup behind her back.",
+      "status": "planned",
+      "image_path": null,
+      "mode": "moss"
+    }
+  ]
+}

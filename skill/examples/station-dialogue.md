@@ -1,6 +1,6 @@
 # 示例：车站回头，从想法到 MOSS JSON
 
-这是完整的示范对话，不表示插件开发时已替用户运行预览或出图。实际使用时应嵌入工具生成的线框 PNG；这里用文字标出展示位置。
+这是保留旧 dialogue 格式的兼容性示范对话，不表示插件开发时已替用户运行预览或出图。新页优先按当前文件格式写独立 texts、英文 caption_en 和 figures，本文随包 JSON 保留旧字段用于回归验证。实际使用时应嵌入工具生成的线框 PNG；这里用文字标出展示位置。
 
 ## 听片段、建立角色
 
@@ -14,7 +14,7 @@ AI：女孩叫什么？有固定外观、触发词或人物 LoRA 吗？没有的
 
 用户：叫澪，黑色短发，浅色校服，背帆布包。触发词 girl_token，LoRA 路径 models/girl.safetensors，参考图 refs/girl.png。
 
-AI：我会把她记作 girl，以后每格引用这个角色。她的 LoRA 先用默认 0.8。你还没指定画法；只写 anime 可能偏 3D，要是想要二维，可以明确线稿和平涂。
+AI：我会把她记作 girl，以后每格引用这个角色。她的 LoRA 先用默认 0.8。你还没指定画法，可以选清爽赛璐珞（Clean 2D anime comic, crisp outlines, flat cel shading）、彩色厚涂（Fully colored 2D digital painting, gentle painterly highlights）或黑白网点（Black-and-white manga, crisp ink lines, screentone shading）。只写 anime 可能偏 3D。
 
 用户：画风用 clean 2D cel-shaded, crisp line art, screentone shading。
 
@@ -66,7 +66,7 @@ AI：好，用这次候选里对应的 hero-top-skew。它会让开头的停步�
 
 ## 落成页文件并给预览
 
-AI 内部先创建空页，再补四个具有 id、order 和占位 shape 的 Panel 对象，之后写回所选几何。画风用用户刚才给的原文。
+AI 内部先创建空页，再补四个具有 id、order 和占位 shape 的 Panel 对象，之后写回所选几何。画风用用户刚才给的原文；当前新流程还会把它存到项目 style_prompt，补全 appearance_en 和每格 caption_en、figures，并把对白迁到独立 texts 以定位。下列旧格式文件保留用于兼容测试。
 
 ```shell
 soda-storyboard page new --project my-story --id station-turn --style "clean 2D cel-shaded, crisp line art, screentone shading" --description "女孩在车站听见熟悉的声音，回头欲言又止。" --dialogue-mode moss_text --text-direction vertical --color-mode monochrome --json
@@ -90,7 +90,7 @@ soda-storyboard validate my-story/pages/station-turn.json --json
 soda-storyboard preview my-story/pages/station-turn.json --output my-story/previews/station-turn.v2.png --json
 ```
 
-AI：【嵌入修改后的线框。】第 3 格已经改为背面，台词和其余格子保持原样。线框只能标明构图要求，实际人物姿态要等出图后复查。整页还有想调整的吗？
+AI：【嵌入修改后的线框。】第 3 格已经改为背面，台词和其余格子保持原样。当前新流程会把对应 figure.facing 改为 back，并在带火柴人的草稿中显示背面；遗留文件只改 description 用于验证旧格式。真实成图的姿态仍要复查。整页还有想调整的吗？
 
 **【停下来等用户确认 ③】未收到当前版本整页满意的确认，不 compile。**
 

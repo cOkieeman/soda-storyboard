@@ -1,0 +1,20 @@
+{
+  "format": "soda-storyboard-project-v1",
+  "name": "布丁争夺战",
+  "default_style_prefix": "",
+  "default_canvas_width": 1024,
+  "default_canvas_height": 1536,
+  "reading_direction": "rtl",
+  "default_dialogue_mode": "moss_text",
+  "text_direction": "vertical",
+  "color_mode": "color",
+  "style_prompt": "High-taste, fully colored 2D anime digital painting comic page, crisp clean line art with soft cel shading and gentle painterly highlights, bright warm kitchen daylight, fresh pastel palette of lemon yellow, soft pink and cool grey, expressive comedic facial expressions, zero rough sketch lines.",
+  "tags": [
+    "2girls",
+    "sisters",
+    "home kitchen",
+    "open refrigerator",
+    "pudding cup",
+    "slapstick comedy"
+  ]
+}

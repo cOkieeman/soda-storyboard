@@ -32,6 +32,20 @@ SHOT_SIZES = (
 CAMERA_ANGLES = ("eye", "high", "low", "bird", "worm", "dutch")
 BUBBLE_TYPES = ("speech", "shout", "thought", "narration")
 PANEL_STATUSES = ("draft", "approved", "needs_redraw")
+POSES = (
+    "stand",
+    "walk",
+    "run",
+    "sit",
+    "crouch",
+    "wave",
+    "point",
+    "arms_up",
+    "hands_clasped",
+    "hand_on_chin",
+    "lie",
+    "back_view",
+)
 
 type JsonObject = dict[str, Any]
 type Point = tuple[float, float]
@@ -222,6 +236,8 @@ class Character:
     approved_images: list[str] = field(default_factory=list)
     extra: JsonObject = field(default_factory=dict, repr=False)
     format: str = CHARACTER_FORMAT
+    age: str | None = None
+    figure_hint: str | None = None
 
     @property
     def name(self) -> str:
@@ -275,6 +291,8 @@ class Character:
             "references",
             "approved_images",
             "approved_reference_images",
+            "age",
+            "figure_hint",
         }
         appearance = value.get("appearance", {})
         appearance_zh = value.get("appearance_zh", "")
@@ -306,6 +324,10 @@ class Character:
             ),
             extra=_copy_extra(value, known),
             format=_text(value.get("format", CHARACTER_FORMAT), "character.format"),
+            age=None if value.get("age") is None else _text(value["age"], "character.age"),
+            figure_hint=None
+            if value.get("figure_hint") is None
+            else _text(value["figure_hint"], "character.figure_hint"),
         )
 
     def to_dict(self) -> JsonObject:
@@ -322,8 +344,95 @@ class Character:
             result["lora"] = self.lora.to_dict()
         if self.appearance:
             result["appearance"] = self.appearance
+        if self.age is not None:
+            result["age"] = self.age
+        if self.figure_hint is not None:
+            result["figure_hint"] = self.figure_hint
         result.update(self.extra)
         return result
+
+
+@dataclass(slots=True)
+class Text:
+    """Independent lettering in top-left pixel coordinates; bbox is x/y/w/h."""
+
+    id: str
+    text: str
+    kind: str = "dialogue"
+    panel_id: str | None = None
+    speaker_id: str | None = None
+    direction: str | None = None
+    bubble: str = "speech"
+    bbox: RectShape | None = None
+    style_hint: str | None = None
+    extra: JsonObject = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.bbox, Mapping):
+            self.bbox = RectShape.from_dict(self.bbox)
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> Text:
+        known = {"id", "text", "kind", "panel_id", "speaker_id", "direction", "bubble", "bbox", "style_hint"}
+        optional = {
+            key: None if value.get(key) is None else _text(value[key], f"text.{key}")
+            for key in ("panel_id", "speaker_id", "direction", "style_hint")
+        }
+        return cls(
+            id=_text(value.get("id", ""), "text.id"),
+            text=_text(value.get("text", ""), "text.text"),
+            kind=_text(value.get("kind", "dialogue"), "text.kind"),
+            bubble=_text(value.get("bubble", "speech"), "text.bubble"),
+            bbox=None if value.get("bbox") is None else RectShape.from_dict(value["bbox"]),
+            extra=_copy_extra(value, known),
+            **optional,
+        )
+
+    def to_dict(self) -> JsonObject:
+        return {
+            **self.extra,
+            "id": self.id,
+            "text": self.text,
+            "kind": self.kind,
+            "panel_id": self.panel_id,
+            "speaker_id": self.speaker_id,
+            "direction": self.direction,
+            "bubble": self.bubble,
+            "bbox": None if self.bbox is None else self.bbox.to_dict(),
+            "style_hint": self.style_hint,
+        }
+
+
+@dataclass(slots=True)
+class Figure:
+    character_id: str
+    pose: str = "stand"
+    position: float | str = "center"
+    facing: str = "front"
+    framing: str | None = None
+    extra: JsonObject = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> Figure:
+        position = value.get("position", "center")
+        return cls(
+            character_id=_text(value.get("character_id", ""), "figure.character_id"),
+            pose=_text(value.get("pose", "stand"), "figure.pose"),
+            position=position if isinstance(position, str) else _number(position, "figure.position"),
+            facing=_text(value.get("facing", "front"), "figure.facing"),
+            framing=None if value.get("framing") is None else _text(value["framing"], "figure.framing"),
+            extra=_copy_extra(value, {"character_id", "pose", "position", "facing", "framing"}),
+        )
+
+    def to_dict(self) -> JsonObject:
+        return {
+            **self.extra,
+            "character_id": self.character_id,
+            "pose": self.pose,
+            "position": self.position,
+            "facing": self.facing,
+            "framing": self.framing,
+        }
 
 
 @dataclass(slots=True)
@@ -343,6 +452,9 @@ class Panel:
     status: str = "draft"
     extra: JsonObject = field(default_factory=dict, repr=False)
 
+    caption_en: str | None = None
+    figures: list[Figure] = field(default_factory=list)
+
     def __post_init__(self) -> None:
         self.shape = shape_to_dict(self.shape)
         self.character_ids = list(self.character_ids)
@@ -350,6 +462,7 @@ class Panel:
             item if isinstance(item, Dialogue) else Dialogue.from_dict(item) for item in self.dialogue
         ]
         self.sfx = list(self.sfx)
+        self.figures = [item if isinstance(item, Figure) else Figure.from_dict(item) for item in self.figures]
 
     @property
     def shape_type(self) -> str:
@@ -391,6 +504,8 @@ class Panel:
             "sfx",
             "importance",
             "status",
+            "caption_en",
+            "figures",
         }
         shape = value.get("shape")
         if shape is None:
@@ -409,6 +524,10 @@ class Panel:
             sfx=_strings(value.get("sfx", []), "panel.sfx"),
             importance=int(value.get("importance", 1)),
             status=_text(value.get("status", "draft"), "panel.status"),
+            caption_en=None
+            if value.get("caption_en") is None
+            else _text(value["caption_en"], "panel.caption_en"),
+            figures=[Figure.from_dict(item) for item in value.get("figures", [])],
             extra=_copy_extra(value, known),
         )
 
@@ -427,12 +546,16 @@ class Panel:
             "status": self.status,
         }
         result.update(self.extra)
+        if self.caption_en is not None:
+            result["caption_en"] = self.caption_en
+        if self.figures:
+            result["figures"] = [item.to_dict() for item in self.figures]
         return result
 
 
 @dataclass(slots=True)
 class Overlay:
-    """A separately generated transparent character layer above panel borders."""
+    """A MOSS character or planned transparent layer crossing panel borders."""
 
     id: str
     character_id: str
@@ -443,6 +566,7 @@ class Overlay:
     status: str = "planned"
     image_path: str | None = None
     extra: JsonObject = field(default_factory=dict, repr=False)
+    mode: str = "moss"
 
     def __post_init__(self) -> None:
         if isinstance(self.rect, Mapping):
@@ -450,7 +574,17 @@ class Overlay:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> Overlay:
-        known = {"id", "character_id", "rect", "panel_id", "z_index", "description", "status", "image_path"}
+        known = {
+            "id",
+            "character_id",
+            "rect",
+            "panel_id",
+            "z_index",
+            "description",
+            "status",
+            "image_path",
+            "mode",
+        }
         return cls(
             id=_text(value.get("id", ""), "overlay.id"),
             character_id=_text(value.get("character_id", ""), "overlay.character_id"),
@@ -463,6 +597,7 @@ class Overlay:
             if value.get("image_path") is None
             else _text(value["image_path"], "overlay.image_path"),
             extra=_copy_extra(value, known),
+            mode=_text(value.get("mode", "layer"), "overlay.mode"),
         )
 
     def to_dict(self) -> JsonObject:
@@ -476,6 +611,7 @@ class Overlay:
             "description": self.description,
             "status": self.status,
             "image_path": self.image_path,
+            "mode": self.mode,
         }
 
 
@@ -497,6 +633,11 @@ class Page:
     extra: JsonObject = field(default_factory=dict, repr=False)
     format: str = PAGE_FORMAT
     overlays: list[Overlay] = field(default_factory=list)
+    texts: list[Text] = field(default_factory=list)
+    style_prompt: str | None = None
+    tags: list[str] = field(default_factory=list)
+    text_font_size: float = 42
+    text_max_chars: int = 10
 
     @property
     def id(self) -> str:
@@ -523,6 +664,7 @@ class Page:
         self.overlays = [
             item if isinstance(item, Overlay) else Overlay.from_dict(item) for item in self.overlays
         ]
+        self.texts = [item if isinstance(item, Text) else Text.from_dict(item) for item in self.texts]
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> Page:
@@ -552,6 +694,11 @@ class Page:
             "text_direction",
             "color_mode",
             "overlays",
+            "texts",
+            "style_prompt",
+            "tags",
+            "text_font_size",
+            "text_max_chars",
         }
         canvas = value.get("canvas", value.get("canvas_size", {}))
         if not isinstance(canvas, Mapping):
@@ -575,6 +722,13 @@ class Page:
             text_direction=_text(value.get("text_direction", "vertical"), "page.text_direction"),
             color_mode=_text(value.get("color_mode", "monochrome"), "page.color_mode"),
             overlays=[Overlay.from_dict(item) for item in value.get("overlays", [])],
+            texts=[Text.from_dict(item) for item in value.get("texts", [])],
+            style_prompt=None
+            if value.get("style_prompt") is None
+            else _text(value["style_prompt"], "page.style_prompt"),
+            tags=_strings(value.get("tags", []), "page.tags"),
+            text_font_size=_number(value.get("text_font_size", 42), "page.text_font_size"),
+            text_max_chars=int(value.get("text_max_chars", 10)),
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PAGE_FORMAT), "page.format"),
         )
@@ -593,6 +747,11 @@ class Page:
             "text_direction": self.text_direction,
             "color_mode": self.color_mode,
             "panels": [item.to_dict() for item in self.panels],
+            "texts": [item.to_dict() for item in self.texts],
+            "style_prompt": self.style_prompt,
+            "tags": list(self.tags),
+            "text_font_size": self.text_font_size,
+            "text_max_chars": self.text_max_chars,
         }
         result.update(self.extra)
         if self.overlays:
@@ -614,6 +773,8 @@ class Project:
     color_mode: str = "monochrome"
     extra: JsonObject = field(default_factory=dict, repr=False)
     format: str = PROJECT_FORMAT
+    style_prompt: str | None = None
+    tags: list[str] = field(default_factory=list)
 
     @property
     def title(self) -> str:
@@ -653,6 +814,8 @@ class Project:
             "dialogue_mode",
             "text_direction",
             "color_mode",
+            "style_prompt",
+            "tags",
         }
         canvas = value.get("default_canvas", value.get("canvas", {}))
         if not isinstance(canvas, Mapping):
@@ -685,6 +848,10 @@ class Project:
             color_mode=_text(value.get("color_mode", "monochrome"), "project.color_mode"),
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PROJECT_FORMAT), "project.format"),
+            style_prompt=None
+            if value.get("style_prompt") is None
+            else _text(value["style_prompt"], "project.style_prompt"),
+            tags=_strings(value.get("tags", []), "project.tags"),
         )
 
     def to_dict(self) -> JsonObject:
@@ -698,6 +865,8 @@ class Project:
             "default_dialogue_mode": self.default_dialogue_mode,
             "text_direction": self.text_direction,
             "color_mode": self.color_mode,
+            "style_prompt": self.style_prompt,
+            "tags": list(self.tags),
         }
         result.update(self.extra)
         return result
@@ -710,12 +879,14 @@ __all__ = [
     "DIALOGUE_MODES",
     "PAGE_FORMAT",
     "PANEL_STATUSES",
+    "POSES",
     "PROJECT_FORMAT",
     "READING_DIRECTIONS",
     "SHOT_SIZES",
     "Character",
     "CharacterLoRA",
     "Dialogue",
+    "Figure",
     "Lora",
     "LoraConfig",
     "Overlay",
@@ -726,6 +897,7 @@ __all__ = [
     "QuadShape",
     "RectShape",
     "Shape",
+    "Text",
     "shape_to_dict",
 ]
 

@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Mapping
-from dataclasses import replace
 from itertools import combinations
 from math import ceil, floor
 from typing import TYPE_CHECKING, Any
 
 from .geometry import inscribed_rect, midline_rect, panel_to_moss_bbox, shape_bbox
+from .lettering import layout_texts
 from .models import shape_to_dict
 
 if TYPE_CHECKING:
-    from .models import Character, Dialogue, Page, Panel, Shape
+    from .models import Character, Overlay, Page, Panel, Shape, Text
+
+TOP_ROW_LIMIT = 0.34
+BOTTOM_ROW_START = 0.72
 
 SHOT_PHRASES = {
     "extreme_long": "extreme long shot",
@@ -41,44 +43,36 @@ def _character_map(characters: Mapping[str, Character] | Iterable[Character] | N
     return {character.id: character for character in characters}
 
 
-def _character_caption(panel: Panel, characters: Mapping[str, Character]) -> str:
-    parts: list[str] = []
-    for identifier in panel.character_ids:
-        character = characters.get(identifier)
-        if character is None:
-            parts.append(identifier)
-            continue
-        detail = character.appearance_text()
-        triggers = ", ".join(character.trigger_words)
-        value = character.display_name or identifier
-        if detail:
-            value += f" ({detail})"
-        elif triggers:
-            value += f" [{triggers}]"
-        parts.append(value)
-    return "、".join(parts)
+def character_caption(identifier: str, characters: Mapping[str, Character]) -> str:
+    character = characters.get(identifier)
+    if character is None:
+        return identifier
+    detail = character.appearance_en or character.appearance_zh or character.display_name
+    return ", ".join(part for part in (character.age, detail, ", ".join(character.trigger_words)) if part)
 
 
-def _panel_caption(panel: Panel, characters: Mapping[str, Character]) -> str:
-    chunks = []
-    character_text = _character_caption(panel, characters)
-    if character_text:
-        chunks.append(character_text)
-    if panel.description:
-        chunks.append(panel.description)
-    if panel.sfx:
-        chunks.append(f"sound effects: {', '.join(panel.sfx)}")
+def panel_location(panel: Panel, page: Page) -> str:
+    x, y, x2, y2 = shape_bbox(panel.shape)
+    cy = (y + y2) / 2 / page.canvas_height
+    row = "Top" if cy < TOP_ROW_LIMIT else "Bottom" if cy > BOTTOM_ROW_START else "Middle"
+    if x2 - x > page.canvas_width * 0.75:
+        return f"{row} wide panel"
+    side = "right" if (x + x2) / 2 > page.canvas_width / 2 else "left"
+    size = " small vertical" if y2 - y > (x2 - x) * 1.5 else ""
+    return f"{row}-{side}{size} panel"
+
+
+def _panel_caption(panel: Panel, page: Page, characters: Mapping[str, Character]) -> str:
+    if panel.caption_en:
+        return panel.caption_en
+    identifiers = list(dict.fromkeys([*panel.character_ids, *(f.character_id for f in panel.figures)]))
+    details = "; ".join(character_caption(identifier, characters) for identifier in identifiers)
     shot = SHOT_PHRASES.get(panel.shot, panel.shot.replace("_", "-"))
     angle = ANGLE_PHRASES.get(panel.angle, panel.angle.replace("_", "-"))
-    return f"Panel {panel.order}, {shot}, {angle}: {', '.join(chunks) or 'a manga scene'}"
-
-
-def _panel_summary(panel: Panel) -> str:
-    shot = SHOT_PHRASES.get(panel.shot, panel.shot)
-    clauses = re.split(r"[，,。.;；!?！？\n]", panel.description.strip(), maxsplit=1)
-    # Retain one opening beat, never echo the complete per-panel description.
-    beat = clauses[0].strip()[:24] if len(clauses) > 1 and clauses[1].strip() else ""
-    return f"Panel {panel.order}: {shot}{', ' + beat if beat else ''}."
+    return (
+        f"Panel {panel.order}, {shot}, {angle}: {panel_location(panel, page)}, "
+        f"{details}, {panel.description or 'a manga scene'}"
+    )
 
 
 def _integer_bbox(shape: Shape, page: Page, *, inward: bool = False) -> list[int]:
@@ -103,7 +97,9 @@ def _compiled_shape(panel: Panel, mode: str) -> dict[str, Any]:
     return inscribed_rect(shape) if mode == "hint" else midline_rect(shape)
 
 
-def compile_geometry_map(page: Page, *, slant_mode: str = "cut") -> dict[str, Any]:
+def compile_geometry_map(
+    page: Page, *, slant_mode: str = "cut", size_check: tuple[int, int] | None = None
+) -> dict[str, Any]:
     """Sidecar geometry only; never append this data to the MOSS prompt."""
     _validate_slant_mode(slant_mode)
     panels = []
@@ -129,6 +125,8 @@ def compile_geometry_map(page: Page, *, slant_mode: str = "cut") -> dict[str, An
         "bbox_format": "yxyx",
         "panels": panels,
         "overlays": [overlay.to_dict() for overlay in page.overlays],
+        "texts": [text.to_dict() for text in layout_texts(page)],
+        **({"size_check": size_check_report(page, size_check)} if size_check is not None else {}),
     }
 
 
@@ -151,73 +149,46 @@ def _validate_cut_regions(page: Page, mode: str, bboxes: list[list[int]]) -> Non
             raise ValueError(message)
 
 
-def _dialogue_caption(dialogue: Dialogue, page: Page) -> str:
-    orientation = page.text_direction
-    bubbles = {
-        "speech": f"A white {orientation} speech bubble",
-        "shout": f"A jagged shout bubble with {orientation} lettering",
-        "thought": f"A cloud-shaped thought bubble with {orientation} lettering",
-        "narration": f"A rectangular narration box with {orientation} lettering",
+def _text_caption(text: Text, page: Page, characters: Mapping[str, Character]) -> str:
+    direction = text.direction or page.text_direction
+    kinds = {
+        "dialogue": f"Clean {direction} Chinese dialogue text",
+        "narration": f"Clean {direction} Chinese narration text",
+        "sfx": f"Bold comic sound effect text with {direction} lettering",
+        "title": (
+            f"Ornate stylized Japanese manga title logo with {direction} lettering "
+            "and a clean decorative frame"
+        ),
+        "caption_tag": f"Clean {direction} Chinese caption tag text",
     }
-    return f'{bubbles.get(dialogue.bubble, bubbles["speech"])} with Chinese text "{dialogue.text}"'
+    bubbles = {
+        "speech": "a white speech bubble",
+        "shout": "a jagged shout bubble",
+        "thought": "a cloud-shaped thought bubble",
+        "box": "a rectangular narration box",
+    }
+    caption = kinds.get(text.kind, kinds["dialogue"])
+    if text.bubble != "none":
+        caption += f" in {bubbles.get(text.bubble, 'a white speech bubble')}"
+    panel = next((panel for panel in page.panels if panel.id == text.panel_id), None)
+    if panel:
+        caption += f" in the {panel_location(panel, page).lower()}"
+    if text.speaker_id:
+        caption += f" next to {character_caption(text.speaker_id, characters)}"
+    if text.style_hint:
+        caption += f", {text.style_hint}"
+    return caption + "."
 
 
-def _text_bbox(
-    panel: Panel, dialogue: Dialogue, index: int, page: Page, *, inward: bool = False
-) -> list[int]:
-    """Place a speech item in the upper portion of its panel."""
-
-    x, y, x2, y2 = shape_bbox(panel.shape)
-    width = max(1.0, x2 - x)
-    height = max(1.0, y2 - y)
-    band_height = min(max(72.0, height * 0.22), 180.0, height)
-    band_width = min(max(160.0, width * 0.72), width)
-    position = (dialogue.position or "").lower()
-    rtl = page.reading_direction != "ltr"
-    if position in {"left", "upper_left", "top_left"}:
-        left = x
-    elif position in {"right", "upper_right", "top_right"} or (index % 2 == 0) == rtl:
-        left = x + width - band_width
-    else:
-        left = x
-    top = y + min(24.0 + index * (band_height * 0.85), max(0.0, height - band_height))
-    return _integer_bbox({"x": left, "y": top, "w": band_width, "h": band_height}, page, inward=inward)
+def size_check_report(page: Page, target: tuple[int, int]) -> dict[str, Any]:
+    return {
+        "canvas": [page.canvas_width, page.canvas_height],
+        "target": list(target),
+        "matches": (page.canvas_width, page.canvas_height) == target,
+    }
 
 
-def _panel_items(
-    panel: Panel, page: Page, characters: Mapping[str, Character], *, mode: str, with_ids: bool
-) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    generation_panel = replace(panel, shape=_compiled_shape(panel, mode))
-    object_caption = _panel_caption(panel, characters)
-    if mode == "hint" and panel.shape_type == "quad":
-        object_caption += ", slanted panel"
-    items.append(
-        {
-            "label": "object",
-            "caption": object_caption,
-            "bbox": _integer_bbox(generation_panel.shape, page, inward=mode == "hint"),
-        }
-    )
-    if with_ids:
-        items[-1]["panel_id"] = panel.id
-    if page.dialogue_mode == "moss_text":
-        for index, dialogue in enumerate(panel.dialogue):
-            if not dialogue.text.strip():
-                continue
-            items.append(
-                {
-                    "label": "text",
-                    "caption": _dialogue_caption(dialogue, page),
-                    "bbox": _text_bbox(generation_panel, dialogue, index, page, inward=mode == "hint"),
-                }
-            )
-            if with_ids:
-                items[-1].update(panel_id=panel.id, speaker_id=dialogue.speaker_id)
-    return items
-
-
-def compile_page(
+def compile_page(  # noqa: C901 -- ordered object, overlay and text emission
     page: Page,
     characters: Mapping[str, Character] | Iterable[Character] | None = None,
     *,
@@ -225,37 +196,103 @@ def compile_page(
     with_ids: bool = False,
     slant_mode: str = "cut",
 ) -> dict[str, Any]:
-    """Return a MOSS layout dictionary for ``page``."""
-
+    """Return only the MOSS contract. Size diagnostics belong to CLI/maps."""
     _validate_slant_mode(slant_mode)
+    # Retain the public argument for clients; diagnostics never enter the prompt.
+    del size_check
     character_map = _character_map(characters)
-    panel_summaries = [_panel_summary(panel) for panel in sorted(page.panels, key=lambda item: item.order)]
-    lead = "; ".join(part for part in (page.style_prefix, page.description) if part)
-    color = "full-color" if page.color_mode == "color" else "black-and-white"
+    color = (
+        "full-color 2D anime digital painting"
+        if page.color_mode == "color"
+        else "black-and-white 2D manga with screentone shading"
+    )
+    shading = (
+        "soft cel shading with gentle painterly highlights, warm daylight, a fresh pastel palette"
+        if page.color_mode == "color"
+        else "delicate screentone shading, strong ink silhouettes, balanced white negative space"
+    )
+    default_style = (
+        f"High-taste {color} comic page, crisp clean line art, {shading}, "
+        "expressive faces, gentle lighting, zero rough sketch lines."
+    )
     direction = "left to right" if page.reading_direction == "ltr" else "right to left"
-    suffix = f"{color} Japanese manga page, {len(page.panels)} panels, read {direction}, clean white gutters"
-    caption = "; ".join(part for part in (lead, suffix, " ".join(panel_summaries)) if part)
+    texts = layout_texts(page) if page.dialogue_mode == "moss_text" else []
+    caption = "; ".join(
+        part
+        for part in (
+            page.style_prompt or default_style,
+            page.style_prefix,
+            page.description,
+            ", ".join(page.tags),
+            f"Japanese manga layout read {direction}, clean white gutters",
+            "crisp Chinese comic text in clean speech bubbles and narration boxes"
+            if texts
+            else "no text, no speech bubbles",
+        )
+        if part
+    )
     if slant_mode == "hint" and any(panel.shape_type == "quad" for panel in page.panels):
         caption += "; panels separated by slanted dividing lines"
-    if page.dialogue_mode == "lettering" or not any(d.text.strip() for p in page.panels for d in p.dialogue):
-        caption += "; no text, no speech bubbles"
     result: dict[str, Any] = {
-        "summary": {"meta": ["comic"], "canvas": "single", "caption": caption},
+        "summary": {
+            "meta": ["comic", "multi_panel"] + (["digital_painting"] if page.color_mode == "color" else []),
+            "canvas": "multi_panel",
+            "caption": caption,
+        },
         "items": [],
         "bbox_coord_space": "abs_centralized",
         "bbox_format": "yxyx",
     }
-    if size_check is not None:
-        result["size_check"] = {
-            "canvas": [page.canvas_width, page.canvas_height],
-            "target": [int(size_check[0]), int(size_check[1])],
-            "matches": [page.canvas_width, page.canvas_height] == [int(size_check[0]), int(size_check[1])],
+    items = result["items"]
+    overlays = sorted(
+        (overlay for overlay in page.overlays if overlay.mode == "moss"), key=lambda overlay: overlay.z_index
+    )
+    for panel in sorted(page.panels, key=lambda panel: panel.order):
+        object_caption = _panel_caption(panel, page, character_map)
+        if slant_mode == "hint" and panel.shape_type == "quad":
+            object_caption += ", slanted panel"
+        item = {
+            "label": "object",
+            "caption": object_caption,
+            "bbox": _integer_bbox(_compiled_shape(panel, slant_mode), page, inward=slant_mode == "hint"),
         }
-    items: list[dict[str, Any]] = result["items"]
-    for panel in sorted(page.panels, key=lambda item: item.order):
-        items.extend(_panel_items(panel, page, character_map, mode=slant_mode, with_ids=with_ids))
+        if with_ids:
+            item["panel_id"] = panel.id
+        items.append(item)
+        for overlay in overlays:
+            if overlay.panel_id == panel.id:
+                items.append(_overlay_item(overlay, page, character_map, with_ids=with_ids))
+    for overlay in overlays:
+        if overlay.panel_id is None or not any(panel.id == overlay.panel_id for panel in page.panels):
+            items.append(_overlay_item(overlay, page, character_map, with_ids=with_ids))
     _validate_cut_regions(page, slant_mode, [item["bbox"] for item in items if item["label"] == "object"])
+    for text in texts:
+        item = {
+            "label": "text",
+            "caption": _text_caption(text, page, character_map),
+            "text": text.text,
+            "bbox": _integer_bbox(text.bbox, page, inward=slant_mode == "hint"),
+        }
+        if with_ids:
+            item.update(text_id=text.id, panel_id=text.panel_id, speaker_id=text.speaker_id)
+        items.append(item)
     return result
+
+
+def _overlay_item(
+    overlay: Overlay, page: Page, characters: Mapping[str, Character], *, with_ids: bool
+) -> dict[str, Any]:
+    item = {
+        "label": "character",
+        "caption": (
+            "Main center character focus breaking across the middle panels: "
+            f"{character_caption(overlay.character_id, characters)}, {overlay.description}"
+        ),
+        "bbox": _integer_bbox(overlay.rect, page),
+    }
+    if with_ids:
+        item.update(overlay_id=overlay.id, character_id=overlay.character_id)
+    return item
 
 
 __all__ = ["compile_geometry_map", "compile_page"]

@@ -187,6 +187,10 @@ def _character_ids(panel: Any) -> list[str]:
             value = _get(value, "id", value)
         if value is not None:
             result.append(str(value))
+    for figure in _get(panel, "figures", []):
+        identifier = str(_get(figure, "character_id", ""))
+        if identifier and identifier not in result:
+            result.append(identifier)
     return result
 
 
@@ -487,6 +491,12 @@ def validate_page(
             for identifier in _character_ids(panel)
             if identifier in char_map and _has_lora(char_map[identifier])
         }
+        page_lora_ids.update(
+            identifier
+            for overlay in _get(page, "overlays", [])
+            if (identifier := _get(overlay, "character_id", "")) in char_map
+            and _has_lora(char_map[identifier])
+        )
         if len(page_lora_ids) >= 2:
             report.add(
                 "warning",
@@ -534,6 +544,7 @@ def validate_page(
                 details={"swap_count": swaps},
             )
 
+    _validate_storytelling(page, char_map, report, max_dialogue_chars=max_dialogue_chars)
     return report
 
 
@@ -581,6 +592,10 @@ def _validate_overlays(
     panel_ids = {_panel_id(panel, i) for i, panel in enumerate(panels)}
     seen = set()
     for overlay in _get(page, "overlays", []):
+        if _get(overlay, "mode", "layer") not in {"moss", "layer"}:
+            report.add(
+                "error", "invalid_overlay_mode", "overlay.mode 必须为 moss 或 layer", field_name="overlays"
+            )
         identifier = _get(overlay, "id", "")
         if not identifier or identifier in seen:
             report.add("error", "invalid_overlay_id", "出格图层 id 不能为空或重复", field_name="overlays")
@@ -599,6 +614,125 @@ def _validate_overlays(
             report.add("error", "invalid_overlay_status", "出格图层状态无效", field_name="overlays")
         if _number(_get(overlay, "z_index", 1)) < 1:
             report.add("error", "invalid_overlay_layer", "出格图层层级必须高于格子", field_name="overlays")
+
+
+def _validate_storytelling(
+    page: Any, characters: dict[str, Any], report: ValidationReport, *, max_dialogue_chars: int
+) -> None:
+    from .models import POSES  # noqa: PLC0415
+
+    panel_ids = {_panel_id(panel, i) for i, panel in enumerate(_panels(page))}
+    width, height = canvas_size(page)
+    if _number(_get(page, "text_font_size", 42)) <= 0 or _number(_get(page, "text_max_chars", 10)) < 1:
+        report.add("error", "invalid_text_metrics", "文字字号和每列字数必须为正数", field_name="texts")
+    seen = set()
+    for text in _get(page, "texts", []):
+        identifier = _get(text, "id", "")
+        if not identifier or identifier in seen:
+            report.add("error", "invalid_text_id", "文字 id 不能为空或重复", field_name="texts")
+        seen.add(identifier)
+        if (
+            _get(text, "kind", "dialogue") == "dialogue"
+            and len(_dialogue_text(text).strip()) > max_dialogue_chars
+        ):
+            report.add(
+                "warning",
+                "dialogue_too_long",
+                f"文字 {identifier} 的台词超过 {max_dialogue_chars} 字",
+                field_name="texts.text",
+                details={"text_id": identifier},
+            )
+        parent = _get(text, "panel_id")
+        if parent and parent not in panel_ids:
+            report.add("error", "unknown_text_panel", "文字引用了不存在的格子", field_name="texts")
+        speaker = _get(text, "speaker_id")
+        if speaker and characters and speaker not in characters:
+            report.add("error", "unknown_text_speaker", "文字引用了不存在的说话人", field_name="texts")
+        for key, choices in (
+            ("kind", {"dialogue", "narration", "sfx", "title", "caption_tag"}),
+            ("bubble", {"speech", "shout", "thought", "box", "none"}),
+            ("direction", {None, "vertical", "horizontal"}),
+        ):
+            if _get(text, key) not in choices:
+                report.add("error", "invalid_text_field", f"文字 {key} 值无效", field_name=f"texts.{key}")
+        direction = _get(text, "direction") or _get(page, "text_direction", "vertical")
+        raw_box = _get(text, "bbox")
+        box = (
+            _coerce_box(raw_box)
+            if isinstance(raw_box, (Mapping, list, tuple))
+            else (
+                (_get(raw_box, "x"), _get(raw_box, "y"), _get(raw_box, "w"), _get(raw_box, "h"))
+                if raw_box
+                else None
+            )
+        )
+        if box:
+            x, y, w, h = box
+            if not (0 <= x < x + w <= width and 0 <= y < y + h <= height):
+                report.add(
+                    "error", "text_out_of_bounds", "文字框必须在画布内且宽高为正", field_name="texts.bbox"
+                )
+            if (direction == "vertical" and w > h * 1.5) or (direction == "horizontal" and h > w * 1.5):
+                report.add(
+                    "warning",
+                    "text_direction_bbox_mismatch",
+                    "文字方向与框形明显不符",
+                    field_name="texts.bbox",
+                    details={"text_id": identifier},
+                )
+    for index, panel in enumerate(_panels(page)):
+        for figure in _get(panel, "figures", []):
+            panel_id = _panel_id(panel, index)
+            if _get(figure, "pose", "stand") not in POSES:
+                report.add(
+                    "warning",
+                    "unknown_figure_pose",
+                    "未知 pose，预览将退回 stand",
+                    panel_id=panel_id,
+                    field_name="figures.pose",
+                )
+            position = _get(figure, "position", "center")
+            if isinstance(position, str):
+                valid = position in {"left", "center", "right"}
+            else:
+                valid = (
+                    isinstance(position, (int, float))
+                    and not isinstance(position, bool)
+                    and 0 <= position <= 1
+                )
+            if not valid:
+                report.add(
+                    "error",
+                    "invalid_figure_position",
+                    "人物位置必须是 0~1 或 left/center/right",
+                    panel_id=panel_id,
+                    field_name="figures.position",
+                )
+            if _get(figure, "facing", "front") not in {"left", "right", "front", "back"}:
+                report.add(
+                    "error",
+                    "invalid_figure_facing",
+                    "人物朝向无效",
+                    panel_id=panel_id,
+                    field_name="figures.facing",
+                )
+            if _get(figure, "framing") not in {None, "full", "waist", "bust", "face"}:
+                report.add(
+                    "error",
+                    "invalid_figure_framing",
+                    "人物取景范围无效",
+                    panel_id=panel_id,
+                    field_name="figures.framing",
+                )
+            identifier = _get(figure, "character_id", "")
+            if characters and identifier not in characters:
+                report.add(
+                    "error",
+                    "unknown_figure_character",
+                    "人物引用了不存在的角色",
+                    panel_id=panel_id,
+                    field_name="figures.character_id",
+                )
 
 
 # Short aliases used by integrations and the CLI.

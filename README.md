@@ -1,6 +1,6 @@
 # soda-storyboard
 
-`soda-storyboard` 是一个轻量的 Python 分镜单工具：用 JSON 描述一页日漫分镜，校验格子几何和角色引用，生成 Pillow 线框预览，并编译成 MOSS-Image 的 Layout Prompt JSON。
+`soda-storyboard` 是一个轻量的 Python 分镜单工具：用 JSON 描述一页日漫分镜，校验格子几何和角色引用，生成 Pillow 人物/文字草稿预览，并编译成 MOSS-Image 的 Layout Prompt JSON。
 
 ## 安装与运行
 
@@ -30,9 +30,27 @@ uv run soda-storyboard compile examples/station/pages/station-turn.json --output
 
 每个 bbox 的顺序是 `[y_min, x_min, y_max, x_max]`。输入使用左上角原点；编译时减去画布中心 `(W/2, H/2)`，因此非方形画布也能保持正确的 x/y 顺序。
 
-编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。object caption 使用 `Panel N, close-up, eye-level: ...`；text caption 使用 `A white vertical speech bubble with Chinese text "……是你？"`，并按类型生成喊叫、思考或旁白框。summary 包含画风、整页说明和逐格简短景别；没有台词或使用 `lettering` 时追加 `no text, no speech bubbles`。
+编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。object caption 优先使用 `caption_en`，否则拼接英文景别、角度、格子位置、人物 `appearance_en` + `age` 和画面描述。每格应写完整外观；保留旧中文 description 作为兼容回退，不自动调用翻译服务。
 
-默认 item 只含 `label`、`caption`、`bbox`。`compile --with-ids` 可加回 `panel_id`、`speaker_id`，此模式适合调试，不建议直接交给 MOSS。项目和页面可设置 `text_direction`（`vertical`，默认；或 `horizontal`）、`color_mode`（`monochrome`，默认；或 `color`），页面覆盖项目设置。`page new` 也提供对应的 `--text-direction`、`--color-mode` 参数。
+文字独立为 `texts`，每个 item 输出 `label: "text"`、英文样式/位置 `caption`、原文 `text`、`bbox`。原文可含换行。kind 支持 dialogue / narration / sfx / title / caption_tag，bubble 支持 speech / shout / thought / box / none，另有可空 panel_id、speaker_id、direction、bbox、style_hint。源页 bbox 是左上角像素矩形 x/y/w/h，省略时自动估算；竖排宽=列数×字宽×1.3，高=每列字数×字高×1.15，横排交换轴。页面 `text_font_size` 默认 42（按 1024 宽画布，随画布宽等比缩放），`text_max_chars` 默认 10，超过即换列/行。框形明显不符方向会 warning。旧 dialogue 和 sfx 继续编译，迁移原文到 texts 后应移除对应旧条目以免重复。
+
+项目和页面可加 `style_prompt`（英文画风段落）、`tags`（字符串数组）。页面有设置则覆盖项目；未给画风时，编译器提供按 color_mode 区分彩色/黑白的英文兜底。插件会先让用户选择画风并保存。summary 以画风段落开头，接页面说明、tags、阅读方向和留白要求，有文字时要求清晰中文，无文字或使用 lettering 时追加 `no text, no speech bubbles`。meta 为 comic、multi_panel，彩色再加 digital_painting；canvas 为 multi_panel。
+
+默认画面 item 含 label、caption、bbox，文字额外含 text。`compile --with-ids` 保留调试 ID，并生成 `.map.json`，生产输出不推荐使用。项目和页面仍可设置 `text_direction`（默认 vertical）、`color_mode`（默认 monochrome）；旧 style_prefix 也保留。`--size-check` 的核对只出现在命令 `--json` 报告和 map 文件中，`--output` 文件只有 summary、items、bbox_coord_space、bbox_format 四个顶层字段。
+
+## 人物与文字草稿
+
+每格可选 `figures` 数组，指定 character_id、pose、position（0～1 或 left / center / right）、facing（left / right / front / back）、可空 framing（full / waist / bust / face）。缺省时按 character_ids 自动排开，RTL 第一个角色在右边；远景/全景画全身，中景到腰，近景到胸，特写画头。角色卡可加 age 和 figure_hint: skirt。
+
+姿势预设为 stand、walk、run、sit、crouch、wave、point、arms_up、hands_clasped、hand_on_chin、lie、back_view；未知值 warning 并回退 stand。Pillow 绘制圆头十字参考线、躯干、四肢及角色名，裁在格子内，不调用图像模型。草稿稳定使用青色格子/格内人物、红色跨格人物/标题、绿色文字框，原文按方向绘制。
+
+```bash
+uv run soda-storyboard preview examples/pudding/pages/pudding.json --output examples/pudding/pudding.sketch.png --json
+uv run soda-storyboard preview examples/pudding/pages/pudding.json --style boxes --output examples/pudding/pudding.boxes.png --json
+uv run soda-storyboard compile examples/pudding/pages/pudding.json --output examples/pudding/pudding.moss.json --json
+```
+
+`preview` 默认 sketch；`--style boxes` 保留原纯框线版。`examples/pudding/` 是参考 JSON 的反向分镜示例，编译得到相同条目种类、数量、原文和 bbox，caption 可不同。为草稿每格都有人物，第 4 格把纯道具特写改成妹妹捧空布丁杯的特写；输出几何与条目结构仍保持参考一致。
 
 ## 版式模板
 
@@ -100,7 +118,7 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --slant
 
 `cut` 的矩形连同白色格间距覆盖整行或整列；`panel_gap=0` 时直接拼接。MOSS 先按普通矩形生成，quad 留待第 3 阶段裁剪。`.cut.json` 记录画布、坐标系、每格的 `panel_id`、`order`、原 `shape` / `quad`、`generation_rect`（左上角像素 `x,y,x2,y2`）和与 MOSS 相同的中心原点整数 `bbox`。例如输出 `page.moss.json` 对应 `page.moss.cut.json`。不指定 `--output` 时，旁路文件写在输入页旁，如 `page.cut.json`。没有 quad 的页不生成裁剪文件。
 
-`--with-ids` 保留原来的 item 辅助 ID，同时写出同名 `.map.json`，列出每格与出格图层。MOSS JSON 本身始终不包含 overlays。库函数 `compile_geometry_map(page, slant_mode="cut")` 可获得同样的映射数据。
+`--with-ids` 保留原来的 item 辅助 ID，同时写出同名 `.map.json`，列出每格、独立文字与出格图层。MOSS JSON 不包含 overlays 顶层字段，moss 模式会输出 character item。库函数 `compile_geometry_map(page, slant_mode="cut")` 可获得同样的映射数据。
 
 对手工编辑的任意 quad，若中线矩形仍重叠，`cut` 会报错；可调整为共享分割线构图，或显式选 `rect` 查看外接矩形。`hint` 会在整数化后检查 bbox 有正面积，过窄的格子会报错。
 
@@ -111,6 +129,7 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --slant
 ```json
 {
   "id": "dash",
+  "mode": "layer",
   "panel_id": "p3",
   "character_id": "runner",
   "rect": {"type": "rect", "x": 130, "y": 420, "w": 310, "h": 340},
@@ -123,7 +142,9 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --slant
 
 `id`、`character_id`、`rect` 为必填字段；`panel_id` 可为 null，`image_path` 可为 null。`z_index` 默认为 1，正整数表示在格子上方，数值越大越靠前；`status` 为 `planned`（默认）或 `approved`。未知扩展字段读写保留。校验器检查重复 ID、引用、层级、状态和画布边界；overlay 可以跨越所属格子的边框，但不能超出画布，角色必须出现在提供的角色卡表中。
 
-预览在所有格子上方绘制绿色虚线框并标注“出格”；当前只表示规划位置，不读取或合成 `image_path`。overlay 不参与格间重叠检查，也不进入 MOSS 提示词。透明人物图层的生成、quad 裁剪与最终叠加属于第 3 阶段。
+overlay 新增 `mode`：新建时应显式写 `moss`（Python Overlay 构造默认值），预览用红色大号人物，编译为 `label: "character"` 让 MOSS 直接画出跨格人物；`layer` 保留原有绿色虚线框和后期叠加规划。旧 JSON 缺省 mode 仍读成 layer，以保持兼容。两者都不参与格间重叠检查，不读取 image_path；透明图层生成、quad 裁剪和叠加仍属第 3 阶段。
+
+跨格主角是可选手法，多数页没有；仅在人物登场、情绪高潮或强调人物时提议并说明理由，日常对话、动作戏默认普通格子。斜切“先生成再裁”实测效果有限，功能保留。JSON 写法比底模和步数更影响成图；Base、SFT 都可用，SFT 偶有手部问题，草稿可用 25 步、定稿 50 步质量档。本工具不调用 ComfyUI。
 
 完整示例位于 `examples/slanted/`：上排三个斜切格，下方两条横格，加一个跨格图层。
 

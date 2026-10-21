@@ -7,12 +7,15 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .models import Character, Page, Panel
+from .figures import draw_figure, panel_figures
+from .geometry import shape_bbox
+from .lettering import layout_texts, text_lines
+from .models import Character, Figure, Page, Panel
 
 if TYPE_CHECKING:
-    from PIL import ImageDraw, ImageFont
+    from PIL import Image, ImageDraw, ImageFont
 
-    from .models import Overlay
+    from .models import Overlay, Text
 
 
 def _draw_overlay(
@@ -101,13 +104,14 @@ def _draw_dialogue(
         draw.text((bubble_left + s(6), bubble_top + s(5)), dialogue.text[:18], fill="#991b1b", font=font)
 
 
-def render_preview(
+def render_preview(  # noqa: PLR0912, PLR0913 -- retain existing keyword API and boxes renderer
     page: Page,
     output: str | Path,
     characters: Mapping[str, Character] | Iterable[Character] | None = None,
     *,
     font: str | Path | None = None,
     scale: float = 1.0,
+    style: str = "sketch",
 ) -> Path:
     """Render ``page`` to ``output`` and return the resulting path."""
 
@@ -115,6 +119,11 @@ def render_preview(
         from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
     except ImportError as exc:  # pragma: no cover - exercised only without optional dependency
         raise RuntimeError("preview 需要 Pillow，请先安装 Pillow") from exc
+
+    if style not in {"sketch", "boxes"} or scale <= 0:
+        raise ValueError("style must be sketch/boxes and scale must be positive")
+    if style == "sketch":
+        return _render_sketch(page, output, characters, font=font, scale=scale)
 
     character_map = (
         {character.id: character for character in characters}
@@ -177,3 +186,149 @@ def render_preview(
 
 
 __all__ = ["find_font", "render_preview"]
+
+
+PANEL_COLOR = "#00a8c4"
+CHARACTER_COLOR = "#dc302a"
+TEXT_COLOR = "#229646"
+
+
+def _paste_panel_figures(  # noqa: PLR0913 -- explicit local drawing context
+    image: Image.Image,
+    panel: Panel,
+    page: Page,
+    characters: Mapping[str, Character],
+    *,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: float,
+) -> None:
+    from PIL import Image, ImageChops, ImageDraw  # noqa: PLC0415
+
+    x, y, x2, y2 = [round(v * scale) for v in shape_bbox(panel.shape)]
+    layer = Image.new("RGBA", (max(1, x2 - x), max(1, y2 - y)))
+    for figure in panel_figures(panel, page):
+        draw_figure(
+            layer, figure, characters.get(figure.character_id), shot=panel.shot, color=PANEL_COLOR, font=font
+        )
+    mask = Image.new("L", layer.size)
+    md = ImageDraw.Draw(mask)
+    points = (
+        [(round(px * scale) - x, round(py * scale) - y) for px, py in panel.shape["points"]]
+        if panel.shape_type == "quad"
+        else [(0, 0), (x2 - x - 1, 0), (x2 - x - 1, y2 - y - 1), (0, y2 - y - 1)]
+    )
+    md.polygon(points, fill=255)
+    layer.putalpha(ImageChops.multiply(layer.getchannel("A"), mask))
+    image.paste(layer, (x, y), layer)
+
+
+def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path | None, scale: float) -> None:
+    from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
+
+    rect = text.bbox
+    if rect is None:
+        return
+    width, height = max(1, round(rect.w * scale)), max(1, round(rect.h * scale))
+    layer = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(layer)
+    color = CHARACTER_COLOR if text.kind == "title" else TEXT_COLOR
+    draw.rectangle((0, 0, width - 1, height - 1), outline=color, width=max(2, round(3 * scale)))
+    lines = text_lines(text.text, page.text_max_chars)
+    vertical = (text.direction or page.text_direction) == "vertical"
+    longest = max(1, *map(len, lines))
+    available_w, available_h = max(1, width - 8 * scale), max(1, height - 8 * scale)
+    cell_w = available_w / (len(lines) if vertical else longest)
+    cell_h = available_h / (longest if vertical else len(lines))
+    size = max(1, int(min(cell_w, cell_h) * 0.88))
+    font = ImageFont.truetype(str(font_path), size) if font_path else ImageFont.load_default(size=size)
+    if vertical:
+        ordered = list(reversed(lines)) if page.reading_direction == "rtl" else lines
+        for column, line in enumerate(ordered):
+            for row, glyph in enumerate(line):
+                draw.text(
+                    (4 * scale + (column + 0.5) * cell_w, 4 * scale + (row + 0.5) * cell_h),
+                    glyph,
+                    fill=color,
+                    font=font,
+                    anchor="mm",
+                )
+    else:
+        for row, line in enumerate(lines):
+            draw.text((4 * scale, 4 * scale + (row + 0.5) * cell_h), line, fill=color, font=font, anchor="lm")
+    image.paste(layer, (round(rect.x * scale), round(rect.y * scale)))
+
+
+def _render_sketch(
+    page: Page,
+    output: str | Path,
+    characters: Mapping[str, Character] | Iterable[Character] | None,
+    *,
+    font: str | Path | None,
+    scale: float,
+) -> Path:
+    from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
+
+    character_map = (
+        dict(characters or {})
+        if isinstance(characters, Mapping) or characters is None
+        else {c.id: c for c in characters}
+    )
+    font_path = find_font(font)
+    if font and not Path(font).exists():
+        raise FileNotFoundError(f"找不到字体文件：{font}")
+    if font_path is None:
+        warnings.warn("未找到中文字体，可通过 --font 指定字体文件", RuntimeWarning, stacklevel=2)
+    label_font = (
+        ImageFont.truetype(str(font_path), max(12, round(22 * scale)))
+        if font_path
+        else ImageFont.load_default()
+    )
+    image = Image.new(
+        "RGB", (max(1, round(page.canvas_width * scale)), max(1, round(page.canvas_height * scale))), "white"
+    )
+    for panel in sorted(page.panels, key=lambda p: p.order):
+        _paste_panel_figures(image, panel, page, character_map, font=label_font, scale=scale)
+        draw = ImageDraw.Draw(image)
+        x, y, x2, y2 = [round(v * scale) for v in shape_bbox(panel.shape)]
+        if panel.shape_type == "quad":
+            draw.polygon(
+                [(round(px * scale), round(py * scale)) for px, py in panel.shape["points"]],
+                outline=PANEL_COLOR,
+                width=max(3, round(4 * scale)),
+            )
+        else:
+            draw.rectangle((x, y, x2, y2), outline=PANEL_COLOR, width=max(3, round(4 * scale)))
+        note = f"{panel.order}  {panel.description[:16]}"
+        draw.text(
+            (x + 8 * scale, y + 8 * scale),
+            note,
+            fill=PANEL_COLOR,
+            font=label_font,
+            stroke_width=1,
+            stroke_fill="white",
+        )
+    for overlay in sorted(page.overlays, key=lambda o: o.z_index):
+        rect = overlay.rect
+        x, y, x2, y2 = [round(v * scale) for v in (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h)]
+        if overlay.mode == "moss":
+            layer = Image.new("RGBA", (max(1, x2 - x), max(1, y2 - y)))
+            draw_figure(
+                layer,
+                Figure(overlay.character_id, pose="arms_up"),
+                character_map.get(overlay.character_id),
+                shot="full",
+                color=CHARACTER_COLOR,
+                font=label_font,
+            )
+            image.paste(layer, (x, y), layer)
+            ImageDraw.Draw(image).rectangle(
+                (x, y, x2, y2), outline=CHARACTER_COLOR, width=max(3, round(4 * scale))
+            )
+        else:
+            _draw_overlay(ImageDraw.Draw(image), overlay, label_font, scale)
+    for text in layout_texts(page):
+        _draw_text_box(image, text, page, font_path, scale)
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path)
+    return output_path

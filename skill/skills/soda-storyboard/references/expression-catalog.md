@@ -1,6 +1,6 @@
 # 表现手法怎样落到分镜里
 
-先写读者应该看到的东西，再写手法。手法名称是沟通的简称，不是新的枚举值。表中的 MOSS 写法由 panel.description 进入 object caption；只有真实台词或指定拟声词才作为可见文字，不把镜头说明、角色 id 印在图上。来源见 NOTICE。
+先写读者应该看到的东西，再写手法。手法名称是沟通的简称，不是新的枚举值。表中的 MOSS 写法优先由 panel.caption_en 进入 object caption，旧 description 仍兼容；只有真实台词或指定拟声词才作为可见文字，不把镜头说明、角色 id 印在图上。来源见 NOTICE。
 
 | 手法 | 分镜单怎么写 | MOSS 布局里怎么表达、当前边界 |
 | --- | --- | --- |
@@ -9,7 +9,7 @@
 | 留白 | description 写人物放哪、空白在哪、想留多久；对白可为空 | 例如“女孩位于右侧，左侧大面积空白，她没有说话”；整页无对白会自动加 no text / no speech bubbles |
 | 跨格连贯物 | 两格分别描述同一景物、姿势或视线的延续，保留合法几何 | 几个 object 的内容可呼应，但独立 bbox 不保证一条线精准接续；别把这种效果说成自动拼接 |
 | 出血格 | 在计划中说明画面到页边、重要脸和文字留安全距离 | 当前没有 bleed 命令；description 可以提“背景延伸到页边”，但真实无边框出血需用户另选合适边缘几何/后续排版。不能仅靠词语保证印刷出血 |
-| 人物出格 | overlays 指定 panel_id、character_id、rect、z_index，description 写覆盖哪条边框 | overlay 不进入 MOSS JSON，预览只有“出格”虚线框。透明人物图层的生成、去背景和叠加是后续阶段 |
+| 人物出格 | 可选 overlays 指定 mode、panel_id、character_id、rect、z_index，description 写动作和覆盖哪条边框 | moss 直接编译 character，预览红色人物；layer 留待后期叠加。仅在登场、高潮、强调人物时提议，日常对话和动作默认普通格子 |
 | 一瞬反应 | close_up 或 extreme_close_up，description 写眼、嘴、手的具体变化 | 不必同时放大所有部分；一格只突出最关键的一点 |
 | 环境停顿 | 用空座位、窗、风、光影等画面承接上一格情绪 | 它是一格具体画面，不是凭空加一句“营造氛围” |
 | 斜切格 | 用共享分割线形成 quad；动作方向与斜边方向协调 | 默认 cut 时不自动加入 slanted panel，先矩形生成，再按 cut 文件处理；hint 才让 MOSS 尝试画斜线 |
@@ -21,3 +21,5 @@ dialogue[].bubble 只用 speech / shout / thought / narration；text 保留用�
 拟声词写在 sfx 数组，只有用户确实想画出的字才写进去；速度线不要误写成 sfx。lettering 模式由后续程序排字，当前编译不发送对白文本，不能承诺这轮已排好字。
 
 不要在一格里同时堆速度线、集中线、强透视、大片拟声词和复杂背景；主动作应先能从人物轮廓看懂。安静、热闹、紧张是目的，技法是可替换的选择。
+
+独立文字优先用 texts，bubble 为 speech / shout / thought / box / none，kind 为 dialogue / narration / sfx / title / caption_tag。旧 dialogue 的 narration 会自动转成 box。文字原文只放 text，caption 只描述英文样式/位置。每格 figures 记录人物姿势、站位、朝向，草稿可逐人修改。

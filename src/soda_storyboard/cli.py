@@ -11,7 +11,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
-from .compiler import compile_geometry_map, compile_page
+from .compiler import compile_geometry_map, compile_page, size_check_report
 from .geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from .io import load_characters, load_page, load_project, read_json, write_json
 from .models import Character, Lora, Page, Panel, Project
@@ -52,6 +52,8 @@ def _default_page(project: Project, page_id: str, panels: int) -> Page:
         dialogue_mode=project.default_dialogue_mode,
         text_direction=project.text_direction,
         color_mode=project.color_mode,
+        style_prompt=project.style_prompt,
+        tags=list(project.tags),
         panels=[
             Panel(
                 id=f"panel-{index}",
@@ -101,6 +103,8 @@ def command_page_new(args: argparse.Namespace) -> int:
         dialogue_mode=args.dialogue_mode or project.default_dialogue_mode,
         text_direction=args.text_direction or project.text_direction,
         color_mode=args.color_mode or project.color_mode,
+        style_prompt=project.style_prompt,
+        tags=list(project.tags),
     )
     target = Path(args.output) if args.output else root / "pages" / f"{args.id}.json"
     write_json(target, page)
@@ -347,7 +351,7 @@ def _characters_near(page_path: Path) -> dict[str, Character]:
 
 def command_validate(args: argparse.Namespace) -> int:
     path = Path(args.page)
-    page = load_page(path)
+    page = _page_for(path)
     report = validate_page(page, _characters_near(path), max_dialogue_chars=args.max_dialogue_chars)
     _emit(report.to_dict(), args.json)
     return report.exit_code
@@ -355,9 +359,11 @@ def command_validate(args: argparse.Namespace) -> int:
 
 def command_preview(args: argparse.Namespace) -> int:
     path = Path(args.page)
-    page = load_page(path)
+    page = _page_for(path)
     output = args.output or str(path.with_suffix(".png"))
-    rendered = render_preview(page, output, _characters_near(path), font=args.font, scale=args.scale)
+    rendered = render_preview(
+        page, output, _characters_near(path), font=args.font, scale=args.scale, style=args.style
+    )
     _emit({"path": str(rendered), "font": str(args.font or "auto")}, args.json)
     return 0
 
@@ -382,17 +388,25 @@ def _parse_importance(value: str) -> list[int]:
     return values
 
 
-def command_compile(args: argparse.Namespace) -> int:
-    path = Path(args.page)
+def _page_for(path: Path) -> Page:
     payload = read_json(path)
     project = _project_for(path)
     payload.setdefault("text_direction", project.text_direction)
     payload.setdefault("color_mode", project.color_mode)
-    page = Page.from_dict(payload)
+    if not payload.get("style_prompt"):
+        payload["style_prompt"] = project.style_prompt
+    payload.setdefault("tags", project.tags)
+    return Page.from_dict(payload)
+
+
+def command_compile(args: argparse.Namespace) -> int:
+    path = Path(args.page)
+    page = _page_for(path)
+    target_size = _parse_size(args.size_check)
     compiled = compile_page(
         page,
         _characters_near(path),
-        size_check=_parse_size(args.size_check),
+        size_check=target_size,
         with_ids=args.with_ids,
         slant_mode=args.slant_mode,
     )
@@ -406,8 +420,12 @@ def command_compile(args: argparse.Namespace) -> int:
             {key: value for key, value in cut_map.items() if key != "overlays"},
         )
     if args.with_ids:
-        write_json(target.with_suffix(".map.json"), compile_geometry_map(page, slant_mode=args.slant_mode))
-    _emit(compiled, args.json)
+        write_json(
+            target.with_suffix(".map.json"),
+            compile_geometry_map(page, slant_mode=args.slant_mode, size_check=target_size),
+        )
+    report = {**compiled, **({"size_check": size_check_report(page, target_size)} if target_size else {})}
+    _emit(report, args.json)
     return 0
 
 
@@ -502,6 +520,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("--output")
     preview.add_argument("--font")
     preview.add_argument("--scale", type=float, default=1.0)
+    preview.add_argument("--style", choices=("sketch", "boxes"), default="sketch")
     preview.add_argument("--json", action="store_true")
     preview.set_defaults(func=command_preview)
 

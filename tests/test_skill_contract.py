@@ -160,4 +160,4 @@ def test_station_example_only_changes_panel_three_and_compiles_without_images(tm
     assert all("panel_id" not in item for item in compiled["items"])
     assert (tmp_path / "station.moss.cut.json").is_file()
     assert not list(tmp_path.rglob("*.png"))
-    assert compile_page(page, {character.id: character})["summary"]["caption"].startswith(page.style_prefix)
+    assert page.style_prefix in compile_page(page, {character.id: character})["summary"]["caption"]

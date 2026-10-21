@@ -1,0 +1,13 @@
+{
+  "format": "soda-storyboard-character-v1",
+  "id": "younger",
+  "display_name": "妹妹",
+  "trigger_words": [],
+  "clothing": [],
+  "reference_images": [],
+  "approved_images": [],
+  "appearance": {
+    "en": "a petite girl with bouncy pink twin tails, big round amber eyes, rosy cheeks, an oversized bright yellow hoodie with the hood down"
+  },
+  "age": "14-year-old"
+}

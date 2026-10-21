@@ -4,14 +4,16 @@
 
 ## 编译器负责什么
 
-- object caption 使用 `Panel N, close-up, eye-level: ...` 等自然英文景别和角度；人物外观与画面说明可保留中文。
-- speech 条目类似 `A white vertical speech bubble with Chinese text "那个……"`；shout、thought、narration 分别是喊叫、云状思考泡和矩形旁白框。横排/竖排取自项目或页面 text_direction。
-- summary 是用户画风前缀、整页故事、格数/阅读方向/留白约束与逐格简短要点，不重复所有完整描述。画风前缀没有用户选择就留空；不要用自己常用的 2D 风格替用户作决定。
-- bbox 为中心原点的整数 `[y_min,x_min,y_max,x_max]`，不是左上角 `[x,y,w,h]`。不要手工交换轴或拿页面坐标直接替换它。只在源页里编辑 shape，再编译。
-- 没有对白，或 dialogue_mode 为 lettering 时，summary 自动追加 no text, no speech bubbles，以抑制乱码日文气泡。
-- 干净的 MOSS JSON 不包含 panel_id、speaker_id 和 overlays。with-ids 只用于调试；它也会生成 map，生产结果不要加该参数。
+- object caption 优先用每格 caption_en；没有时拼英文景别、角度、格子位置和角色 appearance_en + age，再接 description。每格要独立写全外观，中文用户输入由 AI 翻译补全。
+- 每个 text 条目必须有 text 原文；caption 只写英文样式、方向、气泡和位置。官方要求“生成文字时需用 text 指定内容”。竖排框必须竖长，默认超过 10 字换列；文本原有换行保留。
+- summary 以英文 style_prompt 开头，没给时用按 color_mode 区分的兜底画风，随后接页面说明、tags、日漫阅读方向与白色留白；meta 为 comic、multi_panel（彩色再加 digital_painting），canvas 为 multi_panel。AI 应先给用户 2～3 段画风让其选择并保存，不能把编译器兜底当作用户已选画风。
+- bbox 为中心原点的整数 `[y_min,x_min,y_max,x_max]`；源页仍用左上角 x/y/w/h。没有文字或使用 lettering 时 summary 追加 no text, no speech bubbles。
+- 可选 moss overlay 编译成 character 条目，直接让 MOSS 画跨格人物；layer 模式留到第 3 阶段。日常对话、动作页默认不加跨格主角，只在登场、情绪高潮、强调人物时建议并说明原因。
+- 干净 MOSS JSON 只有 summary、items、bbox_coord_space、bbox_format。with-ids 保留调试 ID 并出 map；size_check 只放 --json 命令报告和 map，输出文件不包含它。
 
 ## 已经测到的效果与限制
+
+布丁页的对照表明，JSON 写法对质量的影响比底模与步数更大：独立 text 字段、合适的竖排框、完整英文人物描述和整页画风是关键。Base、SFT 都可用；SFT 偶有手部问题。草稿用 25 步，定稿用 50 步质量档；这些是用户手动出图的建议，本插件不调用模型。
 
 整页一次生成在已测样例中效果较好，短中文台词可直接由 MOSS 画；仍需看成图，不能把 validate 当作台词正确性的证明。只写 anime 会偏 3D 或半写实；如果用户想要二维，可提醒其明确线稿、平涂等画法，但不自动改前缀。
 
@@ -28,7 +30,7 @@ soda-storyboard compile my-story/pages/station-turn.json --output my-story/outpu
 soda-storyboard compile my-story/pages/station-turn.json --output my-story/output/station-turn.debug.json --slant-mode hint --with-ids --json
 ```
 
-cut 是默认：MOSS 使用不重叠的中线矩形，程序不自动添加斜边提示，出图后按 station-turn.moss.cut.json 的 quad 裁剪。hint 用最大内接矩形并提示斜线，模型可能画出来，但 phase0d 的用户反馈不如先矩形生成再裁。rect 只是外接矩形调试，会重叠，不推荐交付。
+cut 是默认：MOSS 使用不重叠的中线矩形，程序不自动添加斜边提示，出图后按 station-turn.moss.cut.json 的 quad 裁剪。hint 用最大内接矩形并提示斜线，模型可能画出来，但两条路线都有局限：实测“先生成再裁”效果也不佳，仅保留功能，不保证斜切成图质量。rect 只是外接矩形调试，会重叠，不推荐交付。
 
 把 MOSS JSON 粘进 Soda-MOSS v2 的“JSON直通”框。工作流画布必须与源页 canvas_width / canvas_height 一致，可额外用 size-check 记录核对；它不会替用户修改工作流。
 
@@ -36,6 +38,6 @@ cut 是默认：MOSS 使用不重叠的中线矩形，程序不自动添加斜�
 soda-storyboard compile my-story/pages/station-turn.json --output my-story/output/station-turn.checked.json --size-check 1024x1536 --json
 ```
 
-没有 quad 的页不会产生 cut 文件。带输出名 page.moss.json 的旁路文件是 page.moss.cut.json；不传 output 才会写到源页旁。map 与 cut 都不是粘贴给 MOSS 的提示词文件。overlays 只在源页和调试 map 中规划，透明人物图层与最终叠加留到第 3 阶段。
+没有 quad 的页不会产生 cut 文件。带输出名 page.moss.json 的旁路文件是 page.moss.cut.json；不传 output 才会写到源页旁。map 与 cut 都不是粘贴给 MOSS 的提示词文件。moss overlays 已进入 MOSS character 条目；layer overlays 只在源页和 map 规划，透明人物图层与最终叠加留到第 3 阶段。
 
 实测来源：docs/research/phase0-moss-layout.md、docs/research/phase0/T1_layout_text.json、docs/research/phase0b-two-characters.md、docs/research/phase0d/README.md。完整仓库保留这些原始记录；安装包内这份精简版可独立使用。

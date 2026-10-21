@@ -35,9 +35,10 @@ def test_compile_uses_proven_caption_contract() -> None:
     assert set(compiled["items"][0]) == {"label", "caption", "bbox"}
     assert all(type(value) is int for value in compiled["items"][0]["bbox"])
     page.panels[0].dialogue = [Dialogue(text="……是你？")]
-    assert compile_page(page)["items"][1]["caption"] == (
-        'A white vertical speech bubble with Chinese text "……是你？"'
-    )
+    text = compile_page(page)["items"][1]
+    assert "Clean vertical Chinese dialogue text in a white speech bubble" in text["caption"]
+    assert text["text"] == "……是你？"
+    assert "……是你？" not in text["caption"]
 
 
 @pytest.mark.parametrize("count", range(3, 8))
@@ -132,7 +133,7 @@ def test_shots_and_angles_are_natural_english(shot: str, angle: str) -> None:
 @pytest.mark.parametrize(
     ("bubble", "phrase"),
     [
-        ("speech", "white horizontal speech bubble"),
+        ("speech", "white speech bubble"),
         ("shout", "jagged shout bubble"),
         ("thought", "cloud-shaped thought bubble"),
         ("narration", "rectangular narration box"),
@@ -148,11 +149,13 @@ def test_bubble_caption_and_optional_ids(bubble: str, phrase: str) -> None:
     page = Page(panels=[panel], text_direction="horizontal", color_mode="color", reading_direction="ltr")
     result = compile_page(page)
     assert phrase in result["items"][1]["caption"]
-    assert 'Chinese text "你好"' in result["items"][1]["caption"]
+    assert result["items"][1]["text"] == "你好"
     assert "horizontal" in result["items"][1]["caption"]
-    assert "full-color Japanese manga page, 1 panels, read left to right" in result["summary"]["caption"]
+    assert "Japanese manga layout read left to right" in result["summary"]["caption"]
+    assert "full-color" in result["summary"]["caption"]
     assert "no text" not in result["summary"]["caption"]
-    assert all(set(item) == {"label", "caption", "bbox"} for item in result["items"])
+    assert set(result["items"][0]) == {"label", "caption", "bbox"}
+    assert set(result["items"][1]) == {"label", "caption", "text", "bbox"}
     ids = compile_page(page, with_ids=True)["items"]
     assert ids[0]["panel_id"] == "p"
     assert ids[1]["speaker_id"] == "girl"
@@ -274,11 +277,13 @@ def test_empty_dialogue_and_brief_summary() -> None:
     data = read_json(Path("examples/station/pages/station-turn.json"))
     page = Page.from_dict(copy.deepcopy(data))
     result = compile_page(page)
-    assert result["summary"]["caption"].startswith(page.style_prefix)
+    assert result["summary"]["caption"].startswith("High-taste")
+    assert page.style_prefix in result["summary"]["caption"]
     assert page.description in result["summary"]["caption"]
     assert all(p.description not in result["summary"]["caption"] for p in page.panels)
     for panel in page.panels:
         panel.dialogue = [Dialogue(text="  ")]
+        panel.sfx = []
     result = compile_page(page)
     assert result["summary"]["caption"].endswith("no text, no speech bubbles")
     assert all(item["label"] == "object" for item in result["items"])

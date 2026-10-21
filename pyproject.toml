@@ -19,7 +19,7 @@ dev = ["pytest>=8.0", "ruff>=0.9"]
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-exclude = [".uv-cache", ".venv", "docs/research"]
+exclude = [".uv-cache", ".venv", "docs/research", "docs/tasks/refs"]
 
 [tool.ruff.lint]
 select = ["ALL"]

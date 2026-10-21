@@ -12,7 +12,7 @@ description: 与用户讨论一页日漫分镜，把片段想法拆格、选择�
 - 此插件提供讨论流程，需要本机 Python 3.12+、uv 和已安装的 soda-storyboard CLI。先用 `soda-storyboard --help` 核对本机版本，涉及的子命令也先看帮助；帮助之外的执行命令都加 `--json`，读取结构化结果。
 - 如 CLI 不在 PATH，按仓库 README 的前置安装步骤告知用户，不自动安装依赖或改全局配置。若用户只运行仓库的 uv 项目环境，可用 `uv run --directory "<仓库绝对路径>" soda-storyboard` 作为命令前缀，此时所有项目、页面、参考图和输出参数用绝对路径。
 - 操作目标是用户的故事项目目录，不是安装后的插件缓存。先检查已有项目和文件，别用 init / new 覆盖它们。新项目才运行 `soda-storyboard init my-story --name "新故事" --direction rtl --json`；路径只是示例，换成实际目标。
-- 默认不联网、不调用 ComfyUI、不执行图像生成。线框 PNG 是本地几何预览；这项工作流不提交生成任务。用户拿来成图时按 [复查清单](references/review-checklist.md) 看图，不擅自改稿或宣称修图完成。
+- 默认不联网、不调用 ComfyUI、不执行图像生成。草稿 PNG 是本地 Pillow 绘制的人物和文字布局预览；这项工作流不提交生成任务。用户拿来成图时按 [复查清单](references/review-checklist.md) 看图，不擅自改稿或宣称修图完成。
 
 ## 1. 听片段并认识角色
 
@@ -29,11 +29,17 @@ soda-storyboard character set girl --project my-story --outfit "浅色校服" --
 
 页里用角色 id 引用角色卡（包括对白 speaker_id），不把整份外观或 LoRA 路径塞入每格。多人页若有多个带 LoRA 的角色，主动说明“一次只能加载一个人物 LoRA”，建议先用出场最多、画面最重要的角色，列出其他角色日后需要单独重画的格子。尽量安排单独反应格，避免两个带 LoRA 的角色同格；已有明确意图要保留，但说清接缝问题尚未解决，不保证局部重绘成功。
 
-用户没给画风时提醒一次：只写 anime 容易偏 3D 或半写实，若想要二维可参考 clean 2D cel-shaded, crisp line art。画风前缀由用户决定；没选就留空，不悄悄补上该示例，也不覆盖用户已有的前缀。
+用户没给画风时，给 2～3 段可选的英文画风描述，让用户选择后存进项目 `style_prompt`，不要擅自定画风或覆盖已有选择。例如：
+
+- 彩色厚涂插画：`Fully colored 2D anime digital painting comic, clean line art, gentle painterly highlights, warm daylight, a fresh pastel palette, expressive faces.`
+- 清爽赛璐珞：`Clean 2D Japanese anime comic, crisp ink outlines, flat cel shading, bright restrained colors, clear silhouettes and expressive eyes.`
+- 黑白网点：`Black-and-white Japanese manga, crisp ink lines, delicate screentone shading, strong black shapes, expressive faces and clean white negative space.`
+
+只写 anime 容易偏 3D。编译器在未给 style_prompt 时有按 color_mode 区分的英文兜底段落，但这不是用户已经选定的画风。用户只说中文时，由 AI 翻译补全角色 `appearance_en`、`age`、每格 `caption_en`；每格 caption_en 都写全人物外观，不能只写“同上”。tags 放项目或页面。
 
 ## 2. 提出 2～3 个拆格方案
 
-需要拆镜头时读 [漫画基础](references/manga-basics.md)。每个方案用几句话说清：几格、每格看到多近和发生什么、台词在哪格、最后停在哪个动作或表情。一次一页无需强加翻页悬念；用户做连续页时才提下一页揭示什么。
+需要拆镜头时读 [漫画基础](references/manga-basics.md)。每个方案用几句话说清：几格、每格看到多近和发生什么、台词、旁白、拟声词、标题在哪格和什么位置、最后停在哪个动作或表情。为这些文字预留空间，优先写独立 texts，原文保存在 text，caption 不重复原文。一次一页无需强加翻页悬念；用户做连续页时才提下一页揭示什么。
 
 给出取舍，例如“四格更安静，五格能多停一拍”。对白尽量一句 20 字内，解释“MOSS 画长句容易错字”；保留用户原话，缩写需要征得同意。
 
@@ -64,6 +70,10 @@ soda-storyboard layout suggest --page my-story/pages/station-turn.json --pick he
 
 用候选返回的真实 id，别照抄示例。写回后按 [assets/storyboard-v1.schema.json](assets/storyboard-v1.schema.json) 和 [文件格式](references/storyboard-format.md) 填入每格的景别、角度、角色、画面、台词。保留无关字段、既有 id、数组顺序和用户设定。需要手法时查 [表现手法](references/expression-catalog.md)。角色外观来自角色卡，不重新发明。
 
+每格补上 `figures`：谁（character_id）、姿势（pose）、站位（position）、朝向（facing），framing 可留空让景别推断。人物取景的大小由 framing 决定。草稿会显示圆头十字线、身体四肢和角色名；矩形与斜切格都会裁住人物。用 `texts` 给对白、旁白、拟声词、标题单独定位，bbox 是左上角原点像素 x/y/w/h，竖排要留竖长框，长句按默认 10 字换列。草稿稳定使用青色格子与格内人物、红色跨格人物和标题框、绿色文字框，并直接写出原文。
+
+跨格主角和出格只是可选手法。只在人物登场、情绪高潮或需要强调某人时提议，并解释这一页为什么需要；日常对话和动作戏默认普通格子，绝不每页都塞主角大图。确需 MOSS 直接画跨格人物时，新增 overlay 必须显式写 `mode: "moss"`；要留给第 3 阶段抠图叠加时用 `mode: "layer"`。旧文件缺 mode 继续按 layer 解释。
+
 ```shell
 soda-storyboard validate my-story/pages/station-turn.json --json
 soda-storyboard preview my-story/pages/station-turn.json --output my-story/previews/station-turn.png --json
@@ -75,7 +85,7 @@ soda-storyboard preview my-story/pages/station-turn.json --output my-story/previ
 
 ## 5. 逐格修改，等待整页确认
 
-用户说“第 3 格从背后看”，按 order=3 找格子，不按数组索引猜。只改这一格的画面描述；背面、过肩、视线方向写进 description，angle 只能使用已有枚举（例如 eye / high / low），不要发明 back。除非用户要求改变几何，别重新运行布局写回而改动全页。再次 validate、preview，并核对其余格子及 overlays 未变。
+用户说“让她坐下”“换到左边”时，按角色 id 找到目标格内的 figure，只改该人物的 pose 或 position，保留其他人物、texts 和格子几何，重新 validate、preview 并展示。用户说“第 3 格从背后看”，按 order=3 找格子，不按数组索引猜。只改这一格的画面描述和目标 figure 的 facing；背面、过肩、视线方向写进 description，angle 只能使用已有枚举（例如 eye / high / low），不要发明 back。除非用户要求改变几何，别重新运行布局写回而改动全页。再次 validate、preview，并核对其余格子及 overlays 未变。
 
 **必须停下来等用户确认 ③：用户没有明确表示整页满意之前，不能 compile。** 让用户看到最后一版预览后确认；更改剧情、台词、版式后，旧版本的确认不自动算作新版本确认。已明确确认当前版本就继续，不重复索要许可。
 
@@ -88,7 +98,9 @@ soda-storyboard validate my-story/pages/station-turn.json --json
 soda-storyboard compile my-story/pages/station-turn.json --output my-story/output/station-turn.moss.json --slant-mode cut --json
 ```
 
-交付页文件、线框和 MOSS JSON 的绝对路径。简短提醒：把 JSON 粘进 Soda-MOSS v2 的“JSON直通”框，工作流画布尺寸要与页面一致；斜切页的 `station-turn.moss.cut.json` 用于出图后按 quad 裁剪，第 3 阶段才会自动化；目前不要称已经裁剪。overlays 只是规划数据，不进入 MOSS，透明人物图层也留待后续生成与叠加。
+交付页文件、线框和 MOSS JSON 的绝对路径。简短提醒：把 JSON 粘进 Soda-MOSS v2 的“JSON直通”框，工作流画布尺寸要与页面一致；斜切页的 `station-turn.moss.cut.json` 用于出图后按 quad 裁剪，第 3 阶段才会自动化；目前不要称已经裁剪。moss 模式 overlays 编译成 character 条目，交给 MOSS 直接画跨格人物；layer 模式仍是规划数据，透明人物图层留待后续生成与叠加。
+
+preview 默认给带火柴人草稿；仅要旧纯框线版时用 `--style boxes`。尺寸核对只出现在 --json 命令报告或 --with-ids 的 map，不写进 --output 的 MOSS JSON，交付应使用输出文件。
 
 生产输出不要加 --with-ids。如用户要调试映射，可单独生成带 ids 的调试输出和 map，别覆盖已交付的干净 MOSS JSON。把多 LoRA 的主角色、需单独处理的格子一并说明，不替用户加载模型。
 
