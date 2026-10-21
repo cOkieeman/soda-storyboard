@@ -40,4 +40,4 @@ soda-storyboard compile my-story/pages/station-turn.json --output my-story/outpu
 
 没有 quad 的页不会产生 cut 文件。带输出名 page.moss.json 的旁路文件是 page.moss.cut.json；不传 output 才会写到源页旁。map 与 cut 都不是粘贴给 MOSS 的提示词文件。moss overlays 已进入 MOSS character 条目；layer overlays 只在源页和 map 规划，透明人物图层与最终叠加留到第 3 阶段。
 
-实测来源：docs/research/phase0-moss-layout.md、docs/research/phase0/T1_layout_text.json、docs/research/phase0b-two-characters.md、docs/research/phase0d/README.md。完整仓库保留这些原始记录；安装包内这份精简版可独立使用。
+以上结论来自作者在本机 ComfyUI 上的实测，只代表测试时的模型和参数，不保证所有情况。

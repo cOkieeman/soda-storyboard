@@ -132,7 +132,7 @@ def test_pudding_matches_reference_contract() -> None:
     characters = load_characters("examples/pudding/characters")
     assert validate_page(page, characters).valid
     result = compile_page(page, characters)
-    reference = read_json("docs/tasks/refs/example-style/pudding-example-style.moss.json")
+    reference = read_json("tests/fixtures/pudding-example-style.moss.json")
     assert set(result) == {"summary", "items", "bbox_coord_space", "bbox_format"}
     assert result["summary"]["caption"].startswith(page.style_prompt)
     assert result["summary"]["meta"] == reference["summary"]["meta"]

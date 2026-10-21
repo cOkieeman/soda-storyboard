@@ -56,7 +56,7 @@ def test_minimal_graph(preset: str, lora: dict | None, mode: str) -> None:
 @pytest.mark.parametrize("preset", ["draft", "final"])
 @pytest.mark.parametrize("lora", [None, {"path": "one.safetensors", "strength": 0.7}])
 def test_v2_adaptation_from_actual_reference(preset: str, lora: dict | None) -> None:
-    workflow = json.loads((ROOT / "docs/tasks/refs/soda-moss-v2-json-api.json").read_text(encoding="utf-8"))
+    workflow = json.loads((ROOT / "examples/comfyui/soda-moss-v2-json-api.json").read_text(encoding="utf-8"))
     original = copy.deepcopy(workflow)
     workflow["301"]["inputs"]["loras"] = {"__value__": ["unexpected character"]}
     graph = v2_graph(

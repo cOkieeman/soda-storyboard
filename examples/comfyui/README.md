@@ -1,6 +1,6 @@
-# 参考资料：Soda-MOSS v2 API 工作流
+# 示例：Soda-MOSS v2 API 工作流
 
-`soda-moss-v2-json-api.json`：Soda-MOSS v2 在「JSON直通」模式下导出的 ComfyUI API 格式（98 个节点，2026-10-20 由 Claude 从 `Soda-MOSS-v2.json` 生成）。
+`soda-moss-v2-json-api.json`：Soda-MOSS v2 在「JSON直通」模式下导出的 ComfyUI API 格式（98 个节点）。需要作者 ComfyUI 里安装的同一批自定义节点，主要作为 `comfy config --backend v2` 的格式参考。
 状态：质量档（Turbo 关，50 步 / Euler / CFG3 / SLG22），SFT INT8，1024×1536，高清二采关，后处理只开 C（SeedVR2 4K）。
 
 ## 程序要改的节点
@@ -19,7 +19,7 @@
 
 LoRA Manager 的堆叠节点（`301`/`302`/`303`/`77`）在 API 里的 `loras` 字段格式不稳定，不建议程序去填。
 建议程序新增一个 `LoraLoaderModelOnly` 节点（自定义 id，例如 `sb_lora_1`）：输入接 `["135:610", 0]`，再把 `77.inputs.model` 改接到它。
-**一次只加载一个人物 LoRA**（第 0 阶段实测：两个人物 LoRA 同时加载会互相吞掉）。
+**一次只加载一个人物 LoRA**（实测两个人物 LoRA 同时加载会互相吞掉）。
 
 ## 关掉 C（SeedVR2 超分）
 
@@ -28,7 +28,7 @@ LoRA Manager 的堆叠节点（`301`/`302`/`303`/`77`）在 API 里的 `loras` �
 
 ## 单格重画（图生图）
 
-不用 v2，直接用最小节点图，参考 `docs/research/phase0/phase0.py` 的 `redraw()`：
+不用 v2，直接用最小节点图，即 `soda_storyboard.production.graphs` 里的 i2i 图：
 `UNETLoader → (LoraLoaderModelOnly) → ModelSamplingAuraFlow(shift 5)`，`CLIPLoader(type=moss_image)`，`VAELoader(flux2-vae)`，
 `LoadImage → ImageScale → VAEEncode → KSampler(denoise 0.45) → VAEDecode → SaveImage`。
-图片先用 `POST /upload/image`（multipart，字段 `image`）上传。局部重绘版本（遮罩）见 `docs/research/phase0b-two-characters.md`（测试完成后补）。
+图片先用 `POST /upload/image`（multipart，字段 `image`）上传。局部重绘再加 `SetLatentNoiseMask`（遮罩取 `LoadImage` 的 alpha），见同一模块的 inpaint 图。

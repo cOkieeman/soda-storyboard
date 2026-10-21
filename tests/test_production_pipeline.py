@@ -153,7 +153,7 @@ def test_config_and_check_missing_nodes_models_and_unreachable(
 def test_v2_end_to_end_and_model_roundtrips(project: Path) -> None:
     with FakeComfy() as fake:
         connect(project, fake)
-        configure(project, backend="v2", workflow=str(ROOT / "docs/tasks/refs/soda-moss-v2-json-api.json"))
+        configure(project, backend="v2", workflow=str(ROOT / "examples/comfyui/soda-moss-v2-json-api.json"))
         generated = api.generate_page(project, "pudding", seeds=1, preset="final")
         assert "620" in fake.prompts[0]
         assert "subfolder=v2" in fake.views[0]

@@ -250,7 +250,7 @@ uv run soda-storyboard comfy check --project my-story --json
 | draft | 25 | er_sde / simple | 2.5 | 无 | 每张约 40 秒 |
 | final | 50 | euler / simple | 3 | single_layers=22 | 每张约 80 秒 |
 
-默认 minimal 使用最小节点图。可选 v2 后端通过 `comfy config --backend v2 --workflow` 导入用户指定的 API JSON：程序填入布局、尺寸、种子、模型、质量参数和输出路径，插入单个 LoRA，清空原人物堆叠并关闭 SeedVR2。导入的是 API 格式，不是前端画布格式；参考节点表在 `docs/tasks/refs/README.md`。单格重画始终使用 minimal。
+默认 minimal 使用最小节点图。可选 v2 后端通过 `comfy config --backend v2 --workflow` 导入用户指定的 API JSON：程序填入布局、尺寸、种子、模型、质量参数和输出路径，插入单个 LoRA，清空原人物堆叠并关闭 SeedVR2。导入的是 API 格式，不是前端画布格式；参考节点表和示例 API 工作流在 `examples/comfyui/`。单格重画始终使用 minimal。
 
 ```shell
 uv run soda-storyboard comfy config --project my-story --backend v2 --workflow workflows/soda-moss-api.json --json
@@ -305,7 +305,7 @@ uv run soda-storyboard layout suggest --panels 5 --templates my-story/templates 
 
 嵌入格和相互重叠的格子可提取并保存几何；现有 `layout suggest` 的无重叠检查仍会拒绝这类模板，需先手动调整为不重叠的版式再复用。
 
-适用于以矩形为主、仍有直线格框或浅色留白证据的漫画页。无框自由构图、严重重叠、复杂背景中的矩形、明显透视、大角度旋转，以及缩小后不足一像素或几乎与纸色相同的细框仍可能漏检或误检。嵌入小格与矩形文字框按内部是否主要为纸白区分，因此大片空白的黑白嵌入格可能漏检，带底色的矩形文字框可能误检。生成示例新增 `dense-narrow`、`cross-frame`、`pale-occluded` 和 `inset`，涵盖画满边缘、窄缝、浅色框、人物／气泡跨格和格中格；真实样本只从本地忽略目录 `docs/tasks/refs/extract-samples/` 读取，缺少样本时对应测试跳过，不复制或分发原图。
+适用于以矩形为主、仍有直线格框或浅色留白证据的漫画页。无框自由构图、严重重叠、复杂背景中的矩形、明显透视、大角度旋转，以及缩小后不足一像素或几乎与纸色相同的细框仍可能漏检或误检。嵌入小格与矩形文字框按内部是否主要为纸白区分，因此大片空白的黑白嵌入格可能漏检，带底色的矩形文字框可能误检。生成示例新增 `dense-narrow`、`cross-frame`、`pale-occluded` 和 `inset`，涵盖画满边缘、窄缝、浅色框、人物／气泡跨格和格中格；真实样本测试只在设置环境变量 `SODA_EXTRACT_SAMPLES`（指向本地样本目录）时运行，否则跳过；仓库不包含也不分发任何真实漫画图片。
 
 角色卡可选 `role_en`（CLI `character new/set --role-en "the older sister"`），文字 caption 优先用它，否则用 display_name。程序排字和草稿图共用竖排标点与均衡分列，显式换行保留；连续英文和数字整体缩放横排，两位数字占一个竖中横排单元。`.cut.json` 的像素坐标四舍五入到整数。
 

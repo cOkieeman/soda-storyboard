@@ -1,4 +1,4 @@
-"""Local-only artwork stays in the ignored reference directory, never in fixtures.
+"""Optional real-page checks; artwork is never distributed. Set SODA_EXTRACT_SAMPLES to a local folder.
 
 Boxes were annotated by looking at the source pages, in page-relative coordinates.
 Occluded sides are the intended frame extent, not the foreground silhouette.
@@ -6,6 +6,7 @@ Occluded sides are the intended frame extent, not the foreground silhouette.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,8 @@ import pytest
 from soda_storyboard.extract import extract_layout
 from soda_storyboard.geometry import shape_bbox
 
-REFERENCES = Path(__file__).resolve().parents[1] / "docs/tasks/refs/extract-samples"
+_SAMPLES = os.environ.get("SODA_EXTRACT_SAMPLES")
+REFERENCES = Path(_SAMPLES) if _SAMPLES else None
 # Annotation order is Japanese reading order, including the tall spanning panels.
 ANNOTATIONS = {
     "s1_pudding_color.png": [
@@ -64,6 +66,8 @@ def intersection_over_union(a: tuple[float, ...], b: tuple[float, ...]) -> float
 
 @pytest.mark.parametrize("name", ANNOTATIONS)
 def test_real_page_geometry(name: str) -> None:
+    if REFERENCES is None or not (REFERENCES / name).is_file():
+        pytest.skip("Optional local reference artwork is not distributed")
     path = REFERENCES / name
     if not path.is_file():
         pytest.skip("Optional local reference artwork is not distributed")

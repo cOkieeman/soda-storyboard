@@ -2,7 +2,7 @@ soda-storyboard contains a Python port of all 14 recipes from manga-blueprint-st
 Upstream files: layout-recipes.mjs (recipe metadata, row weights, width biases,
 hero placement and geometry); layout-solver.mjs (reference for candidate affinity
 without rearranging reading order); layout-modifiers.mjs (reference only).
-Local source snapshots: docs/tasks/refs/manga-blueprint-studio/.
+Upstream repository: https://github.com/c-a-p-engineer/manga-blueprint-studio (core/ and docs/ at the 2026-10 master).
 Implementation: src/soda_storyboard/templates.py and recipes.json.
 
 Changes: Chinese names/help, configurable gutters, LTR mirroring, explicit order,
@@ -14,12 +14,10 @@ original Python implementations. No OpenKoma source code has been copied.
 No kumiko AGPL code is included. Full upstream MIT license follows.
 
 The Chinese knowledge notes in skill/skills/soda-storyboard/references/ are
-concise adaptations and synthesis from the local MIT source documents:
-docs/tasks/refs/manga-blueprint-studio/MANGA-KNOWLEDGE.md,
-docs/tasks/refs/manga-blueprint-studio/MANGA-TECHNIQUES.md,
-docs/tasks/refs/manga-blueprint-studio/PANEL-LAYOUT-GRAMMAR-2026-09-12.md,
-docs/tasks/refs/manga-blueprint-studio/MANGA-EXPRESSION-CATALOG.md.
-MOSS-specific notes summarize this repository's phase0/phase0b/phase0d research;
+concise adaptations and synthesis from the upstream MIT documents
+docs/MANGA-KNOWLEDGE.md, docs/MANGA-TECHNIQUES.md,
+docs/PANEL-LAYOUT-GRAMMAR-2026-09-12.md and docs/MANGA-EXPRESSION-CATALOG.md.
+MOSS-specific notes summarize the author's own generation tests;
 they are not guarantees of image-generation quality. The plugin package carries
 the same NOTICE and upstream MIT text for distribution.
 
