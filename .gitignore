@@ -8,3 +8,7 @@ dist/
 build/
 *.egg-info/
 *.png
+
+# editor (Node)
+editor/node_modules/
+*.tsbuildinfo

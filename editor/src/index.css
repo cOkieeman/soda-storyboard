@@ -1,0 +1,256 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #171815;
+  --paper: #ece8dc;
+  --paper-deep: #d8d1bf;
+  --paper-lift: #fbf6ec;
+  --paper-surface: #f4eddf;
+  --paper-wash: #e2dccd;
+  --signal: #9a321f;
+  --acid: #d7e455;
+  --muted: #5b5a53;
+  --line: rgba(23, 24, 21, 0.19);
+  --rule: #bcb4a3;
+  --on-ink-muted: #c8c0b2;
+  --on-ink-faint: #aaa99f;
+  --ink-lift: #20211e;
+  --ink-line: #35342f;
+  --signal-deep: #8a3328;
+  --signal-wash: #f4ddd3;
+  --scrim: rgba(20, 20, 17, 0.72);
+  --shadow: 0 22px 55px rgba(29, 27, 20, 0.14);
+
+  --font-sans: "Avenir Next", "Helvetica Neue", "PingFang SC", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-serif: "Iowan Old Style", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  --font-mono: Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace;
+
+  --motion-press: 90ms;
+  --motion-fast: 140ms;
+  --motion-ease-out: cubic-bezier(0.2, 0.75, 0.2, 1);
+
+  /* OpenKoma theme overrides -> Soda Prompt Hub */
+  --text-primary: var(--ink);
+  --text-secondary: var(--muted);
+  --bg-0: var(--paper-wash);
+  --bg-1: var(--paper-surface);
+  --bg-2: var(--paper-lift);
+  --panel-0: var(--paper-surface);
+  --panel-1: var(--paper-lift);
+  --line-soft: var(--line);
+  --line-strong: var(--rule);
+  --accent: var(--signal);
+  --accent-strong: var(--signal-deep);
+  --accent-soft: var(--signal-wash);
+  --danger: var(--signal);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--paper-wash);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hub Texture */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.25'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  z-index: 999;
+}
+
+/* Enforce straight corners */
+button, input, select, textarea, div {
+  border-radius: 0 !important;
+}
+
+/* Soda Prompt Hub UI Buttons */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid var(--ink);
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--ink);
+  font: 800 11px/1.2 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease, background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.ui-btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.ui-btn:active:not(:disabled) {
+  transform: translate(0, 0);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.ui-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ui-btn-primary {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--paper-lift);
+}
+
+.ui-btn-primary:hover:not(:disabled) {
+  background: var(--signal-deep);
+  border-color: var(--signal-deep);
+}
+
+.ui-btn-ink {
+  background: var(--ink);
+  color: var(--paper-surface);
+  border-color: var(--ink);
+}
+
+.ui-btn-acid {
+  background: var(--acid);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.ui-btn-ghost {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.ui-btn-ghost:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.ui-btn-sm {
+  min-height: 24px;
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+/* Hub Form Inputs */
+.ui-input, .ui-select, .ui-textarea {
+  width: 100%;
+  border: 1px solid var(--rule);
+  background: var(--paper-lift);
+  color: var(--ink);
+  padding: 7px 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+
+.ui-input:focus, .ui-select:focus, .ui-textarea:focus {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 1px var(--signal);
+}
+
+.ui-label {
+  display: block;
+  font: 700 11px var(--font-mono);
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+/* Notice box */
+.ui-notice-box {
+  padding: 10px 14px;
+  background: var(--paper-surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--signal);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ui-notice-acid {
+  border-left-color: var(--acid);
+}
+
+/* OpenKoma Compatibility Classes mapped to Hub */
+.studio-surface {
+  background: var(--paper-surface);
+  border: 1px solid var(--line);
+}
+
+.studio-subtle {
+  background: var(--paper-lift);
+  border: 1px solid var(--line);
+}
+
+.studio-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  background: var(--paper-lift);
+  color: var(--muted);
+  font: 700 11px var(--font-mono);
+}
+
+.studio-btn {
+  @apply ui-btn;
+}
+
+.studio-btn-primary {
+  @apply ui-btn-primary;
+}
+
+.studio-btn-danger {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.studio-input, .studio-select {
+  @apply ui-input;
+}
+
+.studio-textarea {
+  @apply ui-textarea;
+}
+
+/* Canvas Paper in Workspace */
+.canvas-page-paper {
+  background: #ffffff;
+  box-shadow: 0 12px 36px rgba(23, 24, 21, 0.16);
+  border: 1px solid rgba(23, 24, 21, 0.12);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--paper-wash);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--rule);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}

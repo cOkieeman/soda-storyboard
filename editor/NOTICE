@@ -1,0 +1,19 @@
+Soda Storyboard Editor
+Copyright (c) 2026 Soda Storyboard Contributors
+
+This product includes software developed as part of OpenKoma
+(https://github.com/Reuben-Sun/OpenKoma), licensed under the Apache License 2.0.
+
+Fork details:
+- Source: OpenKoma (commit aa8dbf3)
+- License: Apache License 2.0 (see LICENSE)
+
+Major modifications for Soda Storyboard:
+1. Integrated with Soda Storyboard backend API (REST + SSE) for manga storyboard management.
+2. Replaced OpenKoma theme with Soda Prompt Hub editorial aesthetic (CSS variables, industrial typography, sharp edges).
+3. Added support for Soda Storyboard data schema: Panel (rect/quad), Text (dialogue/narration/sfx/title), Overlay, Figure.
+4. Added Page list sidebar with sketch draft previews and character cards.
+5. Added Layout suggestion and application modal (layout-suggest, layout-apply, skew).
+6. Added Render candidate bar with image picking and background image overlay layer.
+7. Added ETag concurrency control (If-Match) with 409 conflict resolution and 422 validation issue displays.
+8. Added real-time sync with backend Server-Sent Events (/api/events) and async job queue tracking (/api/jobs/{id}).
