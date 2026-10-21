@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import replace
 from math import ceil
@@ -54,12 +55,51 @@ def text_lines(text: str, limit: int) -> list[str]:
     ]
 
 
+# Unicode vertical presentation forms keep punctuation upright in both renderers.
+VERTICAL_FORMS = str.maketrans("…—，。！？「」『』（）：；", "︙︱︐︒︕︖﹁﹂﹃﹄︵︶︓︔")  # noqa: RUF001 -- source punctuation
+BREAK_AFTER = frozenset("︐︒︕︖﹂﹄︶︓︔")
+
+
+def vertical_columns(text: str, limit: int) -> list[list[str]]:
+    """Balance each explicit column; ASCII runs occupy one horizontal cell."""
+    result = []
+    limit = max(1, limit)
+    for line in text.translate(VERTICAL_FORMS).split("\n"):
+        cells = re.findall(r"[A-Za-z0-9]+|[^A-Za-z0-9]", line)
+        count = max(1, ceil(len(cells) / limit))
+        target = len(cells) / count
+        # Dynamic programming balances columns while preferring punctuation breaks.
+        states: dict[int, tuple[float, list[list[str]]]] = {0: (0, [])}
+        for column in range(count):
+            following: dict[int, tuple[float, list[list[str]]]] = {}
+            for start, (cost, parts) in states.items():
+                for end in range(start + 1, min(len(cells), start + limit) + 1):
+                    remaining = len(cells) - end
+                    if not count - column - 1 <= remaining <= (count - column - 1) * limit:
+                        continue
+                    penalty = (end - start - target) ** 2
+                    if end < len(cells):
+                        penalty += 0 if cells[end - 1] in BREAK_AFTER else 2
+                        penalty += 4 if cells[end] in BREAK_AFTER else 0
+                    score = cost + penalty
+                    if end not in following or score < following[end][0]:
+                        following[end] = (score, [*parts, cells[start:end]])
+            states = following
+        result.extend(states[len(cells)][1] if cells else [[]])
+    return result
+
+
 def estimate_text_size(text: Text, page: Page) -> tuple[float, float]:
     size = max(1, page.text_font_size) * page.canvas_width / 1024
-    lines = text_lines(text.text, page.text_max_chars)
+    vertical = (text.direction or page.text_direction) == "vertical"
+    lines = (
+        vertical_columns(text.text, page.text_max_chars)
+        if vertical
+        else text_lines(text.text, page.text_max_chars)
+    )
     cross = len(lines) * size * 1.3
     along = max(1, *map(len, lines)) * size * 1.15
-    return (cross, along) if (text.direction or page.text_direction) == "vertical" else (along, cross)
+    return (cross, along) if vertical else (along, cross)
 
 
 def layout_texts(page: Page) -> list[Text]:

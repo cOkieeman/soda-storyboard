@@ -3197,3 +3197,13 @@ Vary: Origin
 | 任务 | GET /api/jobs/{id}；POST /api/jobs/{id}/cancel |
 | 推送 | GET /api/events：ready、resync、file_changed、job |
 | 跨域 | OPTIONS；仅允许两种 Vite 来源及同源 |
+
+## 14. 参考页版式提取（P5 新增）
+
+`POST /api/layout-extract`：发送 `multipart/form-data`，必需字段 `image`（PNG/JPG/WebP 文件），可选文本字段 `direction`（rtl/ltr，默认 rtl）。请求必须带 Content-Length，总体不超过 16 MiB，图片不超过 3200 万像素。沿用本地 Host/Origin 校验，不调用外部服务。
+
+200 返回 `{extraction_id, source_image, canvas:[width,height], direction, panel_count, threshold, panels, preview_url}`。每个 panel 为 `{order, shape, normalized, confidence}`；shape 为原图像素 rect `{type,x,y,w,h}` 或 quad `{type,points:[[x,y],...]}`，normalized 为同格式的 0～1 坐标。数字按阅读顺序编号；预览以绿色实线画可靠格框、橙色虚线画低置信度格框。用 GET preview_url 获取 PNG；URL 是本地 `/api/files/.server/extractions/<id>.png`。EXIF 方向会应用到坐标和预览。
+
+`POST /api/templates`：发送 JSON `{ "extraction_id": "<提取返回的id>", "name": "可选模板名" }`；name 若提供须为 1～120 字符。201 返回 `{template, path}`，path 是项目内 `templates/<新id>.json`。模板只保存归一化格子几何、来源文件名、UTC extracted_at、格数和阅读方向，source=reference、source_label=“来自参考页”；不复制上传原图。每次保存产生新 id。缺图/非法输入/空格子结果为 400，未找到 extraction_id 为 404。先展示预览供用户确认，再调用保存接口。
+
+上传原始字节只在内存使用；`.server/extractions/` 缓存叠加预览（含参考页画面）和几何结果，重启后 extraction_id 仍可使用。不再需要参考预览时可在服务停止后删除该缓存目录；已保存的 templates 不受影响。前端暂不接入这两个接口。

@@ -146,3 +146,9 @@ soda-storyboard export my-story --format pdf --json
 最终交付成品图和导出文件绝对路径；说明仍未选择的重画或未处理的图层。export 按页序取 lettered、composed、选定底图中有效的最高阶段；换底图或换格子后需要重新 compose / letter，不将旧派生图当成新成品。
 
 完整对话见 [车站示例](../../examples/station-dialogue.md)。
+
+## 从喜欢的漫画页提取分格
+
+用户说“照这一页的分格来”并给出图片路径时，先用 `layout extract "<图片绝对路径>" --direction rtl --preview "<叠加图绝对路径>" --json` 识别（同样先核对子命令帮助）。给用户看返回的叠加预览，解释数字是阅读顺序、橙色虚线是不确定格框；取得用户对格子和顺序的确认后，再运行 `layout extract "<图片绝对路径>" --name "<模板名>" --save --project "<项目绝对路径>" --json`。提醒用户模板只保存格子形状、来源文件名和识别日期，不保存原图；不要另行把参考页复制进项目。
+
+保存后用 `layout suggest --panels <识别格数> --templates "<项目绝对路径>/templates" --pick <保存模板中的id> --json` 获取几何，再按既有流程用于拆格。候选标明“来自参考页”。用户画日漫时默认 rtl；用户明确要西式顺序时使用 ltr。识别结果必须核对，不把低置信度结果当成精确描摹；无框或复杂页面可请用户调整源分格。

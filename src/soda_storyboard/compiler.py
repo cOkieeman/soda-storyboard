@@ -108,12 +108,14 @@ def compile_geometry_map(
         entry = {
             "panel_id": panel.id,
             "order": panel.order,
-            "shape": shape_to_dict(panel.shape),
-            "generation_rect": dict(zip(("x", "y", "x2", "y2"), shape_bbox(region), strict=True)),
+            "shape": _pixel_shape(shape_to_dict(panel.shape)),
+            "generation_rect": dict(
+                zip(("x", "y", "x2", "y2"), (floor(v + 0.5) for v in shape_bbox(region)), strict=True)
+            ),
             "bbox": _integer_bbox(region, page, inward=slant_mode == "hint"),
         }
         if panel.shape_type == "quad":
-            entry["quad"] = shape_to_dict(panel.shape)["points"]
+            entry["quad"] = _pixel_shape(shape_to_dict(panel.shape))["points"]
         panels.append(entry)
     _validate_cut_regions(page, slant_mode, [entry["bbox"] for entry in panels])
     return {
@@ -124,9 +126,25 @@ def compile_geometry_map(
         "bbox_coord_space": "abs_centralized",
         "bbox_format": "yxyx",
         "panels": panels,
-        "overlays": [overlay.to_dict() for overlay in page.overlays],
-        "texts": [text.to_dict() for text in layout_texts(page)],
+        "overlays": [_pixel_entry(overlay.to_dict()) for overlay in page.overlays],
+        "texts": [_pixel_entry(text.to_dict()) for text in layout_texts(page)],
         **({"size_check": size_check_report(page, size_check)} if size_check is not None else {}),
+    }
+
+
+def _pixel_shape(shape: dict[str, Any]) -> dict[str, Any]:
+    if shape.get("type") == "quad":
+        return {**shape, "points": [[floor(v + 0.5) for v in point] for point in shape["points"]]}
+    return {
+        key: floor(value + 0.5) if key in {"x", "y", "w", "h", "width", "height"} else value
+        for key, value in shape.items()
+    }
+
+
+def _pixel_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: _pixel_shape(value) if key in {"bbox", "rect"} and isinstance(value, dict) else value
+        for key, value in entry.items()
     }
 
 
@@ -174,7 +192,8 @@ def _text_caption(text: Text, page: Page, characters: Mapping[str, Character]) -
     if panel:
         caption += f" in the {panel_location(panel, page).lower()}"
     if text.speaker_id:
-        caption += f" next to {character_caption(text.speaker_id, characters)}"
+        speaker = characters.get(text.speaker_id)
+        caption += f" next to {(speaker.role_en or speaker.display_name) if speaker else text.speaker_id}"
     if text.style_hint:
         caption += f", {text.style_hint}"
     return caption + "."

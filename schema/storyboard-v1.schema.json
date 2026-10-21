@@ -501,6 +501,13 @@
             "string",
             "null"
           ]
+        },
+        "role_en": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional short English speaker name or role; preferred over display_name in text captions."
         }
       },
       "additionalProperties": true

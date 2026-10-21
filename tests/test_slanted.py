@@ -156,7 +156,9 @@ def test_cut_and_rect_compilation_and_sidecar_geometry() -> None:
     debug = compile_page(page, slant_mode="rect")
     assert debug["items"][0]["bbox"][1] < cut["items"][0]["bbox"][1]
     mapping = compile_geometry_map(page)
-    assert mapping["panels"][0]["quad"] == page.panels[0].shape["points"]
+    assert mapping["panels"][0]["quad"] == [
+        [int(v + 0.5) for v in point] for point in page.panels[0].shape["points"]
+    ]
     assert [p["bbox"] for p in mapping["panels"]] == [item["bbox"] for item in cut["items"]]
     assert mapping["overlays"] == [o.to_dict() for o in page.overlays]
     assert page.to_dict() == before

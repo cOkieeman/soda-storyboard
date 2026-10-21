@@ -293,6 +293,22 @@ uv run soda-storyboard export my-story --format pdf --json
 
 所有生成命令先在 stderr 说明数量和参考耗时，`--json` 的 stdout 仅含结构化结果；超时提示任务号，服务端任务可能仍在运行，不自动重提。公共接口在 `production/api.py`，不打印、不读取 CLI 参数，可供 P4a 调用。开发测试使用标准库假服务器，不连接真实 ComfyUI，也不占用显卡；真实模型质量、显存及自定义抠图节点兼容性需在用户机器验收。
 
+## 从参考页提取版式
+
+```shell
+uv run soda-storyboard layout extract reference.png --direction rtl --preview reference-overlay.png --json
+uv run soda-storyboard layout extract reference.png --name "喜欢的分格" --save --project my-story --json
+uv run soda-storyboard layout suggest --panels 5 --templates my-story/templates --json
+```
+
+默认只识别，预览写在原图旁的 `<文件名>.layout-preview.png`；支持 PNG / JPG / WebP，默认日漫从右往左，`--direction ltr` 改为从左往右。结果的 `shape` 是原图像素坐标，`normalized` 是 0～1 坐标，另含阅读顺序、形状和 confidence。预览里绿色实线表示可靠格框，橙色虚线表示低置信度，数字表示阅读顺序。先看叠加图确认，再用 `--save` 保存。
+
+模板写入 `<项目>/templates/`，只包含几何、原图文件名、UTC 识别日期和格数，**不复制原图**。每次保存创建新模板，不覆盖已有模板。`layout suggest --templates` 会优先展示标有“来自参考页”的候选，也可用返回的 template_id 配合 `--pick` 选择。模板的阅读方向会随目标页方向调整；矩形和四边形都会按目标 gap 向内缩进。合成测试页和叠加图见 `examples/layout-extract/`，可用 `uv run python examples/layout-extract/generate_samples.py` 重建。
+
+算法只使用 Pillow 和标准库：缩到长边最多 800 像素、中值去噪、自动灰度阈值、留白投影递归 XY 切分、连通格框凸包及四角直边拟合。排除面积小于 1.5% 的区域和圆形/嵌套气泡；不可靠的近似格框退回矩形并降低置信度。适合具有可见格框和留白的页面；无框、严重破损/重叠格框、跨格插画、复杂标题装饰、明显透视和大角度旋转可能漏检或误检，需要人工确认。单图上限 3200 万像素。
+
+角色卡可选 `role_en`（CLI `character new/set --role-en "the older sister"`），文字 caption 优先用它，否则用 display_name。程序排字和草稿图共用竖排标点与均衡分列，显式换行保留；连续英文和数字整体缩放横排，两位数字占一个竖中横排单元。`.cut.json` 的像素坐标四舍五入到整数。
+
 ## 开发检查
 
 ```bash

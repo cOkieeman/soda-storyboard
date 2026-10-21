@@ -37,7 +37,8 @@ def _emit(value: Any, as_json: bool) -> None:
         print(f"已生成 MOSS 布局：{len(value['items'])} 个条目")
     elif isinstance(value, list):
         for item in value:
-            print(f"{item.get('template_id', item.get('id', ''))}: {item.get('name', '')}")
+            source = " [来自参考页]" if item.get("source") == "reference" else ""
+            print(f"{item.get('template_id', item.get('id', ''))}: {item.get('name', '')}{source}")
     else:
         print(value)
 
@@ -120,6 +121,7 @@ def command_character_new(args: argparse.Namespace) -> int:
         trigger_words=args.trigger or [],
         appearance_zh=args.appearance_zh,
         appearance_en=args.appearance_en,
+        role_en=args.role_en,
         lora=_character_lora(args, None),
         clothing=args.outfit or [],
         reference_images=args.reference or [],
@@ -189,6 +191,7 @@ def _patch_character(payload: dict[str, Any], args: argparse.Namespace) -> dict[
     updated = deepcopy(payload)
     for option, keys in (
         ("name", ("display_name", "name")),
+        ("role_en", ("role_en",)),
         ("trigger", ("trigger_words", "triggers")),
         ("outfit", ("clothing",)),
         ("reference", ("reference_images", "references")),
@@ -235,6 +238,7 @@ def _character_options(parser: argparse.ArgumentParser, *, editing: bool = False
     parser.add_argument("--trigger", action="append")
     parser.add_argument("--appearance-zh", default=None if editing else "")
     parser.add_argument("--appearance-en", default=None if editing else "")
+    parser.add_argument("--role-en", help="英文简短称呼，例如 the older sister")
     parser.add_argument("--lora", help="LoRA 文件路径；只记录用户给出的路径，不搜索磁盘")
     parser.add_argument("--lora-strength", type=float, help="LoRA 强度；新建 LoRA 默认 0.8")
     parser.add_argument("--outfit", action="append", help="服装描述；可重复；set 时替换整个服装列表")
@@ -341,6 +345,24 @@ def command_layout_suggest(args: argparse.Namespace) -> int:
     if args.output:
         write_json(args.output, {"panel_count": panel_count, "candidates": results})
     _emit(results, args.json)
+    return 0
+
+
+def command_layout_extract(args: argparse.Namespace) -> int:
+    from PIL import Image  # noqa: PLC0415
+
+    from .extract import draw_extraction_preview, extract_layout, save_template  # noqa: PLC0415
+
+    source = Path(args.image)
+    result = extract_layout(source, direction=args.direction)
+    output = Path(args.preview) if args.preview else source.with_name(f"{source.stem}.layout-preview.png")
+    if output.resolve() == source.resolve():
+        raise ValueError("预览输出不能覆盖参考原图")
+    with Image.open(source) as image:
+        result["preview"] = str(draw_extraction_preview(image, result, output))
+    if args.save:
+        result["template"] = str(save_template(result, Path(args.project) / "templates", name=args.name))
+    _emit(result, args.json)
     return 0
 
 
@@ -491,6 +513,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     layout = subparsers.add_parser("layout", help="版式求解")
     layout_sub = layout.add_subparsers(dest="layout_command", required=True)
+    extract = layout_sub.add_parser("extract", help="从参考页提取格子几何")
+    extract.add_argument("image")
+    extract.add_argument("--direction", choices=("rtl", "ltr"), default="rtl")
+    extract.add_argument("--name")
+    extract.add_argument("--save", action="store_true")
+    extract.add_argument("--project", default=".")
+    extract.add_argument("--preview")
+    extract.add_argument("--json", action="store_true")
+    extract.set_defaults(func=command_layout_extract)
     suggest = layout_sub.add_parser("suggest")
     suggest.add_argument("--panels", type=int)
     suggest.add_argument("--page")

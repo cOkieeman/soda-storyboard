@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from PIL import ImageDraw, ImageFont
 
-from soda_storyboard.lettering import layout_texts, text_lines
+from soda_storyboard.lettering import layout_texts, text_lines, vertical_columns
 
 from .errors import ProductionError
 
@@ -101,7 +101,6 @@ def _draw_text(  # noqa: C901 -- fitting horizontal rows and vertical columns
         max(1, (bottom - top) * (1 - padding * 2)),
     )
     vertical = (text.direction or page.text_direction) == "vertical"
-    lines = text_lines(text.text, page.text_max_chars)
     # Reflow within the declared box, respecting explicit newlines and column order.
     limit = max(
         1,
@@ -110,16 +109,11 @@ def _draw_text(  # noqa: C901 -- fitting horizontal rows and vertical columns
             round(math.sqrt(len(text.text) * (usable_h / usable_w if vertical else usable_w / usable_h))),
         ),
     )
-    lines = text_lines(text.text, limit)
+    lines = vertical_columns(text.text, page.text_max_chars) if vertical else text_lines(text.text, limit)
     for size in range(max(1, round(page.text_font_size * page.canvas_width / 1024)), 0, -1):
         font = _font(font_path, size)
         if vertical:
-            cell_w = max(
-                size, *(draw.textbbox((0, 0), char, font=font)[2] for char in text.text if char != "\n")
-            )
-            cell_h = max(
-                size, *(draw.textbbox((0, 0), char, font=font)[3] for char in text.text if char != "\n")
-            )
+            cell_w = cell_h = size
             total_w, total_h = len(lines) * cell_w * 1.2, max(map(len, lines)) * cell_h * 1.1
         else:
             cell_h = max(size, *(draw.textbbox((0, 0), line, font=font)[3] for line in lines)) * 1.2
@@ -132,9 +126,19 @@ def _draw_text(  # noqa: C901 -- fitting horizontal rows and vertical columns
     x, y = (left + right - total_w) / 2, (top + bottom - total_h) / 2
     if vertical:
         for index, line in enumerate(lines):
-            column_x = x + (len(lines) - 1 - index) * cell_w * 1.2
+            column = len(lines) - 1 - index if page.reading_direction == "rtl" else index
+            column_x = x + column * cell_w * 1.2
             for row, char in enumerate(line):
-                draw.text((column_x, y + row * cell_h * 1.1), char, font=font, fill="black")
+                glyph_font = _font(
+                    font_path, max(1, int(size * min(1, cell_w / max(1, draw.textlength(char, font=font)))))
+                )
+                draw.text(
+                    (column_x + cell_w / 2, y + (row + 0.5) * cell_h * 1.1),
+                    char,
+                    font=glyph_font,
+                    fill="black",
+                    anchor="mm",
+                )
     else:
         for index, line in enumerate(lines):
             draw.text(

@@ -176,6 +176,11 @@ class Handler(BaseHTTPRequestHandler):
             parsed = urlsplit(self.path)
             path = unquote(parsed.path, errors="strict")
             options = parse_qs(parsed.query)
+            if path == "/api/layout-extract" and self.command == "POST":
+                from .extraction import upload  # noqa: PLC0415 -- optional upload endpoint
+
+                upload(self)
+                return
             body = self.body() if self.command in {"POST", "PUT", "PATCH", "DELETE"} else {}
             if path == "/api/events" and self.command == "GET":
                 self.sse()
@@ -253,6 +258,10 @@ class Handler(BaseHTTPRequestHandler):
             if count is not None and not 1 <= count <= 100:
                 raise APIError(400, "panels 必须在 1 到 100 之间")
             self.send(200, {"templates": builtin_templates(count)})
+        elif path == "/api/templates" and method == "POST":
+            from .extraction import save  # noqa: PLC0415 -- additive template endpoint
+
+            save(self, body)
         elif path.startswith("/api/files/") and method == "GET":
             self.project_file(path.removeprefix("/api/files/"))
         elif path.startswith("/api/jobs/"):

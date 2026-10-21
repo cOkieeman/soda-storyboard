@@ -1,0 +1,66 @@
+{
+  "source_image": "rect-3.png",
+  "canvas": [
+    600,
+    800
+  ],
+  "direction": "rtl",
+  "panel_count": 3,
+  "panels": [
+    {
+      "shape": {
+        "type": "rect",
+        "x": 308.0,
+        "y": 37.0,
+        "w": 264.0,
+        "h": 336.0
+      },
+      "confidence": 0.988,
+      "order": 1,
+      "normalized": {
+        "type": "rect",
+        "x": 0.513333,
+        "y": 0.04625,
+        "w": 0.44,
+        "h": 0.42
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 28.0,
+        "y": 29.0,
+        "w": 264.0,
+        "h": 344.0
+      },
+      "confidence": 0.988,
+      "order": 2,
+      "normalized": {
+        "type": "rect",
+        "x": 0.046667,
+        "y": 0.03625,
+        "w": 0.44,
+        "h": 0.43
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 28.0,
+        "y": 389.0,
+        "w": 544.0,
+        "h": 344.0
+      },
+      "confidence": 0.993,
+      "order": 3,
+      "normalized": {
+        "type": "rect",
+        "x": 0.046667,
+        "y": 0.48625,
+        "w": 0.906667,
+        "h": 0.43
+      }
+    }
+  ],
+  "threshold": 80
+}

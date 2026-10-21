@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Mapping
 from importlib.resources import files
-from math import isfinite
+from math import hypot, isfinite
 from pathlib import Path
 from typing import Any
 
@@ -223,16 +223,31 @@ def _check_slots(slots: list[dict[str, Any]], width: int, height: int, gap: int)
                 raise ValueError("版式重叠或格间距不足")
 
 
-def _custom_slots(panels: list[dict[str, Any]], width: int, height: int, gap: int) -> list[dict[str, Any]]:
+def _inset_quad(shape: dict[str, Any], distance: float) -> dict[str, Any]:
+    points = convex_polygon(shape)
+    edges = []
+    for a, b in zip(points, [*points[1:], points[0]], strict=True):
+        nx, ny = a[1] - b[1], b[0] - a[0]
+        edges.append((nx, ny, nx * a[0] + ny * a[1] + distance * hypot(nx, ny)))
+    inset = []
+    for index, (a, b, c) in enumerate(edges):
+        d, e, f = edges[index - 1]
+        denominator = a * e - b * d
+        inset.append([(c * e - b * f) / denominator, (a * f - c * d) / denominator])
+    return {"type": "quad", "points": inset}
+
+
+def _custom_slots(
+    panels: list[dict[str, Any]], width: int, height: int, gap: int, *, inset_quads: bool = False
+) -> list[dict[str, Any]]:
     slots = []
     for panel in panels:
         if panel.get("type", "rect") == "quad":
-            slots.append(
-                {
-                    "type": "quad",
-                    "points": [[float(x) * width, float(y) * height] for x, y in panel["points"]],
-                }
-            )
+            shape = {
+                "type": "quad",
+                "points": [[float(x) * width, float(y) * height] for x, y in panel["points"]],
+            }
+            slots.append(_inset_quad(shape, gap / 2) if inset_quads else shape)
         else:
             slots.append(
                 _rect(
@@ -293,7 +308,9 @@ def suggest_layouts(
     result = []
     for recipe in templates:
         if "panels" in recipe:
-            slots = _custom_slots(recipe["panels"], width, height, gap)
+            slots = _custom_slots(
+                recipe["panels"], width, height, gap, inset_quads=recipe.get("source") == "reference"
+            )
         else:
             slots = _build(recipe.get("source_id", recipe["id"]), width, height, panel_count, gap)
         if len(slots) != panel_count:
@@ -305,7 +322,7 @@ def suggest_layouts(
             if pick:
                 raise
             continue
-        if reading_direction == "ltr":
+        if reading_direction != recipe.get("reading_direction", "rtl"):
             slots = [_mirror(p, width) for p in slots]
         _check_slots(slots, width, height, gap)
         panels = [{**slot, "order": i} for i, slot in enumerate(slots, 1)]
@@ -364,6 +381,8 @@ def _diverse(results: list[dict[str, Any]], count: int, importance: list[int]) -
         )
     else:
         ordered.sort(key=lambda item: -item["score"])
+    # User reference layouts remain discoverable among the default six candidates.
+    ordered.sort(key=lambda item: item.get("source") != "reference")
     return ordered[: max(1, count)]
 
 

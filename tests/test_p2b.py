@@ -67,11 +67,16 @@ def test_measurement_wraps_and_keeps_orientation(direction: str) -> None:
     w, h = estimate_text_size(Text("a", "一" * 11), page)
     if direction == "vertical":
         assert w == pytest.approx(2 * 42 * 1.3)
-        assert h == pytest.approx(10 * 42 * 1.15)
+        assert h == pytest.approx(6 * 42 * 1.15)
     else:
         assert w == pytest.approx(10 * 42 * 1.15)
         assert h == pytest.approx(2 * 42 * 1.3)
-    assert estimate_text_size(Text("a", "一" * 10 + "\n一"), page) == (w, h)
+    # Explicit newlines remain intentional column boundaries.
+    explicit = estimate_text_size(Text("a", "一" * 10 + "\n一"), page)
+    if direction == "vertical":
+        assert explicit == pytest.approx((w, 10 * 42 * 1.15))
+    else:
+        assert explicit == (w, h)
     page.text_max_chars = 5
     assert estimate_text_size(Text("a", "一" * 11), page) != (w, h)
     page.text_font_size = 21

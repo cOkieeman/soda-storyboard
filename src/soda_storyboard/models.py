@@ -238,6 +238,7 @@ class Character:
     format: str = CHARACTER_FORMAT
     age: str | None = None
     figure_hint: str | None = None
+    role_en: str | None = None
 
     @property
     def name(self) -> str:
@@ -293,6 +294,7 @@ class Character:
             "approved_reference_images",
             "age",
             "figure_hint",
+            "role_en",
         }
         appearance = value.get("appearance", {})
         appearance_zh = value.get("appearance_zh", "")
@@ -325,6 +327,7 @@ class Character:
             extra=_copy_extra(value, known),
             format=_text(value.get("format", CHARACTER_FORMAT), "character.format"),
             age=None if value.get("age") is None else _text(value["age"], "character.age"),
+            role_en=None if value.get("role_en") is None else _text(value["role_en"], "character.role_en"),
             figure_hint=None
             if value.get("figure_hint") is None
             else _text(value["figure_hint"], "character.figure_hint"),
@@ -348,6 +351,8 @@ class Character:
             result["age"] = self.age
         if self.figure_hint is not None:
             result["figure_hint"] = self.figure_hint
+        if self.role_en is not None:
+            result["role_en"] = self.role_en
         result.update(self.extra)
         return result
 

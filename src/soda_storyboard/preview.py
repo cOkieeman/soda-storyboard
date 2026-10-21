@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .figures import draw_figure, panel_figures
-from .geometry import shape_bbox
-from .lettering import layout_texts, text_lines
+from .geometry import inscribed_rect, shape_bbox
+from .lettering import layout_texts, text_lines, vertical_columns
 from .models import Character, Figure, Page, Panel
 
 if TYPE_CHECKING:
@@ -68,13 +68,16 @@ def find_font(font: str | Path | None = None) -> Path | None:
 
 
 def _character_names(panel: Panel, characters: Mapping[str, Character] | None) -> str:
-    if not panel.character_ids:
+    identifiers = list(
+        dict.fromkeys([*panel.character_ids, *(figure.character_id for figure in panel.figures)])
+    )
+    if not identifiers:
         return ""
     if not characters:
-        return ", ".join(panel.character_ids)
+        return ", ".join(identifiers)
     return ", ".join(
         characters.get(identifier, Character(identifier, identifier)).display_name
-        for identifier in panel.character_ids
+        for identifier in identifiers
     )
 
 
@@ -208,7 +211,13 @@ def _paste_panel_figures(  # noqa: PLR0913 -- explicit local drawing context
     layer = Image.new("RGBA", (max(1, x2 - x), max(1, y2 - y)))
     for figure in panel_figures(panel, page):
         draw_figure(
-            layer, figure, characters.get(figure.character_id), shot=panel.shot, color=PANEL_COLOR, font=font
+            layer,
+            figure,
+            characters.get(figure.character_id),
+            shot=panel.shot,
+            color=PANEL_COLOR,
+            font=font,
+            show_name=False,
         )
     mask = Image.new("L", layer.size)
     md = ImageDraw.Draw(mask)
@@ -233,8 +242,12 @@ def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path |
     draw = ImageDraw.Draw(layer)
     color = CHARACTER_COLOR if text.kind == "title" else TEXT_COLOR
     draw.rectangle((0, 0, width - 1, height - 1), outline=color, width=max(2, round(3 * scale)))
-    lines = text_lines(text.text, page.text_max_chars)
     vertical = (text.direction or page.text_direction) == "vertical"
+    lines = (
+        vertical_columns(text.text, page.text_max_chars)
+        if vertical
+        else text_lines(text.text, page.text_max_chars)
+    )
     longest = max(1, *map(len, lines))
     available_w, available_h = max(1, width - 8 * scale), max(1, height - 8 * scale)
     cell_w = available_w / (len(lines) if vertical else longest)
@@ -245,11 +258,19 @@ def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path |
         ordered = list(reversed(lines)) if page.reading_direction == "rtl" else lines
         for column, line in enumerate(ordered):
             for row, glyph in enumerate(line):
+                glyph_size = max(
+                    1, int(size * min(1, cell_w * 0.88 / max(1, draw.textlength(glyph, font=font))))
+                )
+                glyph_font = (
+                    ImageFont.truetype(str(font_path), glyph_size)
+                    if font_path
+                    else ImageFont.load_default(size=glyph_size)
+                )
                 draw.text(
                     (4 * scale + (column + 0.5) * cell_w, 4 * scale + (row + 0.5) * cell_h),
                     glyph,
                     fill=color,
-                    font=font,
+                    font=glyph_font,
                     anchor="mm",
                 )
     else:
@@ -258,7 +279,7 @@ def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path |
     image.paste(layer, (round(rect.x * scale), round(rect.y * scale)))
 
 
-def _render_sketch(
+def _render_sketch(  # noqa: PLR0912 -- labels, figures, overlays and lettering passes
     page: Page,
     output: str | Path,
     characters: Mapping[str, Character] | Iterable[Character] | None,
@@ -298,15 +319,6 @@ def _render_sketch(
             )
         else:
             draw.rectangle((x, y, x2, y2), outline=PANEL_COLOR, width=max(3, round(4 * scale)))
-        note = f"{panel.order}  {panel.description[:16]}"
-        draw.text(
-            (x + 8 * scale, y + 8 * scale),
-            note,
-            fill=PANEL_COLOR,
-            font=label_font,
-            stroke_width=1,
-            stroke_fill="white",
-        )
     for overlay in sorted(page.overlays, key=lambda o: o.z_index):
         rect = overlay.rect
         x, y, x2, y2 = [round(v * scale) for v in (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h)]
@@ -319,6 +331,7 @@ def _render_sketch(
                 shot="full",
                 color=CHARACTER_COLOR,
                 font=label_font,
+                show_name=False,
             )
             image.paste(layer, (x, y), layer)
             ImageDraw.Draw(image).rectangle(
@@ -328,7 +341,55 @@ def _render_sketch(
             _draw_overlay(ImageDraw.Draw(image), overlay, label_font, scale)
     for text in layout_texts(page):
         _draw_text_box(image, text, page, font_path, scale)
+    draw = ImageDraw.Draw(image)
+    occupied = [tuple(v * scale for v in shape_bbox(t.bbox)) for t in layout_texts(page) if t.bbox]
+    for panel in sorted(page.panels, key=lambda p: p.order):
+        label_shape = inscribed_rect(panel.shape) if panel.shape_type == "quad" else panel.shape
+        bounds = tuple(v * scale for v in shape_bbox(label_shape))
+        labels = [
+            (f"{panel.order}  {panel.description[:16]}", str(panel.order)),
+            (_character_names(panel, character_map), ""),
+        ]
+        for full, fallback in labels:
+            for label in dict.fromkeys((full, fallback)):
+                if not label:
+                    continue
+                box = draw.textbbox((0, 0), label, font=label_font, stroke_width=1)
+                position = label_position(bounds, (box[2] - box[0], box[3] - box[1]), occupied)
+                if position is not None:
+                    left, top = position
+                    draw.text(
+                        (left - box[0], top - box[1]),
+                        label,
+                        font=label_font,
+                        fill=PANEL_COLOR,
+                        stroke_width=1,
+                        stroke_fill="white",
+                    )
+                    occupied.append((left, top, left + box[2] - box[0], top + box[3] - box[1]))
+                    break
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image.save(output_path)
     return output_path
+
+
+def label_position(
+    bounds: tuple[float, ...], size: tuple[float, float], occupied: list[tuple[float, ...]]
+) -> tuple[float, float] | None:
+    """Find a free label rectangle; callers can retry with just a panel number."""
+    x, y, right, bottom = bounds
+    width, height = size
+    step = max(4, round(height + 4))
+    for top in range(round(y + 8), round(bottom - height - 4), step):
+        for left in (x + 8, right - width - 8):
+            if left < x + 4 or left + width > right - 4:
+                continue
+            candidate = (left - 2, top - 2, left + width + 2, top + height + 2)
+            if all(
+                min(candidate[2], b[2]) <= max(candidate[0], b[0])
+                or min(candidate[3], b[3]) <= max(candidate[1], b[1])
+                for b in occupied
+            ):
+                return left, float(top)
+    return None

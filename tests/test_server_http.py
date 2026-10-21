@@ -18,7 +18,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.io import read_json, write_json
@@ -76,6 +76,31 @@ class Client:
             time.sleep(0.01)
         pytest.fail(f"任务未到达状态 {states}: {job}")
 
+    def upload(self, payload: bytes, *, field: str = "image", direction: str = "rtl") -> tuple[int, dict]:
+        boundary = "soda-extraction-test"
+        data = (
+            (
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; '
+                'filename="reference.png"\r\nContent-Type: image/png\r\n\r\n'
+            ).encode()
+            + payload
+            + (
+                f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="direction"\r\n\r\n'
+                f"{direction}\r\n--{boundary}--\r\n"
+            ).encode()
+        )
+        request = Request(
+            self.url + "/api/layout-extract",
+            data=data,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        try:
+            response = urlopen(request, timeout=5)
+        except HTTPError as exc:
+            response = exc
+        with response:
+            return response.status, json.loads(response.read())
+
 
 @pytest.fixture
 def client(tmp_path: Path) -> Iterator[Client]:
@@ -92,6 +117,38 @@ def client(tmp_path: Path) -> Iterator[Client]:
         thread.join(timeout=3)
         assert not server.events.thread.is_alive()
         assert not server.jobs.worker.is_alive()
+
+
+def test_layout_extraction_upload_and_save(client: Client) -> None:
+    image = Image.new("RGB", (600, 800), "white")
+    draw = ImageDraw.Draw(image)
+    for box in [(30, 30, 290, 370), (310, 30, 570, 370), (30, 400, 570, 750)]:
+        draw.rectangle(box, outline="black", width=4)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    status, result = client.upload(buffer.getvalue())
+    assert status == 200
+    assert result["panel_count"] == 3
+    assert result["panels"][0]["shape"]["x"] == 310
+    preview_status, _, preview = client.call("GET", result["preview_url"])
+    assert preview_status == 200
+    assert Image.open(io.BytesIO(preview)).size == (600, 800)
+    status, _, saved = client.call(
+        "POST", "/api/templates", {"extraction_id": result["extraction_id"], "name": "Reference"}
+    )
+    assert status == 201
+    assert read_json(client.root / saved["path"])["source"] == "reference"
+    assert not (client.root / "reference.png").exists()
+    assert list((client.root / "templates").glob("*.png")) == []
+    assert client.call("POST", "/api/templates", {"extraction_id": "../outside"})[0] == 400
+    assert client.call("POST", "/api/templates", {"extraction_id": "missing"})[0] == 404
+    assert (
+        client.call("POST", "/api/templates", {"extraction_id": result["extraction_id"], "name": 5})[0] == 400
+    )
+    assert client.upload(b"not an image")[0] == 400
+    assert client.upload(buffer.getvalue(), field="file")[0] == 400
+    assert client.upload(buffer.getvalue(), direction="up")[0] == 400
+    assert client.call("POST", "/api/layout-extract", {})[0] == 400
 
 
 def test_project_pages_and_characters(client: Client) -> None:

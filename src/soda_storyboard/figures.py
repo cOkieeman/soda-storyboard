@@ -49,6 +49,7 @@ def draw_figure(  # noqa: C901, PLR0913 -- explicit pose drawing and rendering o
     shot: str,
     color: str,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    show_name: bool = True,
 ) -> None:
     """All strokes and the name are clipped by the supplied local image."""
     width, height = image.size
@@ -114,12 +115,12 @@ def draw_figure(  # noqa: C901, PLR0913 -- explicit pose drawing and rendering o
             [(0.085, 0.23), (0.19, 0.13), (0.24, 0.01)],
         ],
         "hands_clasped": [
-            [(-0.085, 0.23), (-0.16, 0.39), (0, 0.40)],
-            [(0.085, 0.23), (0.16, 0.39), (0, 0.40)],
+            [(-0.085, 0.23), (-0.16, 0.44), (0, 0.54)],
+            [(0.085, 0.23), (0.16, 0.44), (0, 0.54)],
         ],
         "hand_on_chin": [
-            [(-0.085, 0.23), (-0.16, 0.41), (0.12, 0.43)],
-            [(0.085, 0.23), (0.20, 0.36), (0.02, 0.19)],
+            [(-0.085, 0.23), (-0.17, 0.40), (-0.14, 0.53)],
+            [(0.085, 0.23), (0.20, 0.31), (0.13, 0.19), (0.02, 0.19)],
         ],
         "run": [[(-0.085, 0.23), (-0.23, 0.38), (-0.31, 0.24)], [(0.085, 0.23), (0.24, 0.12), (0.32, 0.23)]],
     }.get(pose, [[(-0.085, 0.23), (-0.14, 0.39), (-0.17, 0.56)], [(0.085, 0.23), (0.14, 0.39), (0.17, 0.56)]])
@@ -137,6 +138,8 @@ def draw_figure(  # noqa: C901, PLR0913 -- explicit pose drawing and rendering o
         line(leg)
     if pose == "sit":
         line([(-0.27, 0.59), (0.27, 0.59), (0.27, 0.88)], thin=True)
+    if not show_name:
+        return
     name = character.display_name if character else figure.character_id
     text_width = draw.textlength(name, font=font)
     name_height = draw.textbbox((0, 0), name, font=font)[3]
