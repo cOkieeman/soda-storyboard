@@ -118,5 +118,9 @@
       }
     }
   ],
-  "threshold": 80
+  "threshold": 80,
+  "reliable": false,
+  "warnings": [
+    "识别不可靠，建议手动调整；被遮挡或出血的边界可能为估计值。"
+  ]
 }

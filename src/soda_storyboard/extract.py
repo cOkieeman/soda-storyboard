@@ -10,6 +10,7 @@ import math
 import re
 import uuid
 from datetime import UTC, datetime
+from itertools import combinations, pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +29,424 @@ MAX_PIXELS = 32_000_000
 MIN_AREA = 0.015
 Point = tuple[float, float]
 Box = tuple[int, int, int, int]
+Segment = tuple[int, int, int]  # perpendicular coordinate, start, end
+
+
+def _straight_segments(image: Image.Image, *, vertical: bool = False) -> list[Segment]:
+    """Trace contrast ridges beside light gutters, retaining pale coloured rules.
+
+    Unlike a page-wide threshold, the perpendicular comparison works when the
+    artwork touches the rule. Short gaps allow antialiasing and small occlusions.
+    The unfiltered RGB minimum preserves thin blue rules lost by a median filter.
+    """
+    if vertical:
+        image = image.transpose(Image.Transpose.TRANSPOSE)
+    width, height = image.size
+    pixels = image.tobytes()
+    values = [min(rgb) for rgb in zip(pixels[::3], pixels[1::3], pixels[2::3], strict=True)]
+    segments = []
+    minimum = max(24, round(min(image.size) * 0.075))
+    for y in range(3, height - 3):
+        hits = []
+        for x in range(width):
+            index = y * width + x
+            value = values[index]
+            neighbor = max(values[index - width * 3], values[index + width * 3])
+            hits.append(
+                value < 240
+                and ((neighbor > 245 and neighbor - value > 12) or (value < 110 and neighbor - value > 70))
+            )
+        segments.extend((y, start, end) for start, end in _ridge_runs(hits, minimum))
+    # Thin rules can contribute several adjacent ridges. Keep the longest and
+    # retain separate fragments at the same coordinate when a figure occludes it.
+    kept: list[Segment] = []
+    for segment in sorted(segments, key=lambda s: s[2] - s[1], reverse=True):
+        if not any(
+            abs(segment[0] - other[0]) <= 3
+            and min(segment[2], other[2]) - max(segment[1], other[1]) > 0.7 * (segment[2] - segment[1])
+            for other in kept
+        ):
+            kept.append(segment)
+    return sorted(kept)
+
+
+def _ridge_runs(hits: list[bool], minimum: int) -> list[tuple[int, int]]:
+    start = None
+    last = 0
+    runs = []
+    for x, hit in enumerate([*hits, False, False, False, False]):
+        if hit:
+            if start is None:
+                start = x
+            last = x
+        elif start is not None and x - last > 3:
+            if last - start >= minimum:
+                runs.append((start, last))
+            start = None
+    return runs
+
+
+def _coverage(segments: list[Segment], coordinate: int, start: int, end: int) -> float:
+    intervals = sorted(
+        (max(start, a), min(end, b))
+        for position, a, b in segments
+        if abs(position - coordinate) <= 3 and b > start and a < end
+    )
+    covered = 0
+    previous = start
+    for a, b in intervals:
+        covered += max(0, b - max(a, previous))
+        previous = max(previous, b)
+    return covered / max(1, end - start)
+
+
+def _coordinates(segments: list[Segment]) -> list[int]:
+    positions: list[int] = []
+    for position, _, _ in sorted(segments, key=lambda s: s[2] - s[1], reverse=True):
+        if all(abs(position - other) > 3 for other in positions):
+            positions.append(position)
+    return sorted(positions)
+
+
+def _box_panel(box: Box, confidence: float) -> dict[str, Any]:
+    left, top, right, bottom = box
+    return {
+        "shape": {"type": "rect", "x": left, "y": top, "w": right - left, "h": bottom - top},
+        "confidence": round(confidence, 3),
+    }
+
+
+def _rectangle_frames(
+    horizontal: list[Segment], vertical: list[Segment], image: Image.Image
+) -> list[dict[str, Any]]:
+    """Find locally closed rectangles, independent of the connected artwork."""
+    size = image.size
+    xs, ys = _coordinates(vertical), _coordinates(horizontal)
+    light = image.convert("L").tobytes()
+    candidates = []
+    minimum_area = size[0] * size[1] * MIN_AREA
+    for i, left in enumerate(xs):
+        for right in xs[i + 1 :]:
+            if right - left < size[0] * 0.09:
+                continue
+            supported = [(y, _coverage(horizontal, y, left, right)) for y in ys]
+            supported = [(y, support) for y, support in supported if support >= 0.55]
+            for j, (top, top_support) in enumerate(supported):
+                for bottom, bottom_support in supported[j + 1 :]:
+                    if (right - left) * (bottom - top) < minimum_area or bottom - top < size[1] * 0.06:
+                        continue
+                    sides = [
+                        top_support,
+                        bottom_support,
+                        _coverage(vertical, left, top, bottom),
+                        _coverage(vertical, right, top, bottom),
+                    ]
+                    box = (left, top, right, bottom)
+                    if min(sides[:2]) < 0.55 or min(sides[2:]) < 0.90:
+                        continue
+                    outside = _outside_light(box, light, size)
+                    if min(outside) >= 0.50 and sum(outside) / 4 >= 0.80:
+                        confidence = 0.6 * min(sides) + 0.4 * sum(outside) / 4
+                        candidates.append(
+                            _box_panel(box, min(0.65, confidence) if min(sides) < 0.7 else confidence)
+                        )
+    # A large box spanning multiple separated panels also has four outer sides.
+    # Prefer the small closed faces, but keep genuine inset panels: their parent
+    # is not tiled by multiple children that stretch from one outer edge to another.
+    return _minimal_faces(candidates)
+
+
+def _partial_frames(
+    horizontal: list[Segment],
+    vertical: list[Segment],
+    image: Image.Image,
+    confirmed: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Recover one obscured side only when three other sides have evidence."""
+    xs, ys = _coordinates(vertical), _coordinates(horizontal)
+    # Missing horizontal edges must align with a neighbouring confirmed panel.
+    aligned = {round(y) for panel in confirmed for y in shape_bbox(panel["shape"])[1::2]}
+    light = image.convert("L")
+    candidates = []
+    for left, right in combinations(xs, 2):
+        if right - left < image.width * 0.12:
+            continue
+        hs = [(y, _coverage(horizontal, y, left, right)) for y in ys]
+        for (top, top_support), (bottom, bottom_support) in combinations(hs, 2):
+            if top_support < 0.85 or (bottom_support < 0.70 and bottom not in aligned):
+                continue
+            if (right - left) * (
+                bottom - top
+            ) < image.width * image.height * MIN_AREA or bottom - top < image.height * 0.06:
+                continue
+            box = (left, top, right, bottom)
+            if any(_overlap_fraction(box, shape_bbox(p["shape"])) > 0.10 for p in confirmed):
+                continue
+            confidence = _partial_support(box, horizontal, vertical, light)
+            if confidence:
+                candidates.append(_box_panel(box, confidence))
+    result: list[dict[str, Any]] = []
+    for panel in sorted(
+        candidates,
+        key=lambda p: (
+            _corner_matches(shape_bbox(p["shape"]), vertical),
+            polygon_area(shape_polygon(p["shape"])),
+        ),
+        reverse=True,
+    ):
+        if not any(
+            _overlap_fraction(shape_bbox(panel["shape"]), shape_bbox(p["shape"])) > 0.25 for p in result
+        ):
+            result.append(panel)
+    return result
+
+
+def _partial_support(
+    box: Box, horizontal: list[Segment], vertical: list[Segment], image: Image.Image
+) -> float:
+    left, top, right, bottom = box
+    sides = [
+        _coverage(horizontal, top, left, right),
+        _coverage(horizontal, bottom, left, right),
+        _coverage(vertical, left, top, bottom),
+        _coverage(vertical, right, top, bottom),
+    ]
+    if sum(s >= 0.70 for s in sides) < 3:
+        return 0
+    outside = _outside_light(box, image.tobytes(), image.size)
+    return min(0.69, sum(sides) / 4 * 0.75) if sum(s >= 0.70 for s in outside) >= 3 else 0
+
+
+def _corner_matches(box: Sequence[float], vertical: list[Segment]) -> int:
+    left, top, right, bottom = box
+    return sum(
+        any(
+            abs(position - x) <= 3 and abs(endpoint - y) <= 4
+            for position, start, end in vertical
+            for endpoint in ([start] if y == top else [end])
+        )
+        for x in (left, right)
+        for y in (top, bottom)
+    )
+
+
+def _overlap_fraction(a: Sequence[float], b: Sequence[float]) -> float:
+    intersection = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    return intersection / max(1, min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1])))
+
+
+def _occluded_bands(
+    horizontal: list[Segment], vertical: list[Segment], size: tuple[int, int]
+) -> list[dict[str, Any]]:
+    """Infer repeated bilateral rows whose central rules are entirely occluded.
+
+    This is deliberately low confidence: the pixels cannot prove where a fully
+    covered central rule lies. Require repeated rows and evidence at both ends.
+    """
+    width, height = size
+    bands = []
+    for left, top, bottom in vertical:
+        if left > width * 0.08 or bottom - top < height * 0.15:
+            continue
+        for right, other_top, other_bottom in vertical:
+            if right < width * 0.92 or abs(top - other_top) > 5 or abs(bottom - other_bottom) > 5:
+                continue
+            top_y = min(_coordinates(horizontal), key=lambda y: abs(y - top))
+            bottom_y = min(_coordinates(horizontal), key=lambda y: abs(y - bottom))
+            if abs(top_y - top) > 5 or abs(bottom_y - bottom) > 5:
+                continue
+            center = (left + right) // 2
+            if all(
+                _coverage(horizontal, y, left, left + (right - left) // 4) > 0.75
+                and _coverage(horizontal, y, right - (right - left) // 4, right) > 0.75
+                and _coverage(horizontal, y, center - 8, center + 8) < 0.15
+                for y in (top_y, bottom_y)
+            ):
+                bands.append((left, top_y, right, bottom_y))
+    unique = []
+    for box in bands:
+        if not any(_box_iou(box, other) > 0.8 for other in unique):
+            unique.append(box)
+    if len(unique) < 2:
+        return []
+    # Estimate hidden gutter width from the visible spacing between row bands.
+    unique.sort(key=lambda box: box[1])
+    gap = max(2, min(12, round(min(b[1] - a[3] for a, b in pairwise(unique)) / 2)))
+    return [
+        _box_panel(part, 0.45)
+        for left, top, right, bottom in unique
+        for part in (
+            (left, top, (left + right) // 2 - gap, bottom),
+            ((left + right) // 2 + gap, top, right, bottom),
+        )
+    ]
+
+
+def _suspended_frames(
+    horizontal: list[Segment], vertical: list[Segment], panels: list[dict[str, Any]], size: tuple[int, int]
+) -> list[dict[str, Any]]:
+    """A bottom rule and two short side stubs can survive behind overlapping panels."""
+    result = []
+    for bottom, left, right in horizontal:
+        if right - left < size[0] * 0.25:
+            continue
+        stubs = [
+            (position, start, end)
+            for position, start, end in vertical
+            if abs(end - bottom) <= 4 and min(abs(position - left), abs(position - right)) <= 4
+        ]
+        if len(stubs) < 2:
+            continue
+        if not any(abs(x - left) <= 4 for x, _, _ in stubs) or not any(
+            abs(x - right) <= 4 for x, _, _ in stubs
+        ):
+            continue
+        stub_top = min(start for _, start, _ in stubs)
+        neighbours = [
+            shape_bbox(p["shape"]) for p in panels if abs(shape_bbox(p["shape"])[3] - stub_top) <= 5
+        ]
+        if len(neighbours) < 2:
+            continue
+        top = round(min(box[1] for box in neighbours))
+        box = (left, top, right, bottom)
+        if not any(_box_iou(box, shape_bbox(p["shape"])) > 0.8 for p in panels):
+            result.append(_box_panel(box, 0.45))
+    return _minimal_faces(result)
+
+
+def _bleed_frame(
+    horizontal: list[Segment], panels: list[dict[str, Any]], image: Image.Image
+) -> list[dict[str, Any]]:
+    """Recognize a lower bleed region bounded by a rule reaching both page edges."""
+    width, height = image.size
+    light = image.convert("L").tobytes()
+    for y in _coordinates(horizontal):
+        if not height * 0.25 < y < height * 0.80:
+            continue
+        if (
+            _coverage(horizontal, y, 0, width // 6) < 0.8
+            or _coverage(horizontal, y, width * 5 // 6, width) < 0.8
+        ):
+            continue
+        if not any(abs(shape_bbox(p["shape"])[3] - y) < height * 0.04 for p in panels):
+            continue
+        box = (0, y, width - 1, height - 1)
+        if any(_overlap_fraction(box, shape_bbox(p["shape"])) > 0.3 for p in panels):
+            continue
+        if sum(value < 235 for value in light[-width * 5 :]) / (width * 5) > 0.4:
+            return [_box_panel(box, 0.55)]
+    return []
+
+
+def _inset_frames(
+    horizontal: list[Segment],
+    vertical: list[Segment],
+    image: Image.Image,
+    panels: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    xs, ys = _coordinates(vertical), _coordinates(horizontal)
+    light = image.convert("L")
+    result = []
+    for parent in panels:
+        left, top, right, bottom = shape_bbox(parent["shape"])
+        pxs = [x for x in xs if left + 5 < x < right - 5]
+        pys = [y for y in ys if top + 5 < y < bottom - 5]
+        for i, x in enumerate(pxs):
+            for r in pxs[i + 1 :]:
+                hs = [y for y in pys if _coverage(horizontal, y, x, r) >= 0.96]
+                for j, y in enumerate(hs):
+                    for b in hs[j + 1 :]:
+                        if (r - x) * (b - y) < image.width * image.height * MIN_AREA:
+                            continue
+                        if min(_coverage(vertical, x, y, b), _coverage(vertical, r, y, b)) < 0.96:
+                            continue
+                        # Rectangular narration boxes are predominantly paper-white;
+                        # keep picture insets, rather than promoting text to panels.
+                        histogram = light.crop((x + 3, y + 3, r - 3, b - 3)).histogram()
+                        if sum(histogram[242:]) / max(1, sum(histogram)) < 0.55:
+                            result.append(_box_panel((x, y, r, b), 0.90))
+    return _minimal_faces(result)
+
+
+def _line_frames(image: Image.Image) -> list[dict[str, Any]]:
+    horizontal = _straight_segments(image)
+    vertical = _straight_segments(image, vertical=True)
+    if not horizontal or not vertical:
+        return []
+    bands = _occluded_bands(horizontal, vertical, image.size)
+    if bands:
+        return bands
+    panels = _rectangle_frames(horizontal, vertical, image)
+    panels += _partial_frames(horizontal, vertical, image, panels)
+    panels += _suspended_frames(horizontal, vertical, panels, image.size)
+    panels += _bleed_frame(horizontal, panels, image)
+    panels += _inset_frames(horizontal, vertical, image, panels)
+    return panels
+
+
+def _outside_light(box: Box, light: bytes, size: tuple[int, int]) -> list[float]:
+    width, height = size
+    left, top, right, bottom = box
+    sides = [
+        [[(x, top - distance) for distance in range(1, 5)] for x in range(left, right)],
+        [[(x, bottom + distance) for distance in range(1, 5)] for x in range(left, right)],
+        [[(left - distance, y) for distance in range(1, 5)] for y in range(top, bottom)],
+        [[(right + distance, y) for distance in range(1, 5)] for y in range(top, bottom)],
+    ]
+    return [
+        sum(
+            any(not (0 <= x < width and 0 <= y < height) or light[y * width + x] >= 242 for x, y in band)
+            for band in side
+        )
+        / max(1, len(side))
+        for side in sides
+    ]
+
+
+def _minimal_faces(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    faces = []
+    for panel in candidates:
+        box = shape_bbox(panel["shape"])
+        area = (box[2] - box[0]) * (box[3] - box[1])
+        children = [
+            shape_bbox(child["shape"]) for child in candidates if _contains(panel["shape"], child["shape"])
+        ]
+        if any(
+            _box_iou(a, b) < 0.02
+            and (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) > area * 0.40
+            for i, a in enumerate(children)
+            for b in children[i + 1 :]
+        ):
+            continue
+        faces.append(panel)
+    result: list[dict[str, Any]] = []
+    for panel in sorted(
+        faces,
+        key=lambda p: (p["confidence"], polygon_area(shape_polygon(p["shape"]))),
+        reverse=True,
+    ):
+        box = shape_bbox(panel["shape"])
+        if any(
+            _box_iou(box, shape_bbox(other["shape"])) > 0.80
+            or (
+                _contains(other["shape"], panel["shape"])
+                and any(abs(a - b) <= 4 for a, b in zip(box, shape_bbox(other["shape"]), strict=True))
+            )
+            or (
+                _overlap_fraction(box, shape_bbox(other["shape"])) > 0.75
+                and not _contains(other["shape"], panel["shape"])
+            )
+            for other in result
+        ):
+            continue
+        result.append(panel)
+    return result
+
+
+def _box_iou(a: Sequence[float], b: Sequence[float]) -> float:
+    intersection = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    area = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1])
+    return intersection / max(1, area - intersection)
 
 
 def _threshold(gray: Image.Image) -> int:
@@ -178,9 +597,11 @@ def reading_order(panels: list[dict[str, Any]], direction: str = "rtl") -> list[
     if direction not in {"rtl", "ltr"}:
         msg = "direction must be rtl or ltr"
         raise ValueError(msg)
+    nested = [p for p in panels if any(p is not q and _contains(q["shape"], p["shape"]) for q in panels)]
+    roots = [p for p in panels if p not in nested]
     rows: list[list[dict[str, Any]]] = []
     # The shortest bottom in a row prevents a tall spanning panel joining later rows.
-    for panel in sorted(panels, key=lambda p: shape_bbox(p["shape"])[1]):
+    for panel in sorted(roots, key=lambda p: shape_bbox(p["shape"])[1]):
         box = shape_bbox(panel["shape"])
         row = next(
             (
@@ -197,7 +618,11 @@ def reading_order(panels: list[dict[str, Any]], direction: str = "rtl") -> list[
             row.append(panel)
     result = []
     for row in rows:
-        result.extend(sorted(row, key=lambda p: shape_bbox(p["shape"])[0], reverse=direction == "rtl"))
+        for panel in sorted(row, key=lambda p: shape_bbox(p["shape"])[0], reverse=direction == "rtl"):
+            result.append(panel)
+            children = [p for p in nested if _contains(panel["shape"], p["shape"])]
+            if children:
+                result.extend(reading_order(children, direction))
     return [{**panel, "order": index} for index, panel in enumerate(result, 1)]
 
 
@@ -227,6 +652,8 @@ def extract_image(
     gray = image.convert("RGBA")
     background = Image.new("RGBA", gray.size, "white")
     background.alpha_composite(gray)
+    reduced = background.convert("RGB")
+    reduced.thumbnail((800, 800), Image.Resampling.LANCZOS)
     gray = background.convert("L")
     gray.thumbnail((800, 800), Image.Resampling.LANCZOS)
     gray = gray.filter(ImageFilter.MedianFilter(3))
@@ -241,6 +668,14 @@ def extract_image(
     ]
     # A balloon wholly inside a larger detected frame is never a separate panel.
     frames = [p for p in frames if not any(p is not q and _contains(q["shape"], p["shape"]) for q in frames)]
+    detected = _line_frames(reduced)
+    # Connected clean contours remain useful for rotated and slanted frames.
+    # Dense artwork and pale rules use the independent straight-edge evidence.
+    clean = frames and all(p["confidence"] >= 0.7 for p in frames)
+    if detected and not (
+        any(p["shape"]["type"] == "quad" for p in frames) or (clean and len(frames) >= len(detected))
+    ):
+        frames = detected
     ordered = reading_order(frames, direction)
     panels = []
     for panel in ordered:
@@ -253,6 +688,12 @@ def extract_image(
         "panel_count": len(panels),
         "panels": panels,
         "threshold": threshold,
+        "reliable": bool(panels) and all(p["confidence"] >= 0.7 for p in panels),
+        "warnings": (
+            ["识别不可靠，建议手动调整；被遮挡或出血的边界可能为估计值。"]
+            if not panels or any(p["confidence"] < 0.7 for p in panels)
+            else []
+        ),
     }
 
 

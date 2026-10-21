@@ -1,0 +1,50 @@
+{
+  "source_image": "inset.png",
+  "canvas": [
+    600,
+    800
+  ],
+  "direction": "rtl",
+  "panel_count": 2,
+  "panels": [
+    {
+      "shape": {
+        "type": "rect",
+        "x": 20.0,
+        "y": 20.0,
+        "w": 558.0,
+        "h": 758.0
+      },
+      "confidence": 1.0,
+      "order": 1,
+      "normalized": {
+        "type": "rect",
+        "x": 0.033333,
+        "y": 0.025,
+        "w": 0.93,
+        "h": 0.9475
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 45.0,
+        "y": 450.0,
+        "w": 153.0,
+        "h": 298.0
+      },
+      "confidence": 0.9,
+      "order": 2,
+      "normalized": {
+        "type": "rect",
+        "x": 0.075,
+        "y": 0.5625,
+        "w": 0.255,
+        "h": 0.3725
+      }
+    }
+  ],
+  "threshold": 104,
+  "reliable": true,
+  "warnings": []
+}

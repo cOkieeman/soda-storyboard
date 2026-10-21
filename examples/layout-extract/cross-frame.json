@@ -1,0 +1,124 @@
+{
+  "source_image": "cross-frame.png",
+  "canvas": [
+    600,
+    800
+  ],
+  "direction": "rtl",
+  "panel_count": 6,
+  "panels": [
+    {
+      "shape": {
+        "type": "rect",
+        "x": 303.0,
+        "y": 20.0,
+        "w": 275.0,
+        "h": 247.0
+      },
+      "confidence": 1.0,
+      "order": 1,
+      "normalized": {
+        "type": "rect",
+        "x": 0.505,
+        "y": 0.025,
+        "w": 0.458333,
+        "h": 0.30875
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 20.0,
+        "y": 20.0,
+        "w": 275.0,
+        "h": 247.0
+      },
+      "confidence": 0.807,
+      "order": 2,
+      "normalized": {
+        "type": "rect",
+        "x": 0.033333,
+        "y": 0.025,
+        "w": 0.458333,
+        "h": 0.30875
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 303.0,
+        "y": 275.0,
+        "w": 275.0,
+        "h": 247.0
+      },
+      "confidence": 0.65,
+      "order": 3,
+      "normalized": {
+        "type": "rect",
+        "x": 0.505,
+        "y": 0.34375,
+        "w": 0.458333,
+        "h": 0.30875
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 20.0,
+        "y": 275.0,
+        "w": 275.0,
+        "h": 247.0
+      },
+      "confidence": 0.805,
+      "order": 4,
+      "normalized": {
+        "type": "rect",
+        "x": 0.033333,
+        "y": 0.34375,
+        "w": 0.458333,
+        "h": 0.30875
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 303.0,
+        "y": 530.0,
+        "w": 275.0,
+        "h": 247.0
+      },
+      "confidence": 0.65,
+      "order": 5,
+      "normalized": {
+        "type": "rect",
+        "x": 0.505,
+        "y": 0.6625,
+        "w": 0.458333,
+        "h": 0.30875
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 20.0,
+        "y": 530.0,
+        "w": 275.0,
+        "h": 247.0
+      },
+      "confidence": 1.0,
+      "order": 6,
+      "normalized": {
+        "type": "rect",
+        "x": 0.033333,
+        "y": 0.6625,
+        "w": 0.458333,
+        "h": 0.30875
+      }
+    }
+  ],
+  "threshold": 81,
+  "reliable": false,
+  "warnings": [
+    "识别不可靠，建议手动调整；被遮挡或出血的边界可能为估计值。"
+  ]
+}

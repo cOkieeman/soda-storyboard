@@ -1,0 +1,122 @@
+{
+  "source_image": "dense-narrow.png",
+  "canvas": [
+    600,
+    800
+  ],
+  "direction": "rtl",
+  "panel_count": 6,
+  "panels": [
+    {
+      "shape": {
+        "type": "rect",
+        "x": 302.0,
+        "y": 20.0,
+        "w": 278.0,
+        "h": 251.0
+      },
+      "confidence": 0.993,
+      "order": 1,
+      "normalized": {
+        "type": "rect",
+        "x": 0.503333,
+        "y": 0.025,
+        "w": 0.463333,
+        "h": 0.31375
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 20.0,
+        "y": 20.0,
+        "w": 278.0,
+        "h": 251.0
+      },
+      "confidence": 0.993,
+      "order": 2,
+      "normalized": {
+        "type": "rect",
+        "x": 0.033333,
+        "y": 0.025,
+        "w": 0.463333,
+        "h": 0.31375
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 302.0,
+        "y": 275.0,
+        "w": 278.0,
+        "h": 251.0
+      },
+      "confidence": 0.993,
+      "order": 3,
+      "normalized": {
+        "type": "rect",
+        "x": 0.503333,
+        "y": 0.34375,
+        "w": 0.463333,
+        "h": 0.31375
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 20.0,
+        "y": 275.0,
+        "w": 278.0,
+        "h": 251.0
+      },
+      "confidence": 0.993,
+      "order": 4,
+      "normalized": {
+        "type": "rect",
+        "x": 0.033333,
+        "y": 0.34375,
+        "w": 0.463333,
+        "h": 0.31375
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 302.0,
+        "y": 530.0,
+        "w": 278.0,
+        "h": 251.0
+      },
+      "confidence": 0.993,
+      "order": 5,
+      "normalized": {
+        "type": "rect",
+        "x": 0.503333,
+        "y": 0.6625,
+        "w": 0.463333,
+        "h": 0.31375
+      }
+    },
+    {
+      "shape": {
+        "type": "rect",
+        "x": 20.0,
+        "y": 530.0,
+        "w": 278.0,
+        "h": 251.0
+      },
+      "confidence": 0.993,
+      "order": 6,
+      "normalized": {
+        "type": "rect",
+        "x": 0.033333,
+        "y": 0.6625,
+        "w": 0.463333,
+        "h": 0.31375
+      }
+    }
+  ],
+  "threshold": 80,
+  "reliable": true,
+  "warnings": []
+}

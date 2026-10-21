@@ -8,7 +8,13 @@ import pytest
 from PIL import Image, ImageDraw
 
 from soda_storyboard.cli import main
-from soda_storyboard.extract import draw_extraction_preview, extract_layout, reading_order, save_template
+from soda_storyboard.extract import (
+    draw_extraction_preview,
+    extract_image,
+    extract_layout,
+    reading_order,
+    save_template,
+)
 from soda_storyboard.geometry import shape_bbox
 from soda_storyboard.io import read_json
 from soda_storyboard.templates import suggest_layouts
@@ -177,3 +183,90 @@ def test_rotated_reference_template_can_be_suggested(tmp_path: Path, angle: floa
         5, user_templates=tmp_path / "templates", pick=template["id"], width=600, height=800
     )
     assert layouts[0]["source"] == "reference"
+
+
+def dense_page(*, gap: int = 6, frame: str = "black") -> tuple[Image.Image, list[tuple[int, ...]]]:
+    image = Image.new("RGB", (600, 800), "white")
+    draw = ImageDraw.Draw(image)
+    boxes = []
+    for row in range(3):
+        for column in range(2):
+            left = 20 if column == 0 else 300 + gap // 2
+            right = 300 - gap // 2 if column == 0 else 580
+            top, bottom = 20 + row * 255, 275 + row * 255 - gap
+            box = (left, top, right, bottom)
+            boxes.append(box)
+            draw.rectangle(box, fill="#b1c8d2", outline=frame, width=2)
+            # Artwork runs all the way to the rule, rather than floating inside.
+            for y in range(top + 3, bottom - 2, 9):
+                draw.line((left + 2, y, right - 2, min(bottom - 2, y + 45)), fill="#617c98", width=2)
+            draw.ellipse((left + 40, top + 30, left + 130, top + 150), fill="white", outline="black", width=2)
+    return image, boxes
+
+
+def assert_boxes(result: dict, boxes: list[tuple[int, ...]], tolerance: int = 7) -> None:
+    assert result["panel_count"] == len(boxes)
+    remaining = [shape_bbox(p["shape"]) for p in result["panels"]]
+    for box in boxes:
+        index = min(
+            range(len(remaining)),
+            key=lambda i: sum(abs(a - b) for a, b in zip(remaining[i], box, strict=True)),
+        )
+        assert remaining.pop(index) == pytest.approx(box, abs=tolerance)
+
+
+@pytest.mark.parametrize("gap", [3, 6])
+@pytest.mark.parametrize("frame", ["black", "#aaaaaa", "#b7d5f4"])
+def test_dense_artwork_narrow_gutters_and_light_frames(gap: int, frame: str) -> None:
+    image, boxes = dense_page(gap=gap, frame=frame)
+    assert_boxes(extract_image(image), boxes)
+
+
+def test_cross_frame_figure_and_balloon() -> None:
+    image, boxes = dense_page()
+    draw = ImageDraw.Draw(image)
+    # Two independent occlusions: a figure crosses a horizontal gutter, and a
+    # dialogue balloon covers a corner. Neither shape has a rectangular frame.
+    draw.ellipse((50, 225, 100, 325), fill="#edb59c", outline="#7b4231", width=2)
+    draw.polygon([(60, 305), (90, 305), (115, 405), (35, 405)], fill="#f0ce7d")
+    draw.ellipse((460, 470, 550, 575), fill="white", outline="black", width=2)
+    result = extract_image(image)
+    assert_boxes(result, boxes)
+    assert not result["reliable"]
+    assert result["warnings"]
+
+
+def test_fully_occluded_central_rules_are_explicitly_uncertain() -> None:
+    image, boxes = dense_page(frame="#b7d5f4")
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((220, 0, 380, 150), fill="#edb59c")
+    draw.polygon([(245, 100), (355, 100), (400, 799), (200, 799)], fill="#debada")
+    result = extract_image(image)
+    assert_boxes(result, boxes)
+    assert all(panel["confidence"] < 0.7 for panel in result["panels"])
+    assert not result["reliable"]
+    assert "建议手动调整" in result["warnings"][0]
+
+
+def test_inset_picture_and_rectangular_narration() -> None:
+    image = Image.new("RGB", (600, 800), "white")
+    draw = ImageDraw.Draw(image)
+    outer = (20, 20, 580, 780)
+    inset = (45, 450, 200, 750)
+    caption = (400, 50, 550, 200)
+    draw.rectangle(outer, fill="#adb8c4", outline="black", width=3)
+    draw.rectangle(inset, fill="#d59e87", outline="black", width=3)
+    draw.line((50, 730, 180, 470), fill="#446175", width=12)
+    draw.rectangle(caption, fill="white", outline="black", width=2)
+    draw.text((420, 90), "Narration", fill="black")
+    result = extract_image(image)
+    assert_boxes(result, [outer, inset])
+    assert shape_bbox(result["panels"][0]["shape"]) == pytest.approx(outer, abs=5)
+    assert shape_bbox(result["panels"][1]["shape"]) == pytest.approx(inset, abs=5)
+
+
+def test_empty_and_uncertain_results_warn() -> None:
+    result = extract_image(Image.new("RGB", (200, 300), "white"))
+    assert result["panel_count"] == 0
+    assert not result["reliable"]
+    assert "建议手动调整" in result["warnings"][0]
