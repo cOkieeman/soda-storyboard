@@ -39,7 +39,14 @@ def check(project_dir: str | Path) -> JSON:  # noqa: C901, PLR0912 -- read-only 
             path = Path(project_dir) / path
         graph = v2_graph(read_json(path), "{}", config=config, preset=config["preset"])
     else:
-        graph = minimal_graph("{}", config=config, preset=config["preset"], image="check.png", inpaint=True)
+        graph = minimal_graph(
+            "{}",
+            config=config,
+            preset=config["preset"],
+            image="check.png",
+            mask="check-mask.png",
+            inpaint=True,
+        )
         graph["empty"] = {"class_type": "EmptyFlux2LatentImage", "inputs": {}}
     # Character LoRAs are checked without loading models or submitting a prompt.
     for character in load_characters(Path(project_dir) / "characters").values():

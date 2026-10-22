@@ -73,6 +73,12 @@ def _unique(parts: list[str]) -> list[str]:
     return result
 
 
+def _contains_identity(parts: list[str], phrase: str) -> bool:
+    # ASCII trigger tokens need word boundaries: token_v2 is not token_v20.
+    pattern = rf"(?<![A-Za-z0-9_]){re.escape(phrase)}(?![A-Za-z0-9_])"
+    return bool(phrase) and any(re.search(pattern, part, re.IGNORECASE) for part in parts)
+
+
 def character_caption(identifier: str, characters: Mapping[str, Character], language: str = "zh") -> str:
     character = characters.get(identifier)
     if character is None:
@@ -83,9 +89,12 @@ def character_caption(identifier: str, characters: Mapping[str, Character], lang
         else (character.appearance_en or character.appearance_zh or character.display_name)
     )
     clothing = [] if language == "en" and character.appearance_en else character.clothing
-    parts = _unique([detail, *clothing, *character.trigger_words])
+    parts = _unique([detail, *clothing])
+    for trigger in character.trigger_words:
+        if trigger and not _contains_identity(parts, trigger):
+            parts.append(trigger)
     # Appearance often already starts with the character's name.
-    if character.display_name not in detail:
+    if not _contains_identity(parts, character.display_name):
         parts.insert(0, character.display_name)
     if character.age and character.age not in detail:
         parts.insert(1, character.age)
@@ -110,6 +119,31 @@ def custom_caption_enabled(panel: Panel, page: Page) -> bool:
     )
 
 
+def _scene_without_repeated_appearance(
+    scene: str, identifiers: list[str], characters: Mapping[str, Character], language: str
+) -> str:
+    """Drop only exact standalone appearance clauses, never names inside actions."""
+    appearance_clauses = set()
+    for identifier in identifiers:
+        character = characters.get(identifier)
+        if character is None:
+            continue
+        detail = character.appearance_zh if language == "zh" else character.appearance_en
+        for phrase in [detail, *character.clothing]:
+            appearance_clauses.update(
+                part.strip().casefold() for part in re.split(r"[，,；;。.!！?？]", phrase) if part.strip()
+            )
+    pieces = re.split(r"([，,；;。.!！?？])", scene)
+    result = []
+    for offset in range(0, len(pieces), 2):
+        clause = pieces[offset]
+        if clause.strip().casefold() not in appearance_clauses:
+            result.append(clause)
+            if offset + 1 < len(pieces):
+                result.append(pieces[offset + 1])
+    return "".join(result)
+
+
 def structured_caption(
     panel: Panel, page: Page, characters: Mapping[str, Character], language: str = "zh"
 ) -> str:
@@ -123,6 +157,8 @@ def structured_caption(
         if identifier not in figure_ids
     )
     scene = panel.description if language == "zh" else panel.extra.get("description_en") or panel.description
+    identifiers = list(dict.fromkeys([*panel.character_ids, *(figure.character_id for figure in figures)]))
+    scene = _scene_without_repeated_appearance(scene, identifiers, characters, language)
     parts = [
         SHOTS.get(panel.shot, (panel.shot, panel.shot))[index],
         ANGLES.get(panel.angle, (panel.angle, panel.angle))[index],
@@ -132,18 +168,7 @@ def structured_caption(
     parts.extend(
         str(panel.extra[key]) for key in ("props", "atmosphere") if isinstance(panel.extra.get(key), str)
     )
-    result = clean_caption(parts, language)
-    # Keep the first name/trigger in the person section; remove repeats from scene prose.
-    for identifier in dict.fromkeys([*panel.character_ids, *(figure.character_id for figure in figures)]):
-        character = characters.get(identifier)
-        if character:
-            for term in dict.fromkeys([character.display_name, *character.trigger_words]):
-                if term:
-                    first = result.find(term)
-                    if first >= 0:
-                        end = first + len(term)
-                        result = result[:end] + result[end:].replace(term, "")
-    return clean_caption([result], language)
+    return clean_caption(parts, language)
 
 
 def source_hash(panel: Panel, page: Page, characters: Mapping[str, Character]) -> str:

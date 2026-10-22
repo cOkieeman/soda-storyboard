@@ -12,6 +12,8 @@ from .geometry import inscribed_rect, shape_bbox
 from .models import RectShape, Text
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .models import Page
 
 
@@ -46,13 +48,45 @@ def page_texts(page: Page) -> list[Text]:
 
 
 def text_lines(text: str, limit: int) -> list[str]:
-    """Newlines delimit columns vertically and rows horizontally."""
-    limit = max(1, limit)
-    return [
-        line[start : start + limit]
-        for line in text.split("\n")
-        for start in range(0, max(1, len(line)), limit)
-    ]
+    """Wrap a character grid with the same Chinese line-break rules as lettering."""
+    return horizontal_lines(text, max(1, limit), len)
+
+
+# Kinsoku applies at generated boundaries; explicit newlines remain intentional.
+NO_LINE_START = frozenset("。，、？！：；,.!?;:」』”’）)]}〉》】〕﹂﹄︶︐︒︕︖")  # noqa: RUF001
+NO_LINE_END = frozenset("「『“‘（([{〈《【〔﹁﹃︵")  # noqa: RUF001
+
+
+def horizontal_lines(text: str, width: float, measure: Callable[[str], float]) -> list[str]:
+    """Wrap at measured glyph widths without orphaning closing punctuation.
+
+    An indivisible opening/closing punctuation group may exceed ``width``.
+    The caller then reduces the font size rather than inserting an illegal
+    break or silently deleting text.
+    """
+    result = []
+    for paragraph in text.split("\n"):
+        if not paragraph:
+            result.append("")
+            continue
+        start = 0
+        while start < len(paragraph):
+            fitted = None
+            first_legal = None
+            for end in range(start + 1, len(paragraph) + 1):
+                if end < len(paragraph) and (
+                    paragraph[end] in NO_LINE_START or paragraph[end - 1] in NO_LINE_END
+                ):
+                    continue
+                first_legal = first_legal or end
+                if measure(paragraph[start:end]) <= width:
+                    fitted = end
+                else:
+                    break
+            end = fitted or first_legal or len(paragraph)
+            result.append(paragraph[start:end])
+            start = end
+    return result
 
 
 # Unicode vertical presentation forms keep punctuation upright in both renderers.

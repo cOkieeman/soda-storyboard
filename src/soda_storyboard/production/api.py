@@ -6,15 +6,18 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import secrets
 import shutil
 from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw
 
 from soda_storyboard.compiler import character_caption, compile_geometry_map, compile_page, panel_caption
+from soda_storyboard.figure_semantics import figure_page_box
+from soda_storyboard.figures import panel_figures
 from soda_storyboard.lettering import layout_texts
 
 from .check import page_graph
@@ -29,18 +32,44 @@ from .imaging import (
     panel_size,
     preserve_text,
     quad_mask,
+    working_size,
 )
 from .lettering import letter_image
 from .state import PageState, digest, identifier, save_json, stamp
 from .state import page_ids as project_page_ids
 
 if TYPE_CHECKING:
-    from soda_storyboard.models import Character, Page, Panel
+    from soda_storyboard.models import Character, Overlay, Page, Panel
 
     from .client import Progress
 
 type JSON = dict[str, Any]
 OPAQUE = 255
+MAX_SEED = 2**64 - 1
+
+
+def _seed(value: int | None) -> int:
+    if value is None:
+        return secrets.randbits(63)
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_SEED:
+        msg = "seed 必须是 0 到 18446744073709551615 之间的整数"
+        raise ProductionError(msg)
+    return value
+
+
+def _generation_seeds(count: int, seed: int | list[int] | tuple[int, ...] | None) -> list[int]:
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        msg = "seeds 必须是大于 0 的整数（候选数量）"
+        raise ProductionError(msg)
+    # Explicit values are the complete candidate list; never silently append
+    # random candidates when the historical default count is still four.
+    if seed is None:
+        return [_seed(None) for _ in range(count)]
+    values = list(seed) if isinstance(seed, (list, tuple)) else [seed]
+    if not values:
+        msg = "seed 列表不能为空"
+        raise ProductionError(msg)
+    return [_seed(value) for value in values]
 
 
 def panel_characters(panel: Panel) -> list[str]:
@@ -90,14 +119,13 @@ def generate_page(  # noqa: PLR0913 -- fixed P4a API signature
     page_id: str,
     *,
     seeds: int = 4,
+    seed: int | list[int] | tuple[int, ...] | None = None,
     preset: str = "draft",
     model: str | None = None,
     lora: str = "auto",
     progress: Progress = None,
 ) -> list[dict]:
-    if isinstance(seeds, bool) or not isinstance(seeds, int) or seeds < 1:
-        msg = "seeds 必须是大于 0 的整数（候选数量）"
-        raise ProductionError(msg)
+    selected_seeds = _generation_seeds(seeds, seed)
     state = PageState(project_dir, page_id)
     chosen = select_lora(state.page, state.characters, lora)
     generation_page = copy.deepcopy(state.page)
@@ -112,22 +140,23 @@ def generate_page(  # noqa: PLR0913 -- fixed P4a API signature
     timestamp = stamp()
     results = []
     client = state.client()
-    for index in range(seeds):
-        seed = secrets.randbits(63)
-        path = state.directory / "renders" / f"{timestamp}_{seed}.png"
+    for index, actual_seed in enumerate(selected_seeds):
+        path = state.directory / "renders" / f"{timestamp}_{index + 1}_{actual_seed}.png"
         graph = page_graph(
             state,
             prompt,
             model=model,
             preset=preset,
-            seed=seed,
+            seed=actual_seed,
             width=state.page.canvas_width,
             height=state.page.canvas_height,
             lora=chosen,
-            prefix=f"soda-storyboard/{page_id}/{timestamp}_{seed}",
+            prefix=f"soda-storyboard/{page_id}/{timestamp}_{index + 1}_{actual_seed}",
         )
         if progress:
-            progress({"stage": "candidate", "index": index + 1, "total": seeds, "seed": seed})
+            progress(
+                {"stage": "candidate", "index": index + 1, "total": len(selected_seeds), "seed": actual_seed}
+            )
         client.run(
             graph, path, progress=progress, output_node="81" if state.config["backend"] == "v2" else "10"
         )
@@ -143,10 +172,10 @@ def generate_page(  # noqa: PLR0913 -- fixed P4a API signature
             "backend": state.config["backend"],
             "created_at": timestamp,
         }
-        record = {"path": state.relative(path), "seed": seed, "meta": meta}
+        record = {"path": state.relative(path), "seed": actual_seed, "meta": meta}
         state.production.setdefault("renders", []).append(record)
         state.save()  # Keep earlier candidates if a later one fails or times out.
-        results.append({"path": str(path), "seed": seed, "meta": dict(meta)})
+        results.append({"path": str(path), "seed": actual_seed, "meta": dict(meta)})
     sheet = state.directory / "renders" / f"{timestamp}_candidates.png"
     candidate_sheet([Path(r["path"]) for r in results], [r["seed"] for r in results], sheet)
     state.production["candidate_sheet"] = state.relative(sheet)
@@ -288,9 +317,30 @@ def _panel_source(state: PageState, panel: Panel) -> Image.Image:
     return open_rgb(state.base(), _canvas(state)).crop(panel_box(panel))
 
 
-def _single_prompt(state: PageState, panel: Panel, character_id: str | None) -> str:
+def _inpaint_geometry(state: PageState, panel: Panel, character_id: str) -> str:
+    px, py, _, _ = panel_box(panel)
+    width, height = panel_size(panel)
+    figures = panel_figures(panel, state.page)
+    boxes = []
+    for figure in figures:
+        if figure.character_id == character_id:
+            left, top, right, bottom = figure_page_box(figure, panel)
+            boxes.append(
+                f"({(left - px) / width:.1%} left, {(top - py) / height:.1%} top, "
+                f"{(right - left) / width:.1%} width, {(bottom - top) / height:.1%} height)"
+            )
+    return (
+        f"The target {character_id} occupies the editor figure bounds "
+        + "; ".join(boxes)
+        + ". Keep the target at the same shot distance and matching body scale as the other "
+        "person in this frame. Preserve their relative heights, framing and perspective; "
+        "continue the original background seamlessly through the edited region."
+    )
+
+
+def _single_prompt(state: PageState, panel: Panel, character_id: str | None, *, mode: str = "detail") -> str:
     caption = panel_caption(panel, state.page, state.characters)
-    character = character_caption(character_id, state.characters) if character_id else ""
+    character = character_caption(character_id, state.characters, "en") if character_id else ""
     return ". ".join(
         s
         for s in (
@@ -298,8 +348,19 @@ def _single_prompt(state: PageState, panel: Panel, character_id: str | None) -> 
                 "A single manga illustration, one frame only, no panel borders, "
                 "no gutters, no text, no speech bubbles"
             ),
+            state.page.style_prompt or state.page.style_prefix,
             caption,
             character,
+            (
+                "Preserve the source image's composition, camera framing, body proportions, pose, "
+                "actions and character positions. Preserve all props, their positions, motion and "
+                "visible contents. Replace only the target character's appearance and identity "
+                "with the supplied character description and trigger words. Keep the existing "
+                "anime body proportions and scene continuity; use the supplied target clothing design"
+                if mode in {"swap", "inpaint"}
+                else ""
+            ),
+            _inpaint_geometry(state, panel, character_id) if mode == "inpaint" else "",
         )
         if s
     )
@@ -313,6 +374,7 @@ def _redraw(  # noqa: PLR0913, PLR0915 -- shared generation and version registra
     character_id: str | None,
     denoise: float,
     progress: Progress,
+    seed: int | None = None,
     margin: int = 24,
     feather: int = 16,
 ) -> dict:
@@ -346,23 +408,26 @@ def _redraw(  # noqa: PLR0913, PLR0915 -- shared generation and version registra
     original = _panel_source(state, panel)
     folder = state.directory / "panels" / identifier(panel_id)
     folder.mkdir(parents=True, exist_ok=True)
-    token, seed = stamp(), secrets.randbits(63)
+    token, seed = stamp(), _seed(seed)
     source = folder / f"{token}_input.png"
-    upload = original.convert("RGBA")
     mask = None
     mask_path = None
+    working_mask_path = None
+    width, height = working_size(*original.size)
     if mode == "inpaint":
         mask = figure_mask(panel, state.page, character_id, margin=margin, feather=feather)
         mask_path = folder / f"{token}_mask.png"
         mask.save(mask_path)
-        upload.putalpha(ImageOps.invert(mask))
-    # MOSS latent dimensions must be multiples of 16; resize the alpha with the RGB.
-    width, height = max(16, round(original.width / 16) * 16), max(16, round(original.height / 16) * 16)
-    upload.resize((width, height), Image.Resampling.LANCZOS).save(source)
+        working_mask_path = folder / f"{token}_work-mask.png"
+        mask.resize((width, height), Image.Resampling.LANCZOS).save(working_mask_path)
+    # Never hide the original RGB under transparent alpha: Pillow premultiplies
+    # RGBA during resizing and destroys precisely the pixels being repaired.
+    original.resize((width, height), Image.Resampling.LANCZOS).save(source)
     client = state.client()
     uploaded = client.upload(source)
+    uploaded_mask = client.upload(working_mask_path) if working_mask_path else None
     graph = minimal_graph(
-        _single_prompt(state, panel, character_id),
+        _single_prompt(state, panel, character_id, mode=mode),
         config=state.config,
         preset=state.config["preset"],
         seed=seed,
@@ -370,15 +435,17 @@ def _redraw(  # noqa: PLR0913, PLR0915 -- shared generation and version registra
         height=height,
         lora=chosen,
         image=uploaded,
+        mask=uploaded_mask,
         denoise=denoise,
         inpaint=mode == "inpaint",
+        composite_mask=False,
         prefix=f"soda-storyboard/{state.page.page_id}/{panel_id}_{token}",
     )
     destination = folder / f"{token}_{seed}.png"
     client.run(graph, destination, progress=progress)
     redrawn = open_rgb(destination, original.size)
     if mask is not None:
-        # Also enforce preservation locally, independent of server node behavior.
+        # Blend exactly once at native size, with the mask shown in mask-only.
         redrawn = Image.composite(redrawn, original, mask)
     redrawn = preserve_text(original, redrawn, panel, state.page)
     redrawn.save(destination)
@@ -396,6 +463,7 @@ def _redraw(  # noqa: PLR0913, PLR0915 -- shared generation and version registra
         "source_render": state.production["selected_render"],
         "resolved_characters": sorted(resolved),
         "mask": state.relative(mask_path) if mask_path else None,
+        "working_size": [width, height],
     }
     state.panel(panel_id).setdefault("production", {}).setdefault("renders", []).append(record)
     state.save()
@@ -411,6 +479,7 @@ def redraw_panel(  # noqa: PLR0913 -- fixed P4a API signature
     mode: str = "detail",
     character_id: str | None = None,
     denoise: float | None = None,
+    seed: int | None = None,
     progress: Progress = None,
 ) -> dict:
     if mode not in {"detail", "swap"}:
@@ -427,6 +496,7 @@ def redraw_panel(  # noqa: PLR0913 -- fixed P4a API signature
         character_id=character_id,
         denoise=strength,
         progress=progress,
+        seed=seed,
     )
 
 
@@ -441,11 +511,14 @@ def inpaint_panel(  # noqa: PLR0913 -- explicit mask geometry options
     margin: int = 24,
     feather: int = 16,
     mask_only: bool = False,
+    seed: int | None = None,
     progress: Progress = None,
 ) -> dict:
     if not 0 <= denoise <= 1:
         msg = "denoise 必须在 0 到 1 之间"
         raise ProductionError(msg)
+    if seed is not None:
+        _seed(seed)
     if mask_only:
         state = PageState(project_dir, page_id)
         state.panel(panel_id)
@@ -473,6 +546,7 @@ def inpaint_panel(  # noqa: PLR0913 -- explicit mask geometry options
         character_id=character_id,
         denoise=denoise,
         progress=progress,
+        seed=seed,
         margin=margin,
         feather=feather,
     )
@@ -653,13 +727,70 @@ def _remove_background_node(definition: JSON, class_name: str) -> tuple[JSON, in
     return node(class_name, **inputs), outputs.index("IMAGE")
 
 
+CUTOUT_TEMPLATES = {
+    "whole": "A single solo character illustration, one person only, full body",
+    "partial": (
+        "A tightly cropped body-part detail illustration, showing only the described body parts "
+        "and held props, all unrelated anatomy outside the image"
+    ),
+    "object": "An isolated object illustration, showing only the described objects and props",
+}
+CUTOUT_PARTIAL = re.compile(
+    r"手|手腕|手臂|上半身|半身|局部|脚|腿部|头部|面部|胸像|"
+    r"\b(?:hands?|wrists?|arms?|upper[- ]body|bust|body[- ]part|feet|foot|head|face)\b",
+    re.IGNORECASE,
+)
+CUTOUT_WHOLE = re.compile(r"全身|完整人物|\b(?:full[- ]body|whole[- ]body)\b", re.IGNORECASE)
+CUTOUT_TIGHT = re.compile(r"只|仅|特写|局部|半身|\b(?:only|just|close[- ]up|detail)\b", re.IGNORECASE)
+
+
+def cutout_kind(overlay: Overlay) -> str:
+    """Prefer explicit framing; infer conservatively and default to an object."""
+    if overlay.cutout_type != "auto":
+        if overlay.cutout_type not in CUTOUT_TEMPLATES:
+            msg = "cutout_type 必须是 auto、whole、partial 或 object"
+            raise ProductionError(msg)
+        return overlay.cutout_type
+    partial = CUTOUT_PARTIAL.search(overlay.description)
+    whole = CUTOUT_WHOLE.search(overlay.description)
+    # A request for only a hand takes precedence over broad character wording;
+    # a whole person may still naturally have hands, a wristwatch or a face.
+    if partial and (not whole or CUTOUT_TIGHT.search(overlay.description)):
+        return "partial"
+    return "whole" if whole else "object"
+
+
+def _cutout_prompt(state: PageState, overlay: Overlay, kind: str) -> str:
+    identity = ""
+    character = state.characters.get(overlay.character_id)
+    if kind == "whole":
+        identity = character_caption(overlay.character_id, state.characters, "en")
+    elif kind == "partial" and character:
+        # Full appearance cards often describe hair and whole outfits. A hand
+        # detail must use its own description rather than request those parts.
+        identity = ", ".join(dict.fromkeys([character.display_name, *character.trigger_words]))
+    return ". ".join(
+        part
+        for part in (
+            CUTOUT_TEMPLATES[kind]
+            + ", plain solid white background, no panel borders, no text, no speech bubbles",
+            state.page.style_prompt,
+            state.page.style_prefix,
+            identity,
+            overlay.description,
+        )
+        if part
+    )
+
+
 @production_operation
-def cutout(
+def cutout(  # noqa: PLR0913 -- optional reproducible generation and PNG import
     project_dir: str | Path,
     page_id: str,
     overlay_id: str,
     *,
     png: str | Path | None = None,
+    seed: int | None = None,
     progress: Progress = None,
 ) -> dict:
     state = PageState(project_dir, page_id)
@@ -668,6 +799,9 @@ def cutout(
     if overlay is None or overlay.mode != "layer":
         msg = f"找不到 mode: layer 的出格图层：{overlay_id}"
         raise ProductionError(msg)
+    kind = cutout_kind(overlay)
+    validated_seed = _seed(seed)
+    actual_seed = validated_seed if not png else None
     destination = state.directory / "overlays" / f"{identifier(overlay_id)}_{stamp()}.png"
     destination.parent.mkdir(parents=True, exist_ok=True)
     if png:
@@ -692,16 +826,9 @@ def cutout(
             )
             raise ProductionError(msg)
         remove, output_index = _remove_background_node(definition, class_name)
-        chosen = _character_lora(state, overlay.character_id)
-        prompt = (
-            "A single solo character illustration, one person only, full body, plain solid white background, "
-            "no panel borders, no text, no speech bubbles. "
-            + character_caption(overlay.character_id, state.characters)
-            + ". "
-            + overlay.description
-        )
-        width = max(16, round(overlay.rect.w / 16) * 16)
-        height = max(16, round(overlay.rect.h / 16) * 16)
+        chosen = _character_lora(state, overlay.character_id) if kind != "object" else None
+        prompt = _cutout_prompt(state, overlay, kind)
+        width, height = working_size(overlay.rect.w, overlay.rect.h)
         graph = minimal_graph(
             prompt,
             config=state.config,
@@ -709,7 +836,7 @@ def cutout(
             lora=chosen,
             width=width,
             height=height,
-            seed=secrets.randbits(63),
+            seed=actual_seed,
         )
         graph["cutout"] = remove
         graph["10"]["inputs"]["images"] = ["cutout", output_index]
@@ -719,7 +846,10 @@ def cutout(
                 msg = f"节点 {class_name} 未返回透明图片，请提供已抠好的 PNG"
                 raise ProductionError(msg)
     old_lettering = state.production.get("lettered")
-    state.production.setdefault("overlays", {})[overlay_id] = {"path": state.relative(destination)}
+    record = {"path": state.relative(destination), "seed": actual_seed, "cutout_type": kind}
+    if not png:
+        record["working_size"] = [width, height]
+    state.production.setdefault("overlays", {})[overlay_id] = record
     state.invalidate()
     state.save()
     result = compose_page(project_dir, page_id)
@@ -727,7 +857,7 @@ def cutout(
         result = letter_with_options(
             project_dir, page_id, font=old_lettering.get("font"), text_ids=old_lettering.get("text_ids")
         )
-    return {"overlay_id": overlay_id, "path": str(destination), "page_path": result}
+    return {**record, "overlay_id": overlay_id, "path": str(destination), "page_path": result}
 
 
 __all__ = [

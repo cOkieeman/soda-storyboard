@@ -47,8 +47,10 @@ def minimal_graph(  # noqa: PLR0913 -- explicit graph generation options
     height: int = 1536,
     lora: JSON | None = None,
     image: str | None = None,
+    mask: str | None = None,
     denoise: float = 1,
     inpaint: bool = False,
+    composite_mask: bool = True,
     prefix: str = "soda-storyboard",
 ) -> JSON:
     cfg = {**DEFAULTS, **(config or {})}
@@ -58,8 +60,8 @@ def minimal_graph(  # noqa: PLR0913 -- explicit graph generation options
     if width <= 0 or height <= 0 or not 0 <= denoise <= 1 or seed < 0:
         msg = "尺寸必须为正数、种子不能为负、denoise 必须在 0 到 1 之间"
         raise ProductionError(msg)
-    if inpaint and not image:
-        msg = "局部重绘需要带透明遮罩的输入图片"
+    if (inpaint or mask) and not image:
+        msg = "局部重绘需要输入图片"
         raise ProductionError(msg)
     selected = model or cfg["model"]
     graph = {
@@ -95,7 +97,13 @@ def minimal_graph(  # noqa: PLR0913 -- explicit graph generation options
         graph["13"] = node("VAEEncode", pixels=["11", 0], vae=["3", 0])
         latent = ["13", 0]
         if inpaint:
-            graph["14"] = node("SetLatentNoiseMask", samples=latent, mask=["11", 1])
+            # Separate RGB and mask uploads preserve original pixels even where
+            # noise is applied. Keep alpha-mask support for existing callers.
+            mask_link = ["11", 1]
+            if mask:
+                graph["12"] = node("LoadImageMask", image=mask, channel="red")
+                mask_link = ["12", 0]
+            graph["14"] = node("SetLatentNoiseMask", samples=latent, mask=mask_link)
             latent = ["14", 0]
     else:
         graph["7"] = node("EmptyFlux2LatentImage", width=width, height=height, batch_size=1)
@@ -112,7 +120,7 @@ def minimal_graph(  # noqa: PLR0913 -- explicit graph generation options
     )
     graph["9"] = node("VAEDecode", samples=["8", 0], vae=["3", 0])
     output = ["9", 0]
-    if inpaint:
+    if inpaint and composite_mask:
         graph["15"] = node(
             "ImageCompositeMasked",
             destination=["11", 0],
@@ -120,7 +128,7 @@ def minimal_graph(  # noqa: PLR0913 -- explicit graph generation options
             x=0,
             y=0,
             resize_source=False,
-            mask=["11", 1],
+            mask=mask_link,
         )
         output = ["15", 0]
     graph["10"] = node("SaveImage", images=output, filename_prefix=prefix)

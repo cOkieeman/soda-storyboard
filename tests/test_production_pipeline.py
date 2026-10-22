@@ -117,7 +117,8 @@ def test_lora_plan_swap_and_inpaint_candidates(project: Path) -> None:
             api.redraw_panel(project, "pudding", local["panel_id"], mode="swap", character_id="older")
         painted = api.inpaint_panel(project, "pudding", local["panel_id"], character_id="older")
         assert Path(painted["mask"]).is_file()
-        assert fake.prompts[-1]["14"]["inputs"]["mask"] == ["11", 1]
+        assert fake.prompts[-1]["14"]["inputs"]["mask"] == ["12", 0]
+        assert fake.prompts[-1]["12"]["class_type"] == "LoadImageMask"
         api.pick_panel(project, "pudding", local["panel_id"], painted["path"])
         assert local not in api.production_plan(project, "pudding")["redraws"]
 
@@ -251,6 +252,7 @@ def test_generated_cutout_uses_detected_node_and_one_lora(project: Path, *, with
             "id": "hero",
             "character_id": "older",
             "mode": "layer",
+            "cutout_type": "whole",
             "rect": {"type": "rect", "x": 0, "y": 0, "w": 100, "h": 200},
         }
     ]

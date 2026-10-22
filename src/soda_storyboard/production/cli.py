@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from . import api
 from .check import check
 from .graphs import PRESETS
-from .imaging import panel_size
+from .imaging import panel_size, working_size
 from .state import PageState, configure
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ def _estimate(count: int, preset: str, width: int, height: int) -> None:
 def _panel_dimensions(state: PageState, panel_id: str) -> tuple[int, int]:
     state.panel(panel_id)
     panel = next(p for p in state.page.panels if p.id == panel_id)
-    return tuple(max(16, round(v / 16) * 16) for v in panel_size(panel))
+    return working_size(*panel_size(panel))
 
 
 def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915 -- one thin branch per public operation
@@ -83,9 +83,16 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915 --
         if action == "generate":
             state = PageState(root, page_id)
             preset = args.preset or state.config["preset"]
-            _estimate(args.seeds, preset, state.page.canvas_width, state.page.canvas_height)
+            count = len(args.seed) if args.seed else args.seeds
+            _estimate(count, preset, state.page.canvas_width, state.page.canvas_height)
             result = api.generate_page(
-                root, page_id, seeds=args.seeds, preset=preset, model=args.model, lora=args.lora
+                root,
+                page_id,
+                seeds=args.seeds,
+                seed=args.seed,
+                preset=preset,
+                model=args.model,
+                lora=args.lora,
             )
         elif action == "pick":
             result = api.pick_render(root, page_id, args.render)
@@ -97,7 +104,13 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915 --
             state = PageState(root, page_id)
             _estimate(1, state.config["preset"], *_panel_dimensions(state, args.panel))
             result = api.redraw_panel(
-                root, page_id, args.panel, mode=args.mode, character_id=args.character, denoise=args.denoise
+                root,
+                page_id,
+                args.panel,
+                mode=args.mode,
+                character_id=args.character,
+                denoise=args.denoise,
+                seed=args.seed,
             )
         elif action == "inpaint":
             if not args.mask_only:
@@ -112,6 +125,7 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915 --
                 margin=args.margin,
                 feather=args.feather,
                 mask_only=args.mask_only,
+                seed=args.seed,
             )
         elif action == "pick-panel":
             result = api.pick_panel(root, page_id, args.panel, args.render)
@@ -129,10 +143,9 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915 --
                     _estimate(
                         1,
                         state.config["preset"],
-                        max(16, round(overlay.rect.w / 16) * 16),
-                        max(16, round(overlay.rect.h / 16) * 16),
+                        *working_size(round(overlay.rect.w), round(overlay.rect.h)),
                     )
-            result = api.cutout(root, page_id, args.overlay, png=args.png)
+            result = api.cutout(root, page_id, args.overlay, png=args.png, seed=args.seed)
         else:
             msg = f"未知生产命令：{action}"
             raise ValueError(msg)
@@ -160,7 +173,7 @@ def _common(parser: argparse.ArgumentParser, action: str, *, page: bool = True) 
     return parser
 
 
-def register_commands(subparsers: argparse._SubParsersAction) -> None:
+def register_commands(subparsers: argparse._SubParsersAction) -> None:  # noqa: PLR0915 -- argparse declarations
     comfy = subparsers.add_parser("comfy", help="配置和检查 ComfyUI")
     comfy_sub = comfy.add_subparsers(dest="comfy_command", required=True)
     config = _common(comfy_sub.add_parser("config"), "config", page=False)
@@ -176,6 +189,7 @@ def register_commands(subparsers: argparse._SubParsersAction) -> None:
     gen_sub = gen.add_subparsers(dest="gen_command", required=True)
     generate = _common(gen_sub.add_parser("page"), "generate")
     generate.add_argument("--seeds", type=int, default=4, help="生成数量（每张使用一个随机种子）")
+    generate.add_argument("--seed", type=int, action="append", help="指定种子，可重复；数量以种子列表为准")
     generate.add_argument("--preset", choices=("draft", "final"))
     generate.add_argument("--model", help="base / sft / 自定义模型文件名")
     generate.add_argument("--lora", default="auto", help="auto / none / 角色 id")
@@ -188,12 +202,14 @@ def register_commands(subparsers: argparse._SubParsersAction) -> None:
     redraw.add_argument("--mode", choices=("detail", "swap"), default="detail")
     redraw.add_argument("--character")
     redraw.add_argument("--denoise", type=float)
+    redraw.add_argument("--seed", type=int, help="指定可复现种子；省略时随机")
     inpaint = _common(subparsers.add_parser("inpaint", help="按 figures 局部换人"), "inpaint")
     inpaint.add_argument("panel")
     inpaint.add_argument("--character", required=True)
     inpaint.add_argument("--denoise", type=float, default=0.85)
     inpaint.add_argument("--margin", type=int, default=24)
     inpaint.add_argument("--feather", type=int, default=16)
+    inpaint.add_argument("--seed", type=int, help="指定可复现种子；省略时随机")
     inpaint.add_argument(
         "--mask-only", action="store_true", help="只保存遮罩和叠加预览，不连接 ComfyUI 或提交采样"
     )
@@ -209,6 +225,7 @@ def register_commands(subparsers: argparse._SubParsersAction) -> None:
     cutout = _common(subparsers.add_parser("cutout", help="生成或导入透明出格人物并叠加"), "cutout")
     cutout.add_argument("overlay")
     cutout.add_argument("--png", help="已抠好的透明 PNG；使用此参数不调用 ComfyUI")
+    cutout.add_argument("--seed", type=int, help="指定可复现种子；省略时随机")
     export = _common(subparsers.add_parser("export", help="按页序导出 PNG 或 PDF"), "export", page=False)
     export.add_argument("target", nargs="?", help="页 id、页 JSON、项目目录；省略时导出整个项目")
     export.add_argument("--format", choices=("png", "pdf"), default="png")

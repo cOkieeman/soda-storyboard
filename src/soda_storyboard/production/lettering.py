@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PIL import ImageDraw, ImageFont
 
 from soda_storyboard.bubble_geometry import layout_shout_text, shout_bubble_points
-from soda_storyboard.lettering import layout_texts, text_lines, vertical_columns
+from soda_storyboard.lettering import horizontal_lines, layout_texts, vertical_columns
 
 from .errors import ProductionError
 
@@ -113,6 +114,60 @@ def _font(path: str | None, size: int) -> ImageFont.FreeTypeFont | ImageFont.Ima
         raise ProductionError(msg) from exc
 
 
+@dataclass
+class HorizontalTextLayout:
+    lines: list[str]
+    font_size: int
+    line_height: float
+    width: float
+    height: float
+
+
+def fit_horizontal_text(  # noqa: PLR0913 -- shared measured fitting context
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font_path: str | None,
+    requested_size: float,
+    *,
+    width: float,
+    height: float,
+) -> HorizontalTextLayout:
+    """Try readable single rows before wrapping by real glyph advance widths.
+
+    Explicit newlines are hard boundaries. Reducing a requested size by up to
+    35% is preferred to introducing extra rows; longer passages then wrap and
+    fit normally rather than becoming an unreadably tiny single row.
+    """
+    initial = max(1, min(512, round(requested_size)))
+    minimum = max(1, math.ceil(initial * 0.65))
+    explicit = text.split("\n")
+    for wrap, sizes in ((False, range(initial, minimum - 1, -1)), (True, range(initial, 0, -1))):
+        for size in sizes:
+            font = _font(font_path, size)
+
+            def measure(value: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont = font) -> float:
+                bounds = draw.textbbox((0, 0), value, font=font)
+                return max(draw.textlength(value, font=font), bounds[2] - bounds[0])
+
+            lines = horizontal_lines(text, width, measure) if wrap else explicit
+            line_height = (
+                max(
+                    size,
+                    *(
+                        draw.textbbox((0, 0), line, font=font)[3] - draw.textbbox((0, 0), line, font=font)[1]
+                        for line in lines
+                    ),
+                )
+                * 1.2
+            )
+            total_width = max(map(measure, lines))
+            layout = HorizontalTextLayout(lines, size, line_height, total_width, len(lines) * line_height)
+            if layout.width <= width and layout.height <= height:
+                return layout
+    msg = "文字框过小，无法排入原文，请扩大 bbox"
+    raise ProductionError(msg)
+
+
 def shout_tail_tip(text: Text, scale: float = 1) -> tuple[float, float] | None:
     value = text.extra.get("tail_tip")
     if not isinstance(value, (list, tuple)) or len(value) != 2:  # noqa: PLR2004 -- a coordinate pair
@@ -160,9 +215,16 @@ def draw_shout_text(  # noqa: PLR0913 -- shared render context and lettering opt
                     anchor="mm",
                 )
     else:
-        for row, line in enumerate(layout.lines):
+        measured = fit_horizontal_text(
+            draw, text.text, font_path, font_size, width=layout.area[2], height=layout.area[3]
+        )
+        font = _font(font_path, measured.font_size)
+        for row, line in enumerate(measured.lines):
             draw.text(
-                ((left + right + 1) / 2, top + layout.content_y + (row + 0.5) * layout.cell_height),
+                (
+                    (left + right + 1) / 2,
+                    top + (bottom - top + 1 - measured.height) / 2 + (row + 0.5) * measured.line_height,
+                ),
                 line,
                 fill=color,
                 font=font,
@@ -170,7 +232,7 @@ def draw_shout_text(  # noqa: PLR0913 -- shared render context and lettering opt
             )
 
 
-def _draw_text(  # noqa: C901, PLR0912 -- fitting horizontal rows and vertical columns
+def _draw_text(  # noqa: C901 -- fitting horizontal rows and vertical columns
     image: Image.Image, text: Text, page: Page, font_path: str | None
 ) -> None:
     if text.bbox is None:
@@ -199,54 +261,48 @@ def _draw_text(  # noqa: C901, PLR0912 -- fitting horizontal rows and vertical c
         max(1, (bottom - top) * (1 - padding * 2)),
     )
     vertical = (text.direction or page.text_direction) == "vertical"
-    # Reflow within the declared box, respecting explicit newlines and column order.
-    limit = max(
-        1,
-        min(
-            page.text_max_chars,
-            round(math.sqrt(len(text.text) * (usable_h / usable_w if vertical else usable_w / usable_h))),
-        ),
-    )
-    lines = vertical_columns(text.text, page.text_max_chars) if vertical else text_lines(text.text, limit)
     initial_size = font_size_override(text)
     if initial_size is None:
         initial_size = page.text_font_size * page.canvas_width / 1024
+    if not vertical:
+        layout = fit_horizontal_text(
+            draw, text.text, font_path, initial_size, width=usable_w, height=usable_h
+        )
+        font = _font(font_path, layout.font_size)
+        y = (top + bottom - layout.height) / 2
+        for index, line in enumerate(layout.lines):
+            draw.text(
+                ((left + right) / 2, y + (index + 0.5) * layout.line_height),
+                line,
+                font=font,
+                fill="black",
+                anchor="mm",
+            )
+        return
+    lines = vertical_columns(text.text, page.text_max_chars)
     for size in range(max(1, round(initial_size)), 0, -1):
         font = _font(font_path, size)
-        if vertical:
-            cell_w = cell_h = size
-            total_w, total_h = len(lines) * cell_w * 1.2, max(map(len, lines)) * cell_h * 1.1
-        else:
-            cell_h = max(size, *(draw.textbbox((0, 0), line, font=font)[3] for line in lines)) * 1.2
-            total_w, total_h = max(draw.textlength(line, font=font) for line in lines), len(lines) * cell_h
+        cell_w = cell_h = size
+        total_w, total_h = len(lines) * cell_w * 1.2, max(map(len, lines)) * cell_h * 1.1
         if total_w <= usable_w and total_h <= usable_h:
             break
     if total_w > usable_w or total_h > usable_h:
         msg = f"文字 {text.id} 的框过小，无法排入原文，请扩大 bbox"
         raise ProductionError(msg)
     x, y = (left + right - total_w) / 2, (top + bottom - total_h) / 2
-    if vertical:
-        for index, line in enumerate(lines):
-            column = len(lines) - 1 - index if page.reading_direction == "rtl" else index
-            column_x = x + column * cell_w * 1.2
-            for row, char in enumerate(line):
-                glyph_font = _font(
-                    font_path, max(1, int(size * min(1, cell_w / max(1, draw.textlength(char, font=font)))))
-                )
-                draw.text(
-                    (column_x + cell_w / 2, y + (row + 0.5) * cell_h * 1.1),
-                    char,
-                    font=glyph_font,
-                    fill="black",
-                    anchor="mm",
-                )
-    else:
-        for index, line in enumerate(lines):
+    for index, line in enumerate(lines):
+        column = len(lines) - 1 - index if page.reading_direction == "rtl" else index
+        column_x = x + column * cell_w * 1.2
+        for row, char in enumerate(line):
+            glyph_font = _font(
+                font_path, max(1, int(size * min(1, cell_w / max(1, draw.textlength(char, font=font)))))
+            )
             draw.text(
-                ((left + right - draw.textlength(line, font=font)) / 2, y + index * cell_h),
-                line,
-                font=font,
+                (column_x + cell_w / 2, y + (row + 0.5) * cell_h * 1.1),
+                char,
+                font=glyph_font,
                 fill="black",
+                anchor="mm",
             )
 
 

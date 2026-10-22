@@ -24,6 +24,18 @@ if TYPE_CHECKING:
 
 EPSILON = 1e-8
 PIXEL_TOLERANCE = 1e-6
+MOSS_ALIGNMENT = 16
+
+
+def working_size(width: int, height: int, *, long_side: int = 1024) -> tuple[int, int]:
+    """Keep the crop's aspect ratio at a useful, 16-aligned diffusion size."""
+    if width <= 0 or height <= 0 or long_side < MOSS_ALIGNMENT:
+        msg = "工作尺寸必须为正数，长边至少为 16"
+        raise ProductionError(msg)
+    scale = long_side / max(width, height)
+    return tuple(
+        max(MOSS_ALIGNMENT, round(side * scale / MOSS_ALIGNMENT) * MOSS_ALIGNMENT) for side in (width, height)
+    )
 
 
 def open_rgb(path: str | Path, size: tuple[int, int] | None = None) -> Image.Image:

@@ -42,7 +42,7 @@ def metadata_root(tmp_path: Path) -> Path:
 
 
 def test_repository_release_versions_match() -> None:
-    assert RELEASE_CHECK(ROOT, "v0.4.0") == "0.4.0"
+    assert RELEASE_CHECK(ROOT, "v0.4.1") == "0.4.1"
 
 
 def test_version_check_without_tag(metadata_root: Path) -> None:

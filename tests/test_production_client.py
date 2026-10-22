@@ -37,7 +37,9 @@ class FakeComfy:
             for name in {
                 node["class_type"]
                 for preset in ("draft", "final")
-                for node in minimal_graph("test", preset=preset, image="input.png", inpaint=True).values()
+                for node in minimal_graph(
+                    "test", preset=preset, image="input.png", mask="mask.png", inpaint=True
+                ).values()
             }
         }
         self.definitions["EmptyFlux2LatentImage"] = {"input": {"required": {}}}

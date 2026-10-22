@@ -7,11 +7,11 @@
 需要 Python 3.12+、[uv](https://docs.astral.sh/uv/) 和支持本地插件的 Codex 桌面端或 Claude Code。网页编辑器已随 Python 包发布，**不需要 Node，也不需要手动构建前端**。只有出图需要另外运行 ComfyUI 并准备 MOSS 模型；拆分镜、草稿和网页编辑可独立使用。
 
 ```powershell
-uv tool install git+https://github.com/cOkieeman/soda-storyboard
+uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.0/soda_storyboard-0.4.0-py3-none-any.whl
 soda-storyboard --help
 ```
 
-uv 尚未找到 Python 3.12+ 时，可在安装命令末尾加 `--python 3.12`。安装后在新终端检查命令可用。更新使用同一条安装命令并加 `--force`。Git 安装需要 Git 和网络；本轮只做了离线构建与本地验证，没有在线验证从 GitHub 安装。
+0.4.0 是已发布版本，wheel 包含网页编辑器和运行时数据。uv 尚未找到 Python 3.12+ 时，可在安装命令末尾加 `--python 3.12`。安装后在新终端检查命令可用。更新到指定发布版时更换 wheel URL，并加 `--force`。需要修改源码的开发者也可用 `uv tool install git+https://github.com/cOkieeman/soda-storyboard`，Git 方式需要 Git 和网络。
 
 如果安装器提示工具目录不在 PATH，运行 `uv tool update-shell`，关闭并重开终端后再检查。也可直接使用安装器显示的工具目录下 `soda-storyboard.exe` 的绝对路径运行 `--help`（其他系统使用对应可执行文件）。不要将“包安装成功”当成当前终端已能找到命令。
 
@@ -353,6 +353,7 @@ uv run soda-storyboard export my-story --format pdf --json
 
 - split 按 bbox 切格，quad 使用外接矩形，并单独保存 quad-mask；文件放在 `pages/<页id>/panels/<格id>/`。
 - redraw 的 detail 默认 denoise=0.45，swap 默认 0.85，swap 仅适用于单人格；两人同格使用 inpaint。单格提示词不带整页前缀。moss_text 下生成后贴回原文字框，防止高降噪改字。每次生成是独立候选，pick-panel 后才用于拼页。
+- redraw / inpaint 先把格子按比例放大到长边 1024、宽高对齐 16 的工作尺寸，重画后缩回原格。swap 提示保留动作、道具内容和构图，只替换目标人物外观与触发词。inpaint 分别上传原图 RGB 和遮罩，保留遮罩内的原图内容，完成后以羽化遮罩融合；实际工作尺寸记录在 `working_size`。
 - inpaint 按 figures 位置、余量和羽化生成遮罩，羽化后再次保护另一角色区域；支持 `figure.bbox` 精确指定人物范围（页面坐标 x/y/w/h）。返回 mask 路径供检查。位置推断不能替代真实人物分割，重叠人物需要人工调整范围。
 
 局部重绘前先运行 `soda-storyboard inpaint station-turn p1 --project my-story --character girl --mask-only --json`，查看返回的 `mask` 和红色叠加 `preview`。这个模式只写遮罩与预览，不连接 ComfyUI、不提交采样、不登记重画候选；确认范围后再运行不带 `--mask-only` 的命令。估时以 1024×1536、25 步约 40 秒为基准，按实际像素数和步数成比例换算，排队、模型加载和硬件另计。
@@ -360,7 +361,11 @@ uv run soda-storyboard export my-story --format pdf --json
 抠图在采样前检查节点 required/optional 输入与 IMAGE 输出，填入契约中声明的默认值。缺必填参数或节点不兼容时直接提示 `cutout --png` 导入透明图，不先消耗采样。ComfyUI 执行失败时终端只显示节点、任务号和简短原因，完整诊断保存在故事项目的 `logs/comfy/`。
 - compose 输出 `composed.png`；把选定格子贴回底图，quad 向内缩进默认 12 像素、外部填白并重画格框。默认缩进和边框可通过 comfy config 持久设置。
 - letter 输出 `lettered.png`，支持椭圆 speech、锯齿 shout、云形 thought、矩形 box 和无气泡 none，以及横排／竖排。按 Noto Sans CJK SC、思源黑体、微软雅黑顺序找字体，可用 `--font` 指定。默认处理 lettering 页或 `texts[].render_mode: "lettering"`；moss_text 页可重复传 `--text t1` 指定程序排字。
-- cutout 只处理 mode=layer 的 overlay，使用角色 LoRA 和单人纯色背景提示词；先检查 BiRefNetRMBG、RMBG、Image Remove Background (rembg)。均缺失时提示安装 ComfyUI-RMBG / rembg，也可 `--png` 导入透明 PNG。抠图节点的必填参数需有默认值或枚举值，且需返回含 alpha 的 IMAGE；否则提示提供透明 PNG。图层按 z_index 置于文字之上，重新生成可用的 composed / lettered 成品。
+- cutout 只处理 mode=layer 的 overlay，按 `cutout_type` 选择 `whole`（全身）、`partial`（人物局部）或 `object`（物件）；默认 `auto` 从描述判断，判断不出时按物件。各模板都使用纯色背景，只有 whole 模板请求 full body，物件不加载人物 LoRA。先检查 BiRefNetRMBG、RMBG、Image Remove Background (rembg)。均缺失时提示安装 ComfyUI-RMBG / rembg，也可 `--png` 导入透明 PNG。抠图节点的必填参数需有默认值或枚举值，且需返回含 alpha 的 IMAGE；否则提示提供透明 PNG。图层按 z_index 置于文字之上，重新生成可用的 composed / lettered 成品。
+
+需要复现时，redraw / inpaint / cutout 加 `--seed 123`。`gen page --seed 123 --seed 456` 按指定列表生成两张，覆盖随机数量 `--seeds`；不指定时仍按 `--seeds` 随机生成。种子按整数完整记录，未改变模型、参数和输入时可用于对照；它不保证不同工作尺寸或环境生成相同画面。
+
+横排中文按实际字形宽度适配，优先适度缩小字号保持单行，再按标点禁则断行。validate 对对白或旁白框遮挡人物给出 warning，说明被遮挡角色及与说话人的差异；不会自动移动框。
 - export 接受页 id、页 JSON 路径或项目目录，PNG 每页一张，PDF 合成一份。按 `project.json.pages` / `page_ids` 的声明顺序导出（字符串 id 或含 id/page_id 的对象）；未声明时按页面 order/page_number 再按自然 id 顺序。优先有效的 lettered，再 composed，最后选定底图，输出在 `exports/`。
 
 所有生成命令先在 stderr 说明数量和参考耗时，`--json` 的 stdout 仅含结构化结果；超时提示任务号，服务端任务可能仍在运行，不自动重提。公共接口在 `production/api.py`，不打印、不读取 CLI 参数，可供 P4a 调用。开发测试使用标准库假服务器，不连接真实 ComfyUI，也不占用显卡；真实模型质量、显存及自定义抠图节点兼容性需在用户机器验收。
@@ -411,9 +416,9 @@ uv run ruff check .
 uv run pytest
 ```
 
-## 0.4.0 发布与便携版安装
+## 发布与便携版安装
 
-仓库已配置 CI 和发布工作流，本地准备产物不会自动发布。`.github/workflows/ci.yml` 在 push / PR 时校验 Python 格式、lint、测试，并执行编辑器的 `npm ci`、`npm run build`、`npm test`。`release.yml` 在未来推送 `v*` 标签时检查标签与 `pyproject.toml` 版本一致，运行校验、构建 wheel 和 sdist，创建 GitHub Release 并附上两个产物。
+0.4.0 wheel 已发布，可通过上面的安装命令使用。仓库的 `.github/workflows/ci.yml` 在 push / PR 时校验 Python 格式、lint、测试，并执行编辑器的 `npm ci`、`npm run build`、`npm test`。`release.yml` 在推送 `v*` 标签时检查标签与 `pyproject.toml` 版本一致，运行校验、构建 wheel 和 sdist，创建 GitHub Release 并附上两个产物。本地构建不会自动发布；0.4.1 的修复需另行审阅和发布。
 
 发布前先审阅 CHANGELOG、把 `pyproject.toml` 和三个插件清单同步到同一版本、同步锁文件，并确认前端产物的源码指纹测试通过。若前端源码有改动，先运行 `uv run python scripts/build_editor.py` 更新随包静态文件。下面的构建和检查不会创建 Release：
 
@@ -425,13 +430,13 @@ uv run pytest
 uv build
 ```
 
-检查 `dist/soda_storyboard-0.4.0-py3-none-any.whl` 和 `.tar.gz`，确认 wheel 包含 `web/`、`recipes.json` 和 `data/templates.json`。完成审阅并得到发布授权后，由发布者提交变更、创建并推送 `v0.4.0` 标签；工作流将再次检查版本和测试。标签不匹配、检查失败或产物缺失都会中止发布。
+检查对应版本的 wheel 和 `.tar.gz`，确认 wheel 包含 `web/`、`recipes.json` 和 `data/templates.json`。完成审阅并得到发布授权后，由发布者提交变更、创建并推送与版本一致的标签（如 `v0.4.1`）；工作流将再次检查版本和测试。标签不匹配、检查失败或产物缺失都会中止发布。
 
-0.4.0 Release 发布成功后，在便携版 ComfyUI 根目录执行（`python_embeded` 是便携版实际目录名；需要 Python 3.12+）：
+在便携版 ComfyUI 根目录安装已发布的 0.4.0（`python_embeded` 是便携版实际目录名；需要 Python 3.12+）：
 
 ```powershell
 .\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.0/soda_storyboard-0.4.0-py3-none-any.whl"
 .\python_embeded\python.exe -c "from importlib.metadata import version; print(version('soda-storyboard'))"
 ```
 
-wheel 已包含运行时数据和编辑器，不需要 Git、uv、`uv_build` 或 Node 来安装核心库。重启 ComfyUI 后使用节点；节点仓库后续应同步其 requirements wheel URL 到 0.4.0，并用共享接口替换重复读取/编译逻辑。以上 URL 需等 0.4.0 Release 发布成功后才能下载。
+wheel 已包含运行时数据和编辑器，不需要 Git、uv、`uv_build` 或 Node 来安装核心库。重启 ComfyUI 后使用节点。升级时使用已发布版本对应的 wheel URL，并核对上面命令输出的实际核心版本。

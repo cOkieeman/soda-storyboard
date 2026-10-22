@@ -14,7 +14,10 @@ from math import isfinite
 from typing import Any
 
 from .captions import caption_notices
+from .figure_semantics import figure_page_box
+from .figures import panel_figures
 from .geometry import convex_polygon, polygons_overlap, shape_distance
+from .lettering import layout_texts
 from .models import Character, Page
 
 
@@ -598,6 +601,8 @@ def validate_page(
             )
 
     _validate_storytelling(page, char_map, report, max_dialogue_chars=max_dialogue_chars, tolerance=tolerance)
+    if caption_page is not None:
+        _validate_text_figure_overlap(caption_page, char_map, report)
     if _get(page, "extra", {}).get("moss_import") or _get(page, "moss_import"):
         for issue in report.issues:
             if issue.code == "panel_overlap":
@@ -813,6 +818,64 @@ def _validate_storytelling(
                     "人物引用了不存在的角色",
                     panel_id=panel_id,
                     field_name="figures.character_id",
+                )
+
+
+def _validate_text_figure_overlap(page: Page, characters: dict[str, Any], report: ValidationReport) -> None:
+    """Warn when at least a fifth of a dialogue/narration box covers a figure.
+
+    This uses the shared editor footprint, not a guessed face location. It
+    never moves a declared box or upgrades a visual concern into an error.
+    """
+    threshold = 0.2
+    panels = {panel.id: panel for panel in page.panels}
+    try:
+        texts = layout_texts(page)
+    except (ValueError, TypeError, OverflowError, ZeroDivisionError):
+        # Invalid canvas/text geometry is reported by the regular validator.
+        return
+    for text in texts:
+        if text.kind not in {"dialogue", "narration"} or text.bbox is None:
+            continue
+        box = text.bbox
+        area = box.w * box.h
+        if box.w <= 0 or box.h <= 0:
+            continue
+        candidates = [panels[text.panel_id]] if text.panel_id in panels else page.panels
+        for panel in candidates:
+            for figure in panel_figures(panel, page):
+                try:
+                    left, top, right, bottom = figure_page_box(figure, panel)
+                except (ValueError, TypeError, KeyError, OverflowError):
+                    # Existing geometry/figure validation reports malformed input.
+                    continue
+                overlap = max(0, min(box.x + box.w, right) - max(box.x, left)) * max(
+                    0, min(box.y + box.h, bottom) - max(box.y, top)
+                )
+                ratio = overlap / area
+                if ratio <= threshold:
+                    continue
+                character_id = figure.character_id
+                name = _get(characters.get(character_id), "display_name", character_id)
+                mismatch = bool(text.speaker_id and text.speaker_id != character_id)
+                message = f"第 {panel.order} 格文字可能遮挡人物：{name}"
+                if mismatch:
+                    speaker = _get(characters.get(text.speaker_id), "display_name", text.speaker_id)
+                    message += f"（说话人 {speaker}，被遮挡人物 {name}）"
+                report.add(
+                    "warning",
+                    "text_overlaps_figure",
+                    message,
+                    panel_id=panel.id,
+                    field_name="texts.bbox",
+                    details={
+                        "text_id": text.id,
+                        "character_id": character_id,
+                        "speaker_id": text.speaker_id,
+                        "speaker_mismatch": mismatch,
+                        "overlap_ratio": ratio,
+                        "threshold": threshold,
+                    },
                 )
 
 

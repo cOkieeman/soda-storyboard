@@ -191,8 +191,8 @@ def test_caption_preview_compiles_unsaved_changes_without_writing(client: Client
         with_ids=True,
     )
     assert first["caption"] == compiled["items"][0]["caption"]
-    assert "把布丁藏在身后" in first["caption"]
-    assert first["caption"].count("妹妹") == 1
+    assert "妹妹把布丁藏在身后" in first["caption"]
+    assert first["caption"].count("14-year-old") == 1
     assert first["custom_override"] is False
     raw["panels"][0]["use_custom_caption"] = True
     overridden = client.call("POST", endpoint, {"page": raw})[2]["panels"][0]

@@ -22,7 +22,8 @@ def test_caption_cleanup_order_and_deduplication() -> None:
     page, characters = fixture()
     caption = compile_page(page, characters)["items"][0]["caption"]
     assert "第1格" not in caption
-    assert caption.count("小雨") == 1
+    # Scene subjects survive even when the appearance already names the person.
+    assert "小雨坐在一旁看书" in caption
     assert caption.count("白衬衫") == 1
     assert caption.count("rain") == 1
     assert caption.index("躺") < caption.index("看书")

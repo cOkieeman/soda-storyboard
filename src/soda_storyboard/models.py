@@ -604,6 +604,7 @@ class Overlay:
     image_path: str | None = None
     extra: JsonObject = field(default_factory=dict, repr=False)
     mode: str = "moss"
+    cutout_type: str = "auto"
 
     def __post_init__(self) -> None:
         if isinstance(self.rect, Mapping):
@@ -621,6 +622,7 @@ class Overlay:
             "status",
             "image_path",
             "mode",
+            "cutout_type",
         }
         return cls(
             id=_text(value.get("id", ""), "overlay.id"),
@@ -635,10 +637,11 @@ class Overlay:
             else _text(value["image_path"], "overlay.image_path"),
             extra=_copy_extra(value, known),
             mode=_text(value.get("mode", "layer"), "overlay.mode"),
+            cutout_type=_text(value.get("cutout_type", "auto"), "overlay.cutout_type"),
         )
 
     def to_dict(self) -> JsonObject:
-        return {
+        result = {
             **self.extra,
             "id": self.id,
             "character_id": self.character_id,
@@ -650,6 +653,9 @@ class Overlay:
             "image_path": self.image_path,
             "mode": self.mode,
         }
+        if self.cutout_type != "auto":
+            result["cutout_type"] = self.cutout_type
+        return result
 
 
 @dataclass(slots=True)

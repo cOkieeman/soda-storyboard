@@ -178,7 +178,11 @@ soda-storyboard export station-turn --project my-story --format png --json
 
 swap 加 --character 角色id；两人同格用 inpaint 子命令（同样指定页、格子和 --character）。每次生成前说明这一张的大概耗时，按实际宽高和步数估算：40 秒 × 宽×高/(1024×1536) × 步数/25。compose 使用选定格子结果，quad 向内裁剪并重画边框；letter 为 lettering 模式或 texts.render_mode=lettering 的文字排字，字体找不到时请用户提供字体文件并用 --font 指定；moss_text 可用 --text 指定文字 id（可重复）。不擅自重写台词。
 
+redraw、inpaint 的采样先按比例放大到长边 1024、宽高对齐 16 的工作尺寸，再缩回原格；估时使用工作尺寸。inpaint 独立上传原图和羽化遮罩，`--mask-only` 展示实际融合范围。需要复现时，redraw / inpaint / cutout 加 `--seed <整数>`；gen page 可重复 `--seed`，此时以给出的种子数量为准，未给种子才按 `--seeds` 随机生成。结果记录实际种子。
+
 仅 mode=layer 的 overlay 使用 cutout；mode=moss 已由整页生成。cutout 先检查 BiRefNetRMBG / RMBG / rembg 节点，缺少时说明需安装 ComfyUI-RMBG 或提供透明 PNG，不自行安装。抠图生成同样需要说明耗时和取得用户同意。已有透明 PNG 可直接导入，不消耗生成次数。图层按 z_index 放在页面最上方，展示返回的 page_path。
+
+图层 `cutout_type` 可指定 `whole`（全身人物）、`partial`（手、手臂、上半身等人物局部）、`object`（物件），默认 `auto` 从描述判断，无法判断时按物件处理。手部特写用 partial 并明确可见范围，不把 full body 加到局部或物件描述。cutout 采样也使用长边 1024 的工作尺寸，最终按图层框比例放入页面。
 
 ```shell
 soda-storyboard cutout station-turn hero --project my-story --png refs/hero-transparent.png --json

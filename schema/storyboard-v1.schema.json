@@ -267,6 +267,16 @@
             "layer"
           ],
           "description": "New overlays should explicitly use moss; a missing mode in legacy JSON means layer."
+        },
+        "cutout_type": {
+          "enum": [
+            "auto",
+            "whole",
+            "partial",
+            "object"
+          ],
+          "default": "auto",
+          "description": "Layer generation framing. Auto infers body-part or explicit whole-person descriptions; ambiguous descriptions use object."
         }
       },
       "additionalProperties": true
