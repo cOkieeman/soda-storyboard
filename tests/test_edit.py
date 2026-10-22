@@ -74,6 +74,9 @@ def test_detach_reuse_page_health_and_stop(project: Path) -> None:
     assert run(project, "--stop")["stopped"] is True
     assert not health(started["port"])
     with socket.socket() as sock:
+        if os.name != "nt":
+            # Linux keeps closed connections in TIME_WAIT; on Windows this flag could steal a live port.
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("127.0.0.1", started["port"]))
     assert not (project / ".soda/server.json").exists()
 

@@ -20,6 +20,8 @@ jobs:
       - run: uv run --no-sync python scripts/check_release_version.py
       - run: uv run --no-sync ruff format --check .
       - run: uv run --no-sync ruff check .
+      - name: Install CJK fonts for lettering tests
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
       - run: uv run --no-sync pytest
 
   editor:
