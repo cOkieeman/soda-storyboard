@@ -202,7 +202,11 @@ export async function savePage(
         body: JSON.stringify(page)
       }
     );
-    const newVersion = data.version || headers.get("ETag") || version;
+    const headerVersion = headers.get("ETag");
+    const newVersion = data?.version || headerVersion;
+    if (!data?.page || data.page.id !== id || !newVersion || (headerVersion && headerVersion !== newVersion)) {
+      throw new ApiError("保存响应缺少有效的页面版本，请重新读取后重试", 502, data);
+    }
     return {
       success: true,
       status: 200,

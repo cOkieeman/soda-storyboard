@@ -38,6 +38,50 @@ function uniqueId(value: unknown, label: string, used: Set<string>): string {
   used.add(id);
   return id;
 }
+function importedId(value: unknown, label: string, used: Set<string>, reserved: Set<string>, warnings: string[]): string {
+  const original = identifier(value, label);
+  let id = original, suffix = 2;
+  if (used.has(id)) {
+    do { id = `${original}-import-${suffix++}`; } while (used.has(id) || reserved.has(id));
+    warnings.push(`${label}“${original}”重复，已自动改名为“${id}”。`);
+  }
+  used.add(id);
+  return id;
+}
+
+export function normalizeImportedPageIds<T extends JsonObject>(source: T): { page: T; warnings: string[] } {
+  const page = clone(source), warnings: string[] = [];
+  const renamed = new Map<string, string[]>();
+  const normalize = (values: JsonObject[], label: string, kind: string) => {
+    const sourceId = (item: JsonObject) => kind === "panel" ? item.id ?? item.panel_id : item.id;
+    const reserved = new Set(values.map(sourceId).filter((id): id is string => typeof id === "string"));
+    const used = new Set<string>();
+    for (const item of values) {
+      const original = sourceId(item);
+      if (typeof original !== "string" || !original.trim()) continue;
+      item.id = importedId(original, `${label} id`, used, reserved, warnings);
+      const key = `${kind}:${original}`;
+      renamed.set(key, [...(renamed.get(key) || []), item.id]);
+      if (kind === "panel" && item.id !== original) warnings.push(`原 panel_id“${original}”引用继续指向首个同名格子，请核对文字和图层归属。`);
+    }
+  };
+  const objects = (value: unknown): JsonObject[] => Array.isArray(value) ? value.filter(isObject) : [];
+  const panels = objects(page.panels);
+  normalize(panels, "格子", "panel");
+  normalize(objects(page.texts), "文字", "text");
+  normalize(panels.flatMap(panel => objects(panel.figures)), "人物", "figure");
+  normalize(objects(page.overlays), "跨格人物", "overlay");
+  normalize(objects(page.objects), "图层", "object");
+  // Imported MOSS source entries follow the entity order, so keep their identity
+  // links in sync while leaving their original item data available for round trips.
+  const occurrences = new Map<string, number>();
+  for (const entry of objects(page.moss_import?.entries)) {
+    const key = `${entry.kind}:${entry.id}`, index = occurrences.get(key) || 0;
+    occurrences.set(key, index + 1);
+    if (renamed.get(key)?.[index]) entry.id = renamed.get(key)![index];
+  }
+  return { page, warnings };
+}
 function strings(value: unknown, label: string): string[] {
   return array(value, label, []).map((item, index) => identifier(item, `${label}[${index + 1}]`));
 }
@@ -140,9 +184,11 @@ function placeMissingTextBoxes(page: SodaPage, warnings: string[]) {
 
 function nativePage(raw: JsonObject): ImportedPageDraft {
   if (raw.format !== undefined && raw.format !== "soda-storyboard-page-v1") fail("这不是 Soda 分镜页文件。请选择 pages 目录中的页面 JSON，而不是项目、角色或工作流文件。");
+  const normalized = normalizeImportedPageIds(raw);
+  raw = normalized.page;
   const canvas = sourceSize(raw);
   const size = { width: dimension(canvas.width, "canvas_width"), height: dimension(canvas.height, "canvas_height") };
-  const warnings: string[] = [];
+  const warnings = normalized.warnings;
   const panelIds = new Set<string>(), textIds = new Set<string>(), overlayIds = new Set<string>();
   const panels: SodaPanel[] = array(raw.panels, "panels").map((value, index) => {
     const item = object(value, `第 ${index + 1} 格`);
@@ -262,8 +308,10 @@ function mossPage(raw: JsonObject, options: ImportPageOptions): ImportedPageDraf
   };
   const declaredPanelIds = new Set(items.filter(item => item.label === "object" && !item.overlay_id).map(item => item.panel_id ?? item.id).filter(value => typeof value === "string"));
   const createId = (item: JsonObject, field: string, used: Set<string>, prefix: string, index: number) => {
-    if (item[field] !== undefined && item[field] !== null) return uniqueId(item[field], `第 ${index + 1} 个 item 的 ${field}`, used);
-    if (item.id !== undefined) return uniqueId(item.id, `第 ${index + 1} 个 item 的 id`, used);
+    const reserved = new Set(items.filter(candidate => field === "panel_id" ? candidate.label === "object" && !candidate.overlay_id : field === "text_id" ? candidate.label === "text" : candidate.label === "character" || candidate.overlay_id)
+      .map(candidate => candidate[field] ?? candidate.id).filter(value => typeof value === "string"));
+    if (item[field] !== undefined && item[field] !== null) return importedId(item[field], `第 ${index + 1} 个 item 的 ${field}`, used, reserved, warnings);
+    if (item.id !== undefined) return importedId(item.id, `第 ${index + 1} 个 item 的 id`, used, reserved, warnings);
     let id = `${prefix}-${index + 1}`, suffix = 2;
     while (used.has(id) || (prefix === "moss-panel" && declaredPanelIds.has(id))) id = `${prefix}-${index + 1}-${suffix++}`;
     used.add(id); return id;
@@ -338,7 +386,7 @@ export function mapImportedCharacters(page: SodaPage, mapping: Record<string, st
   const resolve = (id: string | null | undefined) => id && own(mapping, id) ? mapping[id] : id;
   for (const panel of mapped.panels) {
     panel.character_ids = [...new Set((panel.character_ids || []).map(resolve).filter((id): id is string => Boolean(id)))];
-    panel.figures = (panel.figures || []).flatMap(figure => { const id = resolve(figure.character_id); return id ? [{ ...figure, character_id: id }] : []; });
+    panel.figures = (panel.figures || []).flatMap(figure => { const id = resolve(figure.character_id); return id === null ? [] : [{ ...figure, character_id: id ?? figure.character_id }]; });
     if (Array.isArray(panel.dialogue)) panel.dialogue = panel.dialogue.map(dialogue => {
       if (!isObject(dialogue)) return dialogue;
       const speaker = resolve(dialogue.speaker_id ?? dialogue.speaker) ?? null;

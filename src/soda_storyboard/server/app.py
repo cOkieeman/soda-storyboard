@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from soda_storyboard.importers import import_storyboard
 from soda_storyboard.io import load_page
+from soda_storyboard.json_safety import InvalidJSONNumberError, loads_json
 from soda_storyboard.validation import validate_page
 
 from .common import APIError, identifier, inside, json_default, snapshot
@@ -157,14 +158,13 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         if len(raw) != length:
             raise APIError(400, "请求体不完整")
-        value = json.loads(raw.decode("utf-8"), parse_constant=self.reject_constant)
+        try:
+            value = loads_json(raw.decode("utf-8"))
+        except InvalidJSONNumberError as exc:
+            raise APIError(422, str(exc)) from exc
         if not isinstance(value, dict):
             raise APIError(400, "请求 JSON 必须是对象")
         return value
-
-    @staticmethod
-    def reject_constant(value: str) -> None:
-        raise APIError(400, f"JSON 不允许 {value}")
 
     def handle_request(self) -> None:  # noqa: C901 -- one error boundary for HTTP requests
         self.cors_origin = None

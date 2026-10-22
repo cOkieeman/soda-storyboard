@@ -37,6 +37,12 @@ def imported_result(page: Page, compiled: dict, *, with_ids: bool) -> dict:  # n
     used = set()
     items = []
     for entry in metadata.get("entries", []):
+        # Source fidelity must obey the current mode, including uneditable text.
+        if page.dialogue_mode != "moss_text" and (
+            entry["kind"] == "text"
+            or (isinstance(entry.get("item"), dict) and entry["item"].get("label") == "text")
+        ):
+            continue
         if entry["kind"] == "passthrough":
             items.append(copy.deepcopy(entry["item"]))
             continue

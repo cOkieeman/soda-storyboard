@@ -67,7 +67,7 @@ test("Empty native pages, BOM, and one JSON fence are accepted without identifyi
   assert.throws(() => parse(""), /先粘贴 JSON/);
 });
 
-test("Native canvas, geometry, duplicate ids, and parent references fail before creating any page", () => {
+test("Native canvas, geometry, and parent references fail before creating any page", () => {
   for (const value of [0, -1, 8193, 123.5, "1024", true]) {
     assert.throws(() => parse({ ...native(), canvas_width: value }), /canvas_width/);
   }
@@ -77,7 +77,9 @@ test("Native canvas, geometry, duplicate ids, and parent references fail before 
   }
   assert.throws(() => parse('{"format":"soda-storyboard-page-v1","canvas_width":1e309,"canvas_height":10,"panels":[]}'), /有限数字/);
   const duplicate = native(); duplicate.panels.push(panel());
-  assert.throws(() => parse(duplicate), /id.*重复/);
+  const repaired = parse(duplicate);
+  assert.equal(new Set(repaired.page.panels.map(item => item.id)).size, 2);
+  assert.ok(repaired.warnings.some(message => /id.*重复.*已自动改名/.test(message)));
   const orphan = native(); orphan.texts = [{ id: "t1", text: "台词", panel_id: "missing", bbox: { type: "rect", x: 20, y: 20, w: 50, h: 70 } }];
   assert.throws(() => parse(orphan), /不存在的格子/);
   orphan.texts[0].panel_id = "p1"; orphan.texts[0].bbox.x = 1023;

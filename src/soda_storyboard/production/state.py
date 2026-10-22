@@ -14,11 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from soda_storyboard.io import load_characters, read_json
+from soda_storyboard.json_safety import check_json_numbers, loads_json
 from soda_storyboard.models import Page
+from soda_storyboard.persistence import file_snapshot, page_lock
 
 from .client import ComfyClient
 from .errors import ProductionError
 from .graphs import DEFAULTS, PRESETS
+from .paths import production_path, validate_production_paths
 
 type JSON = dict[str, Any]
 
@@ -38,15 +41,64 @@ def digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def save_json(path: Path, value: object) -> None:
+def save_json(path: Path, value: object, *, expected_version: str | None = None) -> None:
     """Replace only after serializing a complete JSON document."""
+    check_json_numbers(value)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
     try:
-        temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary.write_text(
+            json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8"
+        )
+        _, committed_version = file_snapshot(temporary)
+        if expected_version is not None and file_snapshot(path)[1] != expected_version:
+            msg = "页面版本冲突，生成文件已保留，请重新读取后重试"
+            raise ProductionError(msg)
         temporary.replace(path)
+        if expected_version is not None and file_snapshot(path)[1] != committed_version:
+            msg = "页面版本冲突，生成文件已保留，请重新读取后重试"
+            raise ProductionError(msg)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+_MISSING = object()
+
+
+def _merge_production(before: Any, changed: Any, current: Any) -> Any:  # noqa: ANN401
+    """Rebase this task's metadata changes; reject incompatible concurrent edits."""
+    if changed == before:
+        return copy.deepcopy(current) if current is not _MISSING else _MISSING
+    if current in (before, changed):
+        return copy.deepcopy(changed) if changed is not _MISSING else _MISSING
+    if before is _MISSING:
+        if isinstance(changed, dict) and isinstance(current, dict):
+            before = {}
+        elif isinstance(changed, list) and isinstance(current, list):
+            before = []
+    if isinstance(before, dict) and isinstance(changed, dict) and isinstance(current, dict):
+        result = copy.deepcopy(current)
+        for key in before.keys() | changed.keys():
+            merged = _merge_production(
+                before.get(key, _MISSING), changed.get(key, _MISSING), current.get(key, _MISSING)
+            )
+            if merged is _MISSING:
+                result.pop(key, None)
+            else:
+                result[key] = merged
+        return result
+    if (
+        isinstance(before, list)
+        and isinstance(changed, list)
+        and isinstance(current, list)
+        and changed[: len(before)] == before
+        and current[: len(before)] == before
+    ):
+        result = copy.deepcopy(current)
+        result.extend(copy.deepcopy(item) for item in changed[len(before) :] if item not in result)
+        return result
+    msg = "production 元数据修改冲突，生成文件已保留，请重新读取后重试"
+    raise ProductionError(msg)
 
 
 def configure(project_dir: str | Path, **updates: Any) -> JSON:  # noqa: ANN401 -- heterogeneous project configuration
@@ -91,6 +143,9 @@ class PageState:
                 raise ProductionError(msg)
             self.path = matches[0]
         self.raw = read_json(self.path)
+        errors = validate_production_paths(self.raw, self.root)
+        if errors:
+            raise ProductionError("；".join(errors))
         project = read_json(self.root / "project.json")
         payload = dict(self.raw)
         payload["lora_policy"] = project.get("lora_policy", "single")
@@ -100,13 +155,43 @@ class PageState:
         payload.setdefault("dialogue_mode", project.get("default_dialogue_mode", "moss_text"))
         payload.setdefault("style_prefix", project.get("default_style_prefix", ""))
         self.page = Page.from_dict(payload)
-        self.directory = self.root / "pages" / identifier(self.page.page_id)
+        self.directory = self.local(f"pages/{identifier(self.page.page_id)}")
         self.characters = load_characters(self.root / "characters")
         self.config = configure(self.root)
         self.production = self.raw.setdefault("production", {})
+        self._baseline = copy.deepcopy(self.raw)
 
     def save(self) -> None:
-        save_json(self.path, self.raw)
+        with page_lock(self.path):
+            content, version = file_snapshot(self.path)
+            latest = loads_json(content)
+            if not isinstance(latest, dict):
+                msg = "页面文件必须包含 JSON 对象，生成文件已保留"
+                raise ProductionError(msg)
+            latest["production"] = _merge_production(
+                self._baseline.get("production", {}),
+                self.production,
+                latest.get("production", {}),
+            )
+            baseline_panels = {panel["id"]: panel for panel in self._baseline["panels"]}
+            latest_panels = {panel["id"]: panel for panel in latest["panels"]}
+            for panel in self.raw["panels"]:
+                before = baseline_panels[panel["id"]].get("production", {})
+                changed = panel.get("production", {})
+                if before == changed:
+                    continue
+                target = latest_panels.get(panel["id"])
+                if target is None:
+                    msg = "页面格子已被删除，production 写回冲突；生成文件已保留"
+                    raise ProductionError(msg)
+                target["production"] = _merge_production(before, changed, target.get("production", {}))
+            errors = validate_production_paths(latest, self.root)
+            if errors:
+                raise ProductionError("；".join(errors))
+            save_json(self.path, latest, expected_version=version)
+            self.raw = latest
+            self.production = self.raw["production"]
+            self._baseline = copy.deepcopy(latest)
 
     def panel(self, panel_id: str) -> JSON:
         for panel in self.raw["panels"]:
@@ -116,8 +201,10 @@ class PageState:
         raise ProductionError(msg)
 
     def local(self, path: str | Path) -> Path:
-        value = Path(path)
-        return value if value.is_absolute() else self.root / value
+        try:
+            return production_path(self.root, path, allow_absolute=True)
+        except ValueError as exc:
+            raise ProductionError(str(exc)) from exc
 
     def relative(self, path: Path) -> str:
         return path.resolve().relative_to(self.root).as_posix()

@@ -4,7 +4,7 @@ import ModalShell from "./ModalShell";
 import NumberInput from "../ui/NumberInput";
 import { ApiError, importExternalStoryboard } from "../../lib/api";
 import { resolvedFigures } from "../../lib/figures";
-import { collectImportedCharacterIds, mapImportedCharacters, parseImportedPage, type ImportedPageDraft } from "../../lib/importPage";
+import { collectImportedCharacterIds, mapImportedCharacters, normalizeImportedPageIds, parseImportedPage, type ImportedPageDraft } from "../../lib/importPage";
 import { useEditorStore } from "../../lib/store";
 import type { SodaPage } from "../../types";
 
@@ -95,7 +95,8 @@ function ImportDialog() {
       } else {
         setReading(true);
         const result = await importExternalStoryboard(source);
-        setDraft({ page: result.page, format: parsed?.items ? "moss" : "soda", warnings: [...result.report.guesses, ...result.report.warnings, ...result.report.unrecognized_items.map(item => `条目 ${item.index + 1}：${item.reason}，原样保留。`)], needsCanvasSize: false });
+        const normalized = normalizeImportedPageIds(result.page);
+        setDraft({ page: normalized.page, format: parsed?.items ? "moss" : "soda", warnings: [...result.report.guesses, ...result.report.warnings, ...result.report.unrecognized_items.map(item => `条目 ${item.index + 1}：${item.reason}，原样保留。`), ...normalized.warnings], needsCanvasSize: false });
       }
       setRoleMapping({}); setDimensionsConfirmed(false);
       if (window.innerWidth < 768) requestAnimationFrame(() => resultRef.current?.scrollIntoView({ block: "start" }));

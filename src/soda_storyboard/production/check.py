@@ -23,7 +23,12 @@ def page_graph(state: PageState, prompt: str, **options: Any) -> JSON:  # noqa: 
         if not workflow:
             msg = "v2 后端需要先用 comfy config --workflow 导入 API 工作流"
             raise ProductionError(msg)
-        return v2_graph(read_json(state.local(workflow)), prompt, config=state.config, **options)
+        # Explicit project configuration can reference a locally installed
+        # workflow; it is separate from persisted production image metadata.
+        path = Path(workflow)
+        if not path.is_absolute():
+            path = state.root / path
+        return v2_graph(read_json(path.resolve()), prompt, config=state.config, **options)
     return minimal_graph(prompt, config=state.config, **options)
 
 

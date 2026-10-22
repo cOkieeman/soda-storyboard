@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
 import secrets
@@ -621,13 +622,29 @@ def letter_with_options(
         compose_page(project_dir, page_id)
         state = PageState(project_dir, page_id)
     image = open_rgb(state.local(state.production["composed"]["underlay"]), _canvas(state))
-    result = _apply_overlays(state, letter_image(image, state.page, font=font, text_ids=text_ids))
+    font_path = None
+    if font:
+        font_path = Path(font)
+        if not font_path.is_absolute() and (state.root / font_path).is_file():
+            font_path = state.local(font_path)
+        font_path = font_path.resolve()
+    result = _apply_overlays(state, letter_image(image, state.page, font=font_path, text_ids=text_ids))
+    if font_path and not font_path.is_relative_to(state.root):
+        # Explicit CLI/API imports can use a local font, but persisted metadata
+        # must remain portable and confined to the project on later operations.
+        content = font_path.read_bytes()
+        destination_font = state.local(
+            state.directory / "fonts" / f"{hashlib.sha256(content).hexdigest()}{font_path.suffix}"
+        )
+        destination_font.parent.mkdir(parents=True, exist_ok=True)
+        destination_font.write_bytes(content)
+        font_path = destination_font
     destination = state.directory / "lettered.png"
     result.save(destination)
     state.production["lettered"] = {
         "path": state.relative(destination),
         "signature": state.signature(),
-        "font": str(font) if font else None,
+        "font": state.relative(font_path) if font_path else None,
         "text_ids": text_ids,
     }
     state.save()
@@ -651,6 +668,12 @@ def export(project_dir: str | Path, page_ids: list[str] | None = None, fmt: str 
         source = state.image_stage("lettered") or state.image_stage("composed") or state.base()
         if fmt == "png":
             path = folder / f"{identifier(page_id)}.png"
+            try:
+                with Image.open(source) as image:
+                    image.verify()
+            except (OSError, ValueError, SyntaxError) as exc:
+                msg = "导出源文件不是有效图片，请重新选择或生成底图"
+                raise ProductionError(msg) from exc
             shutil.copyfile(source, path)
             outputs.append(str(path))
         else:
@@ -769,7 +792,9 @@ def cutout(  # noqa: PLR0913 -- optional reproducible generation and PNG import
     destination = state.directory / "overlays" / f"{identifier(overlay_id)}_{stamp()}.png"
     destination.parent.mkdir(parents=True, exist_ok=True)
     if png:
-        source = state.local(png)
+        # This is an explicit image import; only the copied project-relative
+        # destination is persisted and reused by later production operations.
+        source = Path(png).resolve() if Path(png).is_absolute() else state.local(png)
         with Image.open(source) as image:
             if "A" not in image.getbands() or image.getchannel("A").getextrema()[0] == OPAQUE:
                 msg = "出格图层需要带透明背景的 PNG"

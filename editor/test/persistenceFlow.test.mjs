@@ -99,6 +99,46 @@ test("Failed PUT keeps newer edits dirty and conflict backup includes those late
   assert.equal(useEditorStore.getState().savePromise, null);
 });
 
+test("A successful save rebuilds every editor model from the returned committed page", async () => {
+  const puts = [];
+  globalThis.fetch = async (url, options) => {
+    if (options?.method === "PUT") {
+      const page = JSON.parse(options.body);
+      puts.push({ page, version: new Headers(options.headers).get("If-Match") });
+      if (puts.length === 1) {
+        page.panels[0].description = "committed canonical description";
+        page.panels[0].shape.x = 135;
+        page.texts[0].text = "committed canonical text";
+      }
+      return response({ page, version: `v${puts.length + 1}` });
+    }
+    return background(url);
+  };
+  useEditorStore.getState().updateSodaPanel("p1", { description: "local description" }); stopTimer();
+  assert.equal(await useEditorStore.getState().saveCurrentPage(), true);
+  const state = useEditorStore.getState();
+  assert.equal(state.currentVersion, "v2");
+  assert.equal(state.sodaPage.panels[0].description, "committed canonical description");
+  assert.equal(state.project.pages[0].panels[0].sodaData.description, "committed canonical description");
+  assert.equal(state.project.pages[0].panels[0].x, 135);
+  assert.equal(state.project.pages[0].bubbles[0].text, "committed canonical text");
+  useEditorStore.getState().updateSodaText("t1", { text: "next local text" }); stopTimer();
+  assert.equal(await useEditorStore.getState().saveCurrentPage(), true);
+  assert.equal(puts[1].version, "v2");
+  assert.equal(puts[1].page.panels[0].description, "committed canonical description");
+  assert.equal(puts[1].page.panels[0].shape.x, 135);
+  assert.equal(puts[1].page.texts[0].text, "next local text");
+});
+
+test("A successful HTTP response without a committed version cannot mark a draft saved", async () => {
+  globalThis.fetch = async (_url, options) => response({ page: JSON.parse(options.body) });
+  useEditorStore.getState().updateSodaText("t1", { text: "keep unsaved draft" }); stopTimer();
+  assert.equal(await useEditorStore.getState().saveCurrentPage(), false);
+  assert.equal(useEditorStore.getState().currentVersion, "v1");
+  assert.equal(useEditorStore.getState().hasUnsavedChanges, true);
+  assert.equal(useEditorStore.getState().sodaPage.texts[0].text, "keep unsaved draft");
+});
+
 const operations = {
   preview: () => useEditorStore.getState().openPreviewModal(),
   compile: () => useEditorStore.getState().openCompileModal(),

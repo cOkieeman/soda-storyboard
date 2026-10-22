@@ -6,13 +6,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .json_safety import check_json_numbers, loads_json
 from .models import CHARACTER_FORMAT, PAGE_FORMAT, PROJECT_FORMAT, Character, Page, Project
 
 
 def read_json(path: str | Path) -> dict[str, Any]:
     file_path = Path(path)
     with file_path.open(encoding="utf-8") as handle:
-        value = json.load(handle)
+        value = loads_json(handle.read())
     if not isinstance(value, dict):
         raise ValueError(f"JSON 文件必须包含对象：{file_path}")
     return value
@@ -20,11 +21,12 @@ def read_json(path: str | Path) -> dict[str, Any]:
 
 def write_json(path: str | Path, value: Any, *, indent: int = 2) -> Path:
     file_path = Path(path)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
     payload = value.to_dict() if hasattr(value, "to_dict") else value
+    check_json_numbers(payload)
+    content = json.dumps(payload, ensure_ascii=False, indent=indent, allow_nan=False) + "\n"
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     with file_path.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=indent)
-        handle.write("\n")
+        handle.write(content)
     return file_path
 
 

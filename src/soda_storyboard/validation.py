@@ -18,10 +18,20 @@ from .clothing import clothing_profile
 from .figure_semantics import figure_page_box
 from .figures import panel_figures
 from .geometry import convex_polygon, polygons_overlap, shape_distance
+from .json_safety import check_json_numbers
 from .lettering import layout_texts
 from .lora import lora_info
-from .models import Character, Page
+from .models import (
+    CAMERA_ANGLES,
+    DIALOGUE_MODES,
+    PANEL_STATUSES,
+    READING_DIRECTIONS,
+    SHOT_SIZES,
+    Character,
+    Page,
+)
 from .production.errors import ProductionError
+from .production.paths import validate_production_paths
 
 
 def _get(value: Any, key: str, default: Any = None) -> Any:
@@ -398,6 +408,15 @@ def validate_page(
     and dialogue checks still run.
     """
 
+    report = ValidationReport()
+    try:
+        check_json_numbers(page.to_dict() if isinstance(page, Page) else _as_dict(page))
+    except ValueError as exc:
+        report.add("error", "invalid_number", str(exc))
+        return report
+    for message in validate_production_paths(page.to_dict() if isinstance(page, Page) else _as_dict(page)):
+        report.add("error", "invalid_production_path", message, field_name="production")
+    _validate_enums_and_ids(page, report)
     if geometry_tolerance is None:
         geometry_tolerance = _get(
             page, "geometry_tolerance", _get(page, "extra", {}).get("geometry_tolerance", 0.5)
@@ -406,7 +425,6 @@ def validate_page(
     if not isfinite(tolerance) or tolerance < 0:
         message = "geometry_tolerance must be finite and nonnegative"
         raise ValueError(message)
-    report = ValidationReport()
     panels = _panels(page)
     width, height = canvas_size(page)
     if width <= 0 or height <= 0:
@@ -571,6 +589,41 @@ def validate_page(
                 issue.severity = "warning"
                 issue.message = "导入的 MOSS 格子存在重叠，原布局已保留，请核对"
     return report
+
+
+def _validate_enums_and_ids(page: Any, report: ValidationReport) -> None:
+    for key, choices, default in (
+        ("reading_direction", READING_DIRECTIONS, "rtl"),
+        ("dialogue_mode", DIALOGUE_MODES, "moss_text"),
+        ("text_direction", ("vertical", "horizontal"), "vertical"),
+        ("color_mode", ("monochrome", "color"), "monochrome"),
+    ):
+        if _get(page, key, default) not in choices:
+            report.add("error", f"invalid_{key}", f"{key} 值无效，应为 {' / '.join(choices)}", field_name=key)
+    panel_ids: set[str] = set()
+    figure_ids: set[str] = set()
+    for panel in _panels(page):
+        identifier = _get(panel, "id", "")
+        if not isinstance(identifier, str) or not identifier.strip() or identifier in panel_ids:
+            report.add("error", "invalid_panel_id", "格子 id 不能为空或重复", field_name="id")
+        if isinstance(identifier, str):
+            panel_ids.add(identifier)
+        for key, choices, default in (
+            ("shot", SHOT_SIZES, "medium"),
+            ("angle", CAMERA_ANGLES, "eye"),
+            ("status", PANEL_STATUSES, "draft"),
+        ):
+            if _get(panel, key, default) not in choices:
+                report.add("error", f"invalid_{key}", f"格子 {key} 值无效", field_name=key)
+        for figure in _get(panel, "figures", []):
+            fields = figure if isinstance(figure, Mapping) else _get(figure, "extra", {})
+            if "id" not in fields:
+                continue  # Legacy anonymous figures have no object id.
+            identifier = fields["id"]
+            if not isinstance(identifier, str) or not identifier.strip() or identifier in figure_ids:
+                report.add("error", "invalid_figure_id", "人物 id 不能为空或重复", field_name="figures.id")
+            if isinstance(identifier, str):
+                figure_ids.add(identifier)
 
 
 def _validate_character_clothing(

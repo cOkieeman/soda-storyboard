@@ -13,8 +13,11 @@ from soda_storyboard.compiler import compile_geometry_map, compile_page
 from soda_storyboard.figures import sketch_geometry
 from soda_storyboard.geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from soda_storyboard.io import load_character, load_project, read_json, save_page, write_json
+from soda_storyboard.json_safety import check_json_numbers
 from soda_storyboard.models import Character, Page, Project
+from soda_storyboard.persistence import page_lock
 from soda_storyboard.preview import render_preview
+from soda_storyboard.production.paths import validate_production_paths
 from soda_storyboard.templates import suggest_layouts
 from soda_storyboard.validation import validate_page
 
@@ -89,13 +92,14 @@ class Store:
             ],
         }
 
-    def atomic(self, path: Path, value: Any, expected_version: str | None = None) -> None:
+    def atomic(self, path: Path, value: Any, expected_version: str | None = None) -> tuple[dict, str]:
         temporary = self.path(path.relative_to(self.root).as_posix() + f".{uuid.uuid4().hex}.tmp")
         try:
             if isinstance(value, Page):
                 save_page(value, temporary)
             else:
                 write_json(temporary, value)
+            committed, committed_version = snapshot(temporary)
             if expected_version is not None:
                 current, version = snapshot(path)
                 if version != expected_version:
@@ -103,6 +107,12 @@ class Store:
                         409, "页面版本冲突，请合并当前内容后重试", current=current, version=version
                     )
             temporary.replace(path)
+            current, version = snapshot(path)
+            if version != committed_version:
+                raise APIError(409, "页面版本冲突，请合并当前内容后重试", current=current, version=version)
+            # Return the actual submitted snapshot; another writer may change the
+            # target immediately after this check, but must never be adopted here.
+            return committed, committed_version
         finally:
             temporary.unlink(missing_ok=True)
 
@@ -149,18 +159,23 @@ class Store:
 
     def checked(self, value: dict) -> tuple[Page, dict]:
         try:
+            check_json_numbers(value)
+            path_errors = validate_production_paths(value, self.root)
             page = Page.from_dict(value)
             page.lora_policy = load_project(self.path("project.json")).lora_policy
             report = validate_page(page, self.character_map()).to_dict()
         except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
             issue = {"severity": "error", "code": "invalid_page", "message": f"页面数据格式错误：{exc}"}
             raise APIError(422, "页面校验失败", errors=[issue], warnings=[]) from exc
+        report["errors"].extend(
+            {"severity": "error", "code": "production_path", "message": message} for message in path_errors
+        )
         if report["errors"]:
             raise APIError(422, "页面校验失败", **report)
         return page, report
 
     def save(self, page_id: str, value: dict, version: str | None) -> dict:
-        with self.lock:
+        with self.lock, page_lock(self.page_path(page_id)):
             self.editable(page_id)
             self.match(page_id, version)
             page, report = self.checked(value)
@@ -168,12 +183,12 @@ class Store:
                 raise APIError(400, "页面 id 必须与 URL 一致")
             # Validation can be slow; catch CLI changes made during validation too.
             self.match(page_id, version)
-            self.atomic(self.page_path(page_id), page, expected_version=version)
-            return {**self.page(page_id), "warnings": report["warnings"]}
+            saved, saved_version = self.atomic(self.page_path(page_id), page, expected_version=version)
+            return {"page": saved, "version": saved_version, "warnings": report["warnings"]}
 
     def create_page(self, value: dict) -> dict:
-        with self.lock:
-            page_id = identifier(value.get("id", ""))
+        page_id = identifier(value.get("id", ""))
+        with self.lock, page_lock(self.page_path(page_id)):
             target = self.page_path(page_id)
             if target.exists():
                 raise APIError(409, "页面已存在")
@@ -192,8 +207,8 @@ class Store:
             page, report = self.checked({**defaults, **value})
             if page.id != page_id:
                 raise APIError(400, "页面 id 与 page_id 不一致")
-            self.atomic(target, page)
-            return {**self.page(page_id), "warnings": report["warnings"]}
+            saved, saved_version = self.atomic(target, page)
+            return {"page": saved, "version": saved_version, "warnings": report["warnings"]}
 
     def delete(self, page_id: str, version: str | None) -> dict:
         with self.lock:
@@ -229,8 +244,8 @@ class Store:
                     )
             # Validate with the model, but retain unknown nested fields in existing role files.
             saved = value if character_id is not None else character.to_dict()
-            self.atomic(path, saved, version if character_id is not None else None)
-            return {"character": saved, "version": snapshot(path)[1]}
+            saved, saved_version = self.atomic(path, saved, version if character_id is not None else None)
+            return {"character": saved, "version": saved_version}
 
     def preview(self, page_id: str, style: str, scale: float) -> bytes:
         page = self.render_page(page_id)

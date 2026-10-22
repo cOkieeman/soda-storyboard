@@ -1647,14 +1647,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
           if (res.success) {
             const unchanged = get().editRevision === revision;
+            const committedPage = res.page!;
             set({
               currentVersion: res.version,
+              pages: get().pages.map(page => page.id === pageId ? {
+                ...page, version: res.version!, description: committedPage.description || "", panel_count: committedPage.panels.length
+              } : page),
               hasUnsavedChanges: !unchanged,
               lastSavedTime: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }),
               validationIssues: res.warnings || [],
               saveStatus: unchanged ? "saved" : "saving", saveError: null,
               ...(unchanged ? {
-                sodaPage: res.page || pageToSave,
+                sodaPage: committedPage,
+                project: { ...get().project, pages: [sodaPageToProjectPage(committedPage)] },
+                sketchGeometry: generatePageSketchGeometry(committedPage, get().characters as any),
                 dirtyPanelIds: new Set<string>(), dirtyBubbleIds: new Set<string>()
               } : {})
             });
