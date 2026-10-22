@@ -79,7 +79,9 @@ CLI 输出 UTF-8，也支持 `python -m soda_storyboard`。文件接口与网页
 
 项目目录包含 `project.json`、`pages/*.json`、`characters/*.json` 和可选的 `templates/*.json`。页文件使用 `soda-storyboard-page-v1`，画布尺寸必须是 16 的倍数。格子的 `shape` 支持左上角原点像素坐标的 `rect` 和四点 `quad`。`order` 从 1 连续编号；`dialogue_mode` 为 `moss_text` 时台词会编译为文字 item，`lettering` 时只编译画面 object。
 
-角色卡可以记录触发词、LoRA 路径和强度、中文/英文外观、服装及参考图。校验器会报告越界、重叠、间距、顺序、台词长度、未知角色和多 LoRA 风险。
+角色卡可以记录中文/英文外观、服装、显著标志物及参考图；触发词、`lora`（路径和强度）均可选，无 LoRA 也能使用。外观应写清发型发色、服装款式和颜色、尾巴或头饰等标志物，并区分同页角色。校验器报告越界、重叠、间距、顺序、台词长度、未知角色，以及服装缺失、缺颜色和同页服装过于相似的提醒。
+
+项目 `lora_policy` 可设为 `single`（默认，每页最多一个角色 LoRA）或 `none`（整页按角色描述出图）。页面可用 `lora_character` 指定角色 id，`none` 表示本页不使用，省略则自动选择；编辑器页面属性的“本页 LoRA 角色”提供自动、不使用和所有带 LoRA 的角色。自动选择按角色出场格子的实际面积累加权重，面积相同再按 id 稳定选择；没有可用 LoRA 时不挂。其他角色始终使用角色卡描述，后期计划不会因其有 LoRA 就建议换人。
 
 ## MOSS bbox 规则
 
@@ -91,21 +93,21 @@ CLI 输出 UTF-8，也支持 `python -m soda_storyboard`。文件接口与网页
 
 每个 bbox 的顺序是 `[y_min, x_min, y_max, x_max]`。输入使用左上角原点；编译时减去画布中心 `(W/2, H/2)`，因此非方形画布也能保持正确的 x/y 顺序。
 
-编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。caption 以几何计算的方位和形状开头（如 `Top-right horizontal panel:` / `右上横格：`），再按“景别和角度 → 人物外观、姿势、朝向 → 场景 → 道具和氛围”整理，移除格号前缀，去重名字、服装和触发词，统一标点。人物姿势和场景描述冲突时，校验与检查器给出提醒，不自动改剧情。每个人物另编译为 `label: "character"` 条目；有 `editor` 数据时，bbox 取草稿骨架的外接框，包含关节、位置、大小、镜像和出框设置，局部换人遮罩共用该几何。
+编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。caption 按“方位和形状 → 景别、角度 → 人物（名字 + 角色卡 `appearance.en` + 姿势短语）→ 场景译文”组装，移除格号前缀并统一标点。人物外观由程序从角色卡插入，同一角色在各格的描述保持一致。多人同格时分别写清每个人的服装，并追加 `each character keeps their own outfit: ...`（中文同理）的区分句。人物姿势和场景描述冲突时，校验与检查器给出提醒，不自动改剧情。每个人物另编译为 `label: "character"` 条目；有 `editor` 数据时，bbox 取草稿骨架的外接框，包含关节、位置、大小、镜像和出框设置，局部细节重绘遮罩共用该几何。
 
-中文编辑，默认英文出图：项目 `caption_language` 默认 `en`，也可选 `zh`。每格 `caption_auto_en` 保存 `text`、中文来源 `source_hash` 和 `translated_at`。新鲜译文用于场景 caption，人物使用英文姿势模板及已有 `appearance_en`；缺失或过期时该格退回整理后的中文并警告。文字条目的台词和旁白始终保留原文。编辑器预览显示实际语言、译文状态和冲突提醒，修改中文后立即标记过期。方位不参与 `source_hash`，只移动格子不会过期；手动覆盖保留原文并提示建议以方位开头。镜头合并成 `<方位>: <景别>, <角度>. <人物及场景>.`；特写和大特写不自动追加全身姿势。
+中文编辑，默认英文出图：项目 `caption_language` 默认 `en`，也可选 `zh`。每格 `caption_auto_en` 保存场景、动作、道具的 `text`、中文来源 `source_hash` 和 `translated_at`。哈希只覆盖需要翻译的中文部分；只改角色卡外观或移动格子不会让译文过期，下一次编译自动使用新的外观。缺失、过期或旧格式译文时该格退回整理后的中文并提醒。文字条目的台词和旁白始终保留原文。编辑器预览显示实际语言、译文状态和冲突提醒。手动覆盖保留原文并提示建议以方位开头；特写和大特写不自动追加全身姿势。
 
 翻译由使用插件的 AI 完成，核心库不调用服务。可配置项目 `glossary`（如 `{"猫胡子": "cat whiskers"}`）：
 
 ```powershell
 soda-storyboard translate my-story/pages/page-01.json --todo --json
-# AI 根据清单、英文外观、姿势模板与术语表生成 translations.json
+# AI 仅翻清单中的场景、动作和道具，按术语表生成 translations.json
 soda-storyboard translate my-story/pages/page-01.json --apply translations.json --json
 ```
 
-`--todo` 额外提供 `position_en` 供核对方位，AI 不将它写入译文；编译器根据当前几何自动拼接。格式变化本身不改变中文语义哈希，旧英文镜头前缀可自动规范；特写姿势省略改变了源语义时会正常要求重译。
+`--todo` 将人物外观标为程序负责的排除内容。AI 只翻场景、动作、道具，不把人物外观、服装、镜头、方位或自动姿势模板写入译文；这些内容由编译器组装。`position_en` 仅供核对方位。
 
-译文文件格式为 `{"translations": [{"panel_id": "p1", "source_hash": "清单中的哈希", "text": "English visual description."}]}`；哈希不符的格子拒绝写入。旧文件无需升级，缺少缓存时仍可编译中文。旧 `caption_en` 保留，只有 `use_custom_caption: true` 或页面 `legacy_caption_en: true` 才启用，手动覆盖优先级最高。
+译文文件格式为 `{"translations": [{"panel_id": "p1", "source_hash": "清单中的哈希", "text": "Reading by the window, with a book on the table."}]}`；哈希不符的格子拒绝写入。`--apply` 自动在缓存写入 `format: "scene-v1"`，无需手写。旧缓存缺少该标记时状态为 `legacy`，标为“需要重新翻译”；请运行 `translate --todo`，只翻新的 `source_zh`（场景、动作、道具），再用 `--apply` 写回，避免沿用含人物外观的整句。缺少缓存时仍可编译中文。旧 `caption_en` 保留，只有 `use_custom_caption: true` 或页面 `legacy_caption_en: true` 才启用，手动覆盖优先级最高。
 
 离线语言 A/B 只写两份相同几何的 MOSS JSON，禁用手动覆盖，使用整理后中文和缓存英文，不提交任务：
 
@@ -113,7 +115,7 @@ soda-storyboard translate my-story/pages/page-01.json --apply translations.json 
 uv run python scripts/ab_caption_lang.py my-story/pages/page-01.json --translations translations.json --output-dir my-story/ab
 ```
 
-输出 `page-01.zh.moss.json` 和 `page-01.en.moss.json`。未提供新鲜译文的英文分支会警告并回退中文；兼容 `--english-page <翻译副本>`。
+输出 `page-01.zh.moss.json` 和 `page-01.en.moss.json`。未提供新鲜译文的英文分支会提醒并回退中文。`--english-page <翻译副本>` 仍保留，但旧整句缓存会识别为 `legacy` 并中文回退；迁移时使用 `translate --todo/--apply` 的场景译文，再传 `--translations`，由 apply 自动维护 `scene-v1` 标记。
 
 stdout 编译的附属文件保存为 `pages/<id>/<id>.cut.json` 和 `<id>.map.json`；显式 `--output` 继续保存在输出 JSON 旁。编辑器忽略 `pages/` 中非法页面 id 和 `.cut.json`、`.map.json` 等附属文件。
 
@@ -145,7 +147,7 @@ soda-storyboard export-bundle my-story/pages/page-01.json --json
 soda-storyboard export-bundle my-story/pages/page-01.json --output my-story/exports/page-01.storyboard.json --no-sketch --json
 ```
 
-默认保存到项目 `exports/<页id>.storyboard.json`。导出前校验，有 error 就拒绝写文件；英文译文缺失或过期会提醒先运行 `translate --todo`，仍允许携带中文后备导出。`--json` 返回输出路径、格数、台词数、出场角色、建议 LoRA 和译文状态。此操作不连接 ComfyUI、不提交生成任务。
+默认保存到项目 `exports/<页id>.storyboard.json`。导出前校验，有 error 就拒绝写文件；英文译文缺失、过期或需要迁移时提醒先运行 `translate --todo`，仍允许携带中文后备导出。`--json` 返回输出路径、格数、台词数、出场角色、建议 LoRA 和译文状态。摘要、`compile_bundle` 的 `warnings` 与 `validate` 信息会说明“本页 LoRA：Sylvia（0.8）；鲸鱼娘按角色描述出图”或“本页不使用 LoRA”。此操作不连接 ComfyUI、不提交生成任务。
 
 包格式为 `soda-storyboard-bundle-v1`，包含 `exported_at`、`generator`、项目设置 `project`、完整分镜单 `page`、该页实际引用的 `characters`，以及可选 `sketch_png_base64`。译文缓存和扩展字段保留；角色参考图仅留文件名，LoRA 等本机文件信息便携化，不打包参考图或模型文件。草稿是本地绘制的 PNG，长边 768，最多 2 MiB / 400 万像素，分镜 JSON 最多 16 MiB；`--no-sketch` 可省略草稿。格式见 [schema](schema/storyboard-v1.schema.json)。
 
@@ -290,12 +292,12 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --outpu
 ### 新增角色管理
 
 ```shell
-soda-storyboard character new --project my-story --id girl --name "澪" --lora "models/girl.safetensors" --outfit "浅色校服" --reference "refs/front.png" --json
-soda-storyboard character set girl --project my-story --lora-strength 0.75 --appearance-zh "黑色短发" --json
+soda-storyboard character new --project my-story --id girl --name "澪" --appearance-zh "黑色短发，白色水手服配藏蓝色百褶裙，红色发夹" --appearance-en "short black hair, a white sailor blouse and navy pleated skirt, a red hair clip" --outfit "白色水手服" --outfit "藏蓝色百褶裙" --reference "refs/front.png" --json
+soda-storyboard character set girl --project my-story --appearance-zh "黑色短发，白色水手服配藏蓝色百褶裙，红色发夹" --json
 soda-storyboard character list --project my-story --json
 ```
 
-`new` 新建 LoRA 默认强度为 0.8；`set` 的 id 是位置参数，只改给出的字段。改路径而没给强度时保留已有强度；没 LoRA 不能单设强度。trigger、outfit、reference 都可重复，set 时用给出的整个列表替换，未给列表原样保留。set 按角色 id 查找，不要求文件名与 id 相同，也不会为不存在的角色新建文件。LoRA 和参考图路径只保存，不搜索或读取对应模型/图片。
+角色创建无需 LoRA；需要时可另加 `--lora "models/girl.safetensors" --lora-strength 0.75`。`new` 设置 LoRA 而省略强度时默认 0.8；`set` 的 id 是位置参数，只改给出的字段。改路径而没给强度时保留已有强度；没 LoRA 不能单设强度。trigger、outfit、reference 都可重复，set 时用给出的整个列表替换，未给列表原样保留。set 按角色 id 查找，不要求文件名与 id 相同，也不会为不存在的角色新建文件。LoRA 和参考图路径只保存，不搜索或读取对应模型/图片。
 
 ### 文档来源与验证边界
 
@@ -333,14 +335,14 @@ uv run soda-storyboard pick station-turn render.png --project my-story --json
 uv run soda-storyboard plan station-turn --project my-story --json
 ```
 
-gen 自动编译，不要求预先 compile。`--seeds N` 表示候选数量，每张随机选一个具体种子；preset 省略时 CLI 使用项目默认值。model 可选 base、sft 或自定义模型文件名；`--lora auto` 默认选出场最多的带 LoRA 角色（同票按 id），也可指定角色 id 或 none。一次最多加载一个人物 LoRA。结果存到 `pages/<页id>/renders/<时间>_<种子>.png`，记录种子、预设、模型、LoRA 和编译 JSON 哈希；返回 `meta.candidate_sheet` 是并排标种子的候选拼图。pick 的 render 参数换成返回的真实路径或唯一文件名；不接受未登记的图片。
+gen 自动编译，不要求预先 compile。`--seeds N` 表示候选数量，每张随机选一个具体种子；preset 省略时 CLI 使用项目默认值。model 可选 base、sft 或自定义模型文件名；`--lora auto` 遵循项目 `lora_policy` 与页面 `lora_character`，未指定角色时按格子面积加权的出场量选择（同权重按 id）。`--lora none` 本次不挂，也可显式指定角色 id。一次最多加载一个人物 LoRA，没有角色提供 LoRA 时也正常生成。结果存到 `pages/<页id>/renders/<时间>_<种子>.png`，记录种子、预设、模型、LoRA 和编译 JSON 哈希；返回 `meta.candidate_sheet` 是并排标种子的候选拼图。pick 的 render 参数换成返回的真实路径或唯一文件名；不接受未登记的图片。
 
-plan 可在选图前查看，选图后会列出需要换人的格子及角色、swap / inpaint 模式、斜切、出格图层和排字。不同候选可以随时重新 pick，旧格子选择和派生页会失效；候选记录仍保留。
+plan 可在选图前查看，列出斜切、出格图层和排字等后期步骤；不因配角有自己的 LoRA 而提出 swap 或 inpaint。看成图后可按需要手动使用 redraw / inpaint 修复细节。不同候选可以随时重新 pick，旧格子选择和派生页会失效；候选记录仍保留。
 
 ```shell
 uv run soda-storyboard split station-turn --project my-story --json
 uv run soda-storyboard redraw station-turn p3 --project my-story --mode detail --json
-uv run soda-storyboard redraw station-turn p3 --project my-story --mode swap --character girl --denoise 0.85 --json
+uv run soda-storyboard redraw station-turn p3 --project my-story --mode detail --denoise 0.45 --json
 uv run soda-storyboard inpaint station-turn p1 --project my-story --character girl --denoise 0.85 --margin 24 --feather 16 --json
 uv run soda-storyboard pick-panel station-turn p3 panel-render.png --project my-story --json
 uv run soda-storyboard compose station-turn --project my-story --cut-inset 12 --border-width 3 --json
@@ -352,8 +354,8 @@ uv run soda-storyboard export my-story --format pdf --json
 ```
 
 - split 按 bbox 切格，quad 使用外接矩形，并单独保存 quad-mask；文件放在 `pages/<页id>/panels/<格id>/`。
-- redraw 的 detail 默认 denoise=0.45，swap 默认 0.85，swap 仅适用于单人格；两人同格使用 inpaint。单格提示词不带整页前缀。moss_text 下生成后贴回原文字框，防止高降噪改字。每次生成是独立候选，pick-panel 后才用于拼页。
-- redraw / inpaint 先把格子按比例放大到长边 1024、宽高对齐 16 的工作尺寸，重画后缩回原格。swap 提示保留动作、道具内容和构图，只替换目标人物外观与触发词。inpaint 分别上传原图 RGB 和遮罩，保留遮罩内的原图内容，完成后以羽化遮罩融合；实际工作尺寸记录在 `working_size`。
+- redraw / inpaint 用于修复细节，detail 默认 denoise=0.45；inpaint 只处理遮罩范围。`redraw --mode swap --character <角色id>` 保留为手动高级选项，默认 0.85，仅适用单人格，不推荐用于换 LoRA 角色。单格提示词不带整页前缀。moss_text 下生成后贴回原文字框，防止高降噪改字。每次生成是独立候选，pick-panel 后才用于拼页。
+- redraw / inpaint 先把格子按比例放大到长边 1024、宽高对齐 16 的工作尺寸，重画后缩回原格。swap 提示保留动作、道具内容和构图，只替换目标人物外观与触发词；改变人物 LoRA 可能破坏整页画风和比例。inpaint 分别上传原图 RGB 和遮罩，保留遮罩内的原图内容，完成后以羽化遮罩融合；实际工作尺寸记录在 `working_size`。
 - inpaint 按 figures 位置、余量和羽化生成遮罩，羽化后再次保护另一角色区域；支持 `figure.bbox` 精确指定人物范围（页面坐标 x/y/w/h）。返回 mask 路径供检查。位置推断不能替代真实人物分割，重叠人物需要人工调整范围。
 
 局部重绘前先运行 `soda-storyboard inpaint station-turn p1 --project my-story --character girl --mask-only --json`，查看返回的 `mask` 和红色叠加 `preview`。这个模式只写遮罩与预览，不连接 ComfyUI、不提交采样、不登记重画候选；确认范围后再运行不带 `--mask-only` 的命令。估时以 1024×1536、25 步约 40 秒为基准，按实际像素数和步数成比例换算，排队、模型加载和硬件另计。

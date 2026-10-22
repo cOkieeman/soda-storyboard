@@ -245,7 +245,7 @@ def _character_options(parser: argparse.ArgumentParser, *, editing: bool = False
     parser.add_argument("--appearance-zh", default=None if editing else "")
     parser.add_argument("--appearance-en", default=None if editing else "")
     parser.add_argument("--role-en", help="英文简短称呼，例如 the older sister")
-    parser.add_argument("--lora", help="LoRA 文件路径；只记录用户给出的路径，不搜索磁盘")
+    parser.add_argument("--lora", help="可选的 LoRA 文件路径；省略时按角色描述出图，只记录给出的路径")
     parser.add_argument("--lora-strength", type=float, help="LoRA 强度；新建 LoRA 默认 0.8")
     parser.add_argument("--outfit", action="append", help="服装描述；可重复；set 时替换整个服装列表")
     parser.add_argument("--reference", action="append", help="参考图路径；可重复；set 时替换整个参考图列表")
@@ -430,6 +430,7 @@ def _page_for(path: Path) -> Page:
         payload["style_prompt"] = project.style_prompt
     payload.setdefault("tags", project.tags)
     payload.setdefault("caption_language", project.caption_language)
+    payload["lora_policy"] = project.lora_policy
     return Page.from_dict(payload)
 
 

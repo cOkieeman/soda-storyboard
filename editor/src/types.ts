@@ -270,6 +270,7 @@ export type SodaPage = {
   style_prefix?: string;
   legacy_caption_en?: boolean;
   caption_language?: "en" | "zh";
+  lora_character?: string;
   style_prompt?: string | null;
   tags?: string[];
   text_font_size?: number;
@@ -343,6 +344,7 @@ export type SodaProject = {
   tags?: string[];
   caption_language?: "en" | "zh";
   glossary?: Record<string, string>;
+  lora_policy?: "single" | "none";
   [key: string]: any;
 };
 
@@ -411,7 +413,7 @@ export type LayoutCandidate = {
 };
 
 export type ValidationIssue = {
-  severity: "error" | "warning";
+  severity: "error" | "warning" | "info";
   code: string;
   message: string;
   panel_id?: string | null;
@@ -423,6 +425,7 @@ export type ValidationResult = {
   exit_code: number;
   errors: ValidationIssue[];
   warnings: ValidationIssue[];
+  infos?: ValidationIssue[];
   issues: ValidationIssue[];
 };
 

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { AlertCircle, AlertTriangle, ArrowUpRight, Check, ChevronDown, Columns2, List, Plus, Rows2, Star, Trash2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowUpRight, Check, ChevronDown, Columns2, Info, List, Plus, Rows2, Star, Trash2 } from "lucide-react";
 import { useEditorStore } from "../lib/store";
 import { Figure, ShotType, AngleType, FigurePose, TextKind, BubbleStyle, Selection } from "../types";
 import { getFigureId } from "../lib/figureRig";
@@ -76,7 +76,7 @@ const BUBBLE_OPTIONS: { value: BubbleStyle; label: string }[] = [
 
 type InspectorNotice = {
   id: string;
-  severity: "error" | "warning";
+  severity: "error" | "warning" | "info";
   message: string;
   code: string;
   targetKind?: "panel" | "text" | "overlay";
@@ -141,6 +141,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const updateFigureInPanel = useEditorStore((state) => state.updateFigureInPanel);
   const addTextToPanel = useEditorStore((state) => state.addTextToPanel);
   const setLegacyCaptionMode = useEditorStore((state) => state.setLegacyCaptionMode);
+  const setPageLoraCharacter = useEditorStore((state) => state.setPageLoraCharacter);
   const selectObject = (nextSelection: Selection) => {
     selectItem(nextSelection);
     onSelectObject?.(nextSelection);
@@ -174,11 +175,6 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
       if (!panel.character_ids?.length) {
         items.push({ id: `char-${panel.id}`, severity: "warning", code: "no_character", message: `格子 ${panel.order} 未指定登场角色`, targetKind: "panel", targetId: panel.id });
       }
-      const loras = new Set((panel.character_ids || []).map((id) => characterDetails[id]?.lora?.path).filter(Boolean));
-      const hasServerLoraWarning = items.some((item) => item.code === "multiple_lora_characters_panel" && item.targetId === panel.id);
-      if (loras.size > 1 && !hasServerLoraWarning) {
-        items.push({ id: `lora-${panel.id}`, severity: "warning", code: "multi_lora", message: `格子 ${panel.order} 使用 ${loras.size} 个不同 LoRA，可能互相影响`, targetKind: "panel", targetId: panel.id });
-      }
     });
     sodaPage.texts.forEach((text) => {
       const hasServerTextWarning = items.some((item) => item.code === "dialogue_too_long" && (item.targetId === text.id || item.targetId === text.panel_id));
@@ -205,7 +201,9 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const objectId = selectedFigure ? "人物与姿势" : selectedObject?.id || selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
   const deleteLabel = `删除${selectedObject ? "物件框" : selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
   const errorCount = notices.filter((notice) => notice.severity === "error").length;
-  const warningCount = notices.length - errorCount;
+  const warningCount = notices.filter((notice) => notice.severity === "warning").length;
+  const infoCount = notices.filter((notice) => notice.severity === "info").length;
+  const noticeSummary = [errorCount ? `校验失败 · ${errorCount} 处错误` : "", warningCount ? `${warningCount} 条提醒` : "", infoCount ? `${infoCount} 条说明` : ""].filter(Boolean).join(" · ");
   const firstPanel = [...sodaPage.panels].sort((a, b) => a.order - b.order)[0];
   const panelTexts = selectedPanel ? sodaPage.texts.filter((text) => text.panel_id === selectedPanel.id) : [];
   const textPanel = selectedText ? sodaPage.panels.find((panel) => panel.id === selectedText.panel_id) : undefined;
@@ -223,10 +221,10 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
       <div className="inspector-content min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-wrap gap-2 border-b border-[var(--line)] px-5 py-3"><button className="ui-btn ui-btn-sm" onClick={() => window.dispatchEvent(new Event("soda:open-dialogue-editor"))}><List size={14} />整页台词</button><button className="ui-btn ui-btn-sm" onClick={() => window.dispatchEvent(new Event("soda:open-favorites"))}><Star size={14} />收藏样式</button></div>
         {notices.length > 0 ? (
-          <details className="validation-summary group" data-severity={errorCount ? "error" : "warning"} open={errorCount > 0}>
+          <details className="validation-summary group" data-severity={errorCount ? "error" : warningCount ? "warning" : "info"} open={errorCount > 0}>
             <summary className="flex cursor-pointer select-none items-center gap-2 text-[12px] font-medium">
-              {errorCount ? <AlertCircle size={15} className="shrink-0" aria-hidden="true" /> : <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />}
-              <span className="flex-1">{errorCount ? `校验失败 · ${errorCount} 处错误${warningCount ? ` · ${warningCount} 条提醒` : ""}` : `${warningCount} 条提醒`}</span>
+              {errorCount ? <AlertCircle size={15} className="shrink-0" aria-hidden="true" /> : warningCount ? <AlertTriangle size={15} className="shrink-0" aria-hidden="true" /> : <Info size={15} className="shrink-0" aria-hidden="true" />}
+              <span className="flex-1">{noticeSummary}</span>
               <ChevronDown size={14} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
             <div className="validation-list mt-2" role="list">
@@ -367,6 +365,13 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
             <InspectorSection title="提示词兼容">
               <label className="figure-option flex cursor-pointer items-center gap-2 text-[13px]"><input type="checkbox" checked={Boolean(sodaPage.legacy_caption_en)} onChange={(event) => setLegacyCaptionMode(event.target.checked)} />保持旧版英文提示词覆盖行为</label>
               <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">中文编辑，默认使用新鲜英文译文；缺失或过期时用中文。旧项目兼容模式会启用原有手动提示词。</p>
+            </InspectorSection>
+            <InspectorSection title="本页 LoRA 角色">
+              <InspectorSelect label="本页 LoRA 角色" value={sodaPage.lora_character || "auto"} options={[
+                { value: "auto", label: "自动" },
+                { value: "none", label: "不使用" },
+                ...characters.filter((character) => character.has_lora).map((character) => ({ value: character.id, label: character.display_name }))
+              ]} onChange={(value) => setPageLoraCharacter(value === "auto" ? undefined : value)} />
             </InspectorSection>
             {sodaPage.style_prompt && <InspectorSection title="画面风格提示词" open={false}><p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--ink-light)]">{sodaPage.style_prompt}</p></InspectorSection>}
           </div>

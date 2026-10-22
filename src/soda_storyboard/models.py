@@ -21,6 +21,7 @@ CHARACTER_FORMAT = "soda-storyboard-character-v1"
 
 READING_DIRECTIONS = ("rtl", "ltr")
 DIALOGUE_MODES = ("moss_text", "lettering")
+LORA_POLICIES = ("single", "none")
 SHOT_SIZES = (
     "extreme_long",
     "long",
@@ -81,6 +82,12 @@ def _boolean(value: Any, name: str) -> bool:
 def _caption_language(value: Any) -> str:
     if value not in ("en", "zh"):
         raise ValueError("caption_language must be en or zh")
+    return value
+
+
+def _lora_policy(value: Any) -> str:
+    if value not in LORA_POLICIES:
+        raise ValueError("lora_policy must be single or none")
     return value
 
 
@@ -243,7 +250,7 @@ class Dialogue:
 
 @dataclass(slots=True)
 class Character:
-    """Character metadata stored in ``characters/<id>.json``."""
+    """Character metadata; an optional LoRA supplements the appearance description."""
 
     id: str
     display_name: str
@@ -721,6 +728,9 @@ class Page:
     legacy_caption_en: bool = False
     caption_language: str | None = None
     objects: list[ObjectBox] = field(default_factory=list)
+    lora_character: str | None = None
+    # Effective project policy, inherited by project loaders; never page JSON.
+    lora_policy: str = "single"
 
     @property
     def id(self) -> str:
@@ -788,6 +798,8 @@ class Page:
             "legacy_caption_en",
             "caption_language",
             "objects",
+            "lora_character",
+            "lora_policy",
         }
         canvas = value.get("canvas", value.get("canvas_size", {}))
         if not isinstance(canvas, Mapping):
@@ -823,6 +835,10 @@ class Page:
             if value.get("caption_language") is None
             else _caption_language(value["caption_language"]),
             objects=[ObjectBox.from_dict(item) for item in value.get("objects", [])],
+            lora_character=None
+            if value.get("lora_character") is None
+            else _text(value["lora_character"], "page.lora_character"),
+            lora_policy=_lora_policy(value.get("lora_policy", "single")),
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PAGE_FORMAT), "page.format"),
         )
@@ -852,6 +868,8 @@ class Page:
             result["legacy_caption_en"] = True
         if self.caption_language is not None:
             result["caption_language"] = self.caption_language
+        if self.lora_character is not None:
+            result["lora_character"] = self.lora_character
         if self.objects:
             result["objects"] = [item.to_dict() for item in self.objects]
         if self.overlays:
@@ -877,6 +895,7 @@ class Project:
     tags: list[str] = field(default_factory=list)
     caption_language: str = "en"
     glossary: dict[str, str] = field(default_factory=dict)
+    lora_policy: str = "single"
 
     @property
     def title(self) -> str:
@@ -920,6 +939,7 @@ class Project:
             "tags",
             "caption_language",
             "glossary",
+            "lora_policy",
         }
         canvas = value.get("default_canvas", value.get("canvas", {}))
         if not isinstance(canvas, Mapping):
@@ -958,6 +978,7 @@ class Project:
             tags=_strings(value.get("tags", []), "project.tags"),
             caption_language=_caption_language(value.get("caption_language", "en")),
             glossary=_glossary(value.get("glossary", {})),
+            lora_policy=_lora_policy(value.get("lora_policy", "single")),
         )
 
     def to_dict(self) -> JsonObject:
@@ -975,6 +996,7 @@ class Project:
             "tags": list(self.tags),
             "caption_language": self.caption_language,
             "glossary": dict(self.glossary),
+            "lora_policy": self.lora_policy,
         }
         result.update(self.extra)
         return result
@@ -985,6 +1007,7 @@ __all__ = [
     "CAMERA_ANGLES",
     "CHARACTER_FORMAT",
     "DIALOGUE_MODES",
+    "LORA_POLICIES",
     "PAGE_FORMAT",
     "PANEL_STATUSES",
     "POSES",

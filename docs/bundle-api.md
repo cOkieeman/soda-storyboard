@@ -24,7 +24,13 @@ result = compile_bundle(path_or_dict, dialogue_mode=None, slant_mode="cut", incl
 
 返回 dict 的稳定键：`moss`（MOSS dict）、`width` / `height`（int）、`lora`（建议项或 None）、`warnings`（list[str]）。建议项包含 `character_id`、`filename` 和 `strength`，只提供模型文件名，不提供机器路径，也不加载模型。
 
+项目 `lora_policy` 为 `single`（默认）或 `none`；`none` 下 `lora` 返回 None。页面 `lora_character` 为角色 id 或 `none`，省略时按有 LoRA 角色出场格子的实际面积加权选择，同权重按 id；没有可用 LoRA 时返回 None。角色卡的 `lora` 明确可省略。其他角色始终按角色卡描述出图，`warnings` 字符串列表包含信息说明“本页 LoRA：Sylvia（0.8）；鲸鱼娘按角色描述出图”或“本页不使用 LoRA”，不再报告多 LoRA 角色风险；CLI validate 将这类说明放在 info / infos，warnings 保留实际提醒。
+
 `dialogue_mode=None` 遵循页/项目设置，可显式用 `moss_text` 或 `lettering`；`slant_mode` 为 cut / hint / rect。默认包含触发词，`include_triggers=False` 用于不想自动注入角色触发词的调用方；台词原文始终保留。输出复用同一套 `compile_page`，不会调用旧节点的重复 caption_en 追加逻辑。调用方需要 JSON 字符串时自行 `json.dumps(result["moss"], ensure_ascii=False)`。
+
+自动 caption 由程序按“方位 → 景别、角度 → 名字 + 角色卡 appearance.en + 姿势 → 场景译文”组装，同一角色在各格使用相同外观。多人同格分别说明服装并追加区分句。译文 `source_hash` 只覆盖需翻译的中文场景、动作、道具，角色外观改变不会过期；旧含外观整句缓存标为需要重新翻译，使用 `translate --todo/--apply` 迁移，迁移前仍允许中文后备。
+
+`translate --apply` 自动设置 `caption_auto_en.format: "scene-v1"`。缺少标记的旧缓存为 `legacy`，不静默沿用。离线 A/B 脚本建议传 `--translations` 场景译文；其保留的 `--english-page` 若携带旧整句缓存，也会提示迁移并回退中文。
 
 ## 导出与节点契约
 

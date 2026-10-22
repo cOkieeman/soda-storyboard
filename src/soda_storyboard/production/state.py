@@ -93,6 +93,7 @@ class PageState:
         self.raw = read_json(self.path)
         project = read_json(self.root / "project.json")
         payload = dict(self.raw)
+        payload["lora_policy"] = project.get("lora_policy", "single")
         for key in ("text_direction", "color_mode", "tags", "style_prompt", "caption_language"):
             if (key not in payload or (key == "style_prompt" and not payload[key])) and key in project:
                 payload[key] = project[key]

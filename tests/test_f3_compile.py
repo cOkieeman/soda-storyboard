@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from soda_storyboard.captions import source_hash, structured_caption
+from soda_storyboard.captions import source_hash
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.figure_rig import ensure_figure_editor
 from soda_storyboard.geometry import from_moss_bbox
@@ -117,7 +117,8 @@ def test_offline_ab_script_preserves_sources_and_uses_both_templates(tmp_path: P
     page, characters = sample()
     page.panels[0].extra["description_en"] = "A girl looks out of the window"
     page.panels[0].caption_auto_en = {
-        "text": structured_caption(page.panels[0], page, characters, "en"),
+        "format": "scene-v1",
+        "text": "A girl looks out of the window.",
         "source_hash": source_hash(page.panels[0], page, characters),
         "translated_at": "test",
     }
@@ -156,6 +157,22 @@ def test_ab_reports_missing_translation_and_uses_only_translated_text(
     translation["panels"][0]["figures"] = []
     translated = write_json(tmp_path / "translated.json", translation)
     entry["main"]([str(source), "--output-dir", str(output), "--english-page", str(translated)])
+    # The legacy helper constructs a full sentence cache. F8 requires migration
+    # through the scene-only translation exchange before using it as English.
+    assert "English translations missing or stale" in capsys.readouterr().err
+    translations = write_json(
+        tmp_path / "scene-translations.json",
+        {
+            "translations": [
+                {
+                    "panel_id": page.panels[0].id,
+                    "source_hash": source_hash(page.panels[0], page, {}),
+                    "text": "A girl looks out of the window.",
+                },
+            ]
+        },
+    )
+    entry["main"]([str(source), "--output-dir", str(output), "--translations", str(translations)])
     assert capsys.readouterr().err == ""
     en = read_json(output / "p.en.moss.json")
     zh = read_json(output / "p.zh.moss.json")

@@ -18,16 +18,16 @@ description: 与用户讨论日漫分镜、选择版式、审阅线框，确认�
 
 先复述核心事件和情绪。信息不足时只问一两个影响拆格的问题，例如“谁出场？”“最后想留下遗憾还是惊喜？”。不要把角色设定、镜头、尺寸等问题一次全抛给用户。
 
-用 `soda-storyboard character list --project my-story --json` 读已有角色。没有对应角色卡时逐步询问：名字、模型触发词（没有可留空）、LoRA 文件路径（没有可不用）、长相描述。让用户给出 LoRA 和参考图路径，不搜索其磁盘。衣服和参考图可后补；触发词按原文保存，不自行猜测。
+用 `soda-storyboard character list --project my-story --json` 读已有角色。没有对应角色卡时先帮用户写名字和外观：发型与发色、服装款式和**颜色**、尾巴或头饰等显著标志物；用中英文保存，同页角色的服装和颜色要有区分。服装不清楚时逐步询问，别把“连衣裙”“校服”等无颜色描述当作完整设定。LoRA、触发词和参考图均可选，无 LoRA 也能完整创作；用户要使用时才记录其提供的路径，不搜索磁盘。触发词按原文保存，不自行猜测。
 
 ```shell
-soda-storyboard character new --project my-story --id girl --name "女孩" --trigger "girl_token" --lora "models/girl.safetensors" --lora-strength 0.8 --appearance-zh "黑色短发" --outfit "浅色校服" --reference "refs/girl.png" --json
-soda-storyboard character set girl --project my-story --outfit "浅色校服" --outfit "帆布包" --json
+soda-storyboard character new --project my-story --id girl --name "女孩" --appearance-zh "黑色短发，白色水手服配藏蓝色百褶裙，红色发夹" --appearance-en "short black hair, a white sailor blouse and navy pleated skirt, a red hair clip" --outfit "白色水手服" --outfit "藏蓝色百褶裙" --json
+soda-storyboard character set girl --project my-story --outfit "白色水手服" --outfit "藏蓝色百褶裙" --reference "refs/girl.png" --json
 ```
 
 新建只用于不存在的角色；修改用 set。重复的 trigger / outfit / reference 构成该字段的新列表，set 会替换整个列表，未给字段不变。修改现有 LoRA 路径而未给强度时保留原强度；新建 LoRA 默认 0.8。字段、旧别名和扩展信息见 [文件格式](references/storyboard-format.md)。
 
-页里用角色 id 引用角色卡（包括对白 speaker_id），不把整份外观或 LoRA 路径塞入每格。多人页若有多个带 LoRA 的角色，主动说明“一次只能加载一个人物 LoRA”，建议先用出场最多、画面最重要的角色，列出其他角色日后需要单独重画的格子。尽量安排单独反应格，避免两个带 LoRA 的角色同格；已有明确意图要保留，但说清接缝问题尚未解决，不保证局部重绘成功。
+页里用角色 id 引用角色卡（包括对白 speaker_id），不把整份外观或 LoRA 路径塞入每格。项目 `lora_policy` 为 `single`（默认）或 `none`；每页最多挂一个角色 LoRA，其余角色靠角色卡描述。页面 `lora_character` 可指定角色 id、`none`（不使用），省略为自动；编辑器页面属性也能选。`gen page --lora auto` 先遵循 none 策略，再用页面指定角色，未指定时按格子实际面积加权的出场量选带 LoRA 的角色（同权重按 id），没有可用 LoRA 就不挂。命令也保留 `--lora none` 与 `--lora <角色id>`。不要为配角安排后续换 LoRA，也不用为了 LoRA 拆开多人同格；先把每个人的衣服款式和颜色写清楚。
 
 用户没给画风时，给 2～3 段可选的英文画风描述，让用户选择后存进项目 `style_prompt`，不要擅自定画风或覆盖已有选择。例如：
 
@@ -35,7 +35,7 @@ soda-storyboard character set girl --project my-story --outfit "浅色校服" --
 - 清爽赛璐珞：`Clean 2D Japanese anime comic, crisp ink outlines, flat cel shading, bright restrained colors, clear silhouettes and expressive eyes.`
 - 黑白网点：`Black-and-white Japanese manga, crisp ink lines, delicate screentone shading, strong black shapes, expressive faces and clean white negative space.`
 
-只写 anime 容易偏 3D。编译器在未给 style_prompt 时有按 color_mode 区分的英文兜底段落，但这不是用户已经选定的画风。用户用中文编辑 `description` 和 `appearance_zh`，AI 补全角色 `appearance_en`；出图前按下方译文流程写入 `caption_auto_en`。不要把自动译文塞进手动覆盖字段 `caption_en`，也不要擅自开启覆盖开关。tags 放项目或页面。
+只写 anime 容易偏 3D。编译器在未给 style_prompt 时有按 color_mode 区分的英文兜底段落，但这不是用户已经选定的画风。用户用中文编辑 `description` 和角色卡 `appearance.zh`，AI 补全角色卡 `appearance.en`；出图前按下方流程只翻场景、动作、道具，写入 `caption_auto_en`。人物外观由程序读取角色卡插入，不让翻译者逐格重写。不要把自动译文塞进手动覆盖字段 `caption_en`，也不要擅自开启覆盖开关。tags 放项目或页面。
 
 ## 2. 提出 2～3 个拆格方案
 
@@ -87,7 +87,7 @@ soda-storyboard validate my-story/pages/station-turn.json --json
 soda-storyboard preview my-story/pages/station-turn.json --output my-story/previews/station-turn.png --json
 ```
 
-每次修改后先 validate：有 error 就自行修正几何、缺失引用等可确定的问题并复验；不能擅自改掉用户剧情来消除问题。warning 要读原因：20 字警告解释给用户，多 LoRA 风险带上逐格处理建议，阅读顺序警告要检查实际线框。不可用“通过校验”证明图像生成一定正确。
+每次修改后先 validate：有 error 就自行修正几何、缺失引用等可确定的问题并复验；不能擅自改掉用户剧情来消除问题。warning 要读原因：20 字警告解释给用户；服装缺失、缺颜色或同页过于相似时，帮用户写明不同的服装和颜色；阅读顺序警告要检查实际线框。本页 LoRA 为信息级说明，例如“本页 LoRA：Sylvia（0.8）；鲸鱼娘按角色描述出图”或“本页不使用 LoRA”。不可用“通过校验”证明图像生成一定正确。
 
 修复同一问题两轮仍不通过，或需要用户未给的角色信息时，说明具体阻塞并等待必要信息，不无限重试、不带错交付。无 error 后展示更新的线框，说明哪些格子发生变化。
 
@@ -113,17 +113,17 @@ soda-storyboard edit my-story --stop --json
 soda-storyboard translate my-story/pages/page-01.json --todo --json
 ```
 
-清单非空时，由当前插件 AI 翻译每格 `caption_zh`，遵守项目 `glossary`（如“猫胡子”译为 `cat whiskers`），角色已有 `appearances_en` 直接使用。每格写成完整的 MOSS 英文画面描述，不加 `Panel N`、格号、标签或台词原文；`position_en` 仅供核对，不写进译文，编译器自动按几何添加方位和形状。镜头写成 `Medium shot, eye-level. ...`，不要把景别和角度拆成两句。特写及大特写不补写全身姿势，只保留清单给出的朝向和头部动作；使用清单中的 `pose_templates_en`，保持人物姿势与朝向，先人物后场景，不自行消除冲突或改写中文剧情。若清单显示描述与姿势冲突，先提醒用户确认。译文保存为：
+清单非空时，由当前插件 AI **只翻场景、动作、道具**，遵守项目 `glossary`（如“猫胡子”译为 `cat whiskers`）。人物外观在清单中通过占位或排除标注说明，由程序统一读取角色卡 `appearance.en`；不要把外观、服装、镜头、方位或自动姿势模板写进译文。不要加 `Panel N`、格号、标签或台词原文；`position_en` 仅供核对。编译器按“方位 → 景别、角度 → 人物（名字 + 角色卡外观 + 姿势短语）→ 场景译文”组装，各格人物外观保持一致。多人同格时程序分别写出各人的服装，并追加 `each character keeps their own outfit: ...`（中文同理）；先保证角色卡衣服有款式和颜色，避免“两人都穿……”的歧义。不自行消除冲突或改写中文剧情；若清单显示描述与姿势冲突，先提醒用户确认。译文保存为：
 
 ```json
-{"translations": [{"panel_id": "p1", "source_hash": "照抄 todo 中的哈希", "text": "Full shot, eye-level, a girl lying on one side facing left, reading by the window."}]}
+{"translations": [{"panel_id": "p1", "source_hash": "照抄 todo 中的哈希", "text": "Reading by the window, with an open book on the table."}]}
 ```
 
 ```shell
 soda-storyboard translate my-story/pages/page-01.json --apply my-story/translations.json --json
 ```
 
-哈希不符的格子会被拒绝，重跑 `--todo` 后重新翻译，不能覆盖检查或伪造新哈希。没有新鲜译文的格子会警告并回退中文，台词始终保留原文。核心库和网页不会调用翻译服务；网页只显示新鲜、过期或缺失状态。确认译文写回后，再执行编译、出图或导出；已授权步骤无需重复征求许可。
+`source_hash` 只覆盖待翻译的中文部分，改角色卡外观不会使译文过期，下一次编译自动使用新外观。哈希不符的格子会被拒绝，重跑 `--todo` 后重新翻译，不能覆盖检查或伪造新哈希。`--apply` 自动写入缓存标记 `format: "scene-v1"`，无需手写；缺少标记的旧缓存为 `legacy`，标成“需要重新翻译”：运行 `translate --todo`，只翻新的 `source_zh`（description、props、atmosphere），再用 `--apply` 写回，不能直接沿用含外观整句造成重复外观。清单里的 `characters[].appearance` 为“由编译器插入，不翻译”，必须保留这个边界。没有新鲜译文的格子会提醒并回退中文，台词始终保留原文。核心库和网页不会调用翻译服务。确认译文写回后，再执行编译、出图或导出；已授权步骤无需重复征求许可。
 
 确认后读 [MOSS 要点](references/moss-layout-tips.md)，再 validate 一次并编译：
 
@@ -144,7 +144,7 @@ soda-storyboard export-bundle my-story/pages/station-turn.json --json
 
 preview 默认给带火柴人草稿；仅要旧纯框线版时用 `--style boxes`。尺寸核对只出现在 --json 命令报告或 --with-ids 的 map，不写进 --output 的 MOSS JSON，交付应使用输出文件。
 
-生产输出不要加 --with-ids。如用户要调试映射，可单独生成带 ids 的调试输出和 map，别覆盖已交付的干净 MOSS JSON。把多 LoRA 的主角色、需单独处理的格子一并说明。
+生产输出不要加 --with-ids。如用户要调试映射，可单独生成带 ids 的调试输出和 map，别覆盖已交付的干净 MOSS JSON。说明本页实际使用的 LoRA 及按角色描述出图的其他角色，或本页不使用 LoRA。
 
 ## 7. 经用户同意后出图与生产
 
@@ -165,7 +165,7 @@ soda-storyboard pick station-turn render.png --project my-story --json
 soda-storyboard plan station-turn --project my-story --json
 ```
 
-向用户解释 plan：哪些格需要整格换人、哪些需要局部换人、斜切裁剪、出格抠图和排字。一次只加载一个人物 LoRA；auto 选出场最多的带 LoRA 角色，其他角色单独格用 swap 0.85，两人同格用 inpaint 0.85。detail 0.45 修细节。按用户同意逐步执行；每一步展示返回的图片，重画候选必须等待用户选择后 pick-panel。局部重绘先运行 `soda-storyboard inpaint station-turn p3 --project my-story --character girl --mask-only --json`（换成实际页、格和角色），嵌入返回的 mask 和 preview，让用户确认范围后再去掉 --mask-only 提交采样。这个预览步骤不连接 ComfyUI，也不消耗生成张数。遮罩按 figures 位置估计，重叠或大动作时在 figure.bbox 填入更准确的页面坐标 x/y/w/h，重新预览。重画保留 moss_text 文字框；提示词只能描述单张画面，不能带整页前缀。
+向用户解释 plan 中的斜切裁剪、出格抠图和排字；plan 不会因为配角有自己的 LoRA 而提出 swap 或 inpaint。看成图后，按实际偏差用 redraw / inpaint 修细节，detail 默认 0.45；保持本页角色描述与衣服一致。按用户同意逐步执行；每一步展示返回的图片，重画候选必须等待用户选择后 pick-panel。局部重绘先运行 `soda-storyboard inpaint station-turn p3 --project my-story --character girl --mask-only --json`（换成实际页、格和角色），嵌入返回的 mask 和 preview，让用户确认范围后再去掉 --mask-only 提交采样。这个预览步骤不连接 ComfyUI，也不消耗生成张数。遮罩按 figures 位置估计，重叠或大动作时在 figure.bbox 填入更准确的页面坐标 x/y/w/h，重新预览。重画保留 moss_text 文字框；提示词只能描述单张画面，不能带整页前缀。
 
 ```shell
 soda-storyboard split station-turn --project my-story --json
@@ -176,7 +176,7 @@ soda-storyboard letter station-turn --project my-story --json
 soda-storyboard export station-turn --project my-story --format png --json
 ```
 
-swap 加 --character 角色id；两人同格用 inpaint 子命令（同样指定页、格子和 --character）。每次生成前说明这一张的大概耗时，按实际宽高和步数估算：40 秒 × 宽×高/(1024×1536) × 步数/25。compose 使用选定格子结果，quad 向内裁剪并重画边框；letter 为 lettering 模式或 texts.render_mode=lettering 的文字排字，字体找不到时请用户提供字体文件并用 --font 指定；moss_text 可用 --text 指定文字 id（可重复）。不擅自重写台词。
+`redraw --mode swap --character <角色id>` 保留为手动高级选项，仅适用于单人格，不推荐用于换 LoRA 角色：整页画风和比例可能改变，不作为默认后期流程。inpaint 指定页、格子和 `--character` 来定位需要修复的细节。每次生成前说明这一张的大概耗时，按实际宽高和步数估算：40 秒 × 宽×高/(1024×1536) × 步数/25。compose 使用选定格子结果，quad 向内裁剪并重画边框；letter 为 lettering 模式或 texts.render_mode=lettering 的文字排字，字体找不到时请用户提供字体文件并用 --font 指定；moss_text 可用 --text 指定文字 id（可重复）。不擅自重写台词。
 
 redraw、inpaint 的采样先按比例放大到长边 1024、宽高对齐 16 的工作尺寸，再缩回原格；估时使用工作尺寸。inpaint 独立上传原图和羽化遮罩，`--mask-only` 展示实际融合范围。需要复现时，redraw / inpaint / cutout 加 `--seed <整数>`；gen page 可重复 `--seed`，此时以给出的种子数量为准，未给种子才按 `--seeds` 随机生成。结果记录实际种子。
 

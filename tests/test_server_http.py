@@ -808,6 +808,7 @@ def test_caption_preview_reports_fresh_stale_missing_and_pose_conflict(client: C
     characters = client.server.store.character_map()
     first = raw["panels"][0]
     first["caption_auto_en"] = {
+        "format": "scene-v1",
         "text": "A girl reads a book.",
         "source_hash": source_hash(page.panels[0], page, characters),
         "translated_at": "test",

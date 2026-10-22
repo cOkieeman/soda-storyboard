@@ -150,6 +150,7 @@ class Store:
     def checked(self, value: dict) -> tuple[Page, dict]:
         try:
             page = Page.from_dict(value)
+            page.lora_policy = load_project(self.path("project.json")).lora_policy
             report = validate_page(page, self.character_map()).to_dict()
         except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
             issue = {"severity": "error", "code": "invalid_page", "message": f"页面数据格式错误：{exc}"}
@@ -251,6 +252,7 @@ class Store:
             raw, _ = snapshot(self.page_path(page_id))
         page = Page.from_dict(raw)
         project = load_project(self.path("project.json"))
+        page.lora_policy = project.lora_policy
         for key in ("text_direction", "color_mode", "tags", "caption_language"):
             if key not in raw:
                 setattr(page, key, getattr(project, key))

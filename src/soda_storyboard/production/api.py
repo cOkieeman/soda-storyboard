@@ -9,7 +9,6 @@ import json
 import re
 import secrets
 import shutil
-from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +18,7 @@ from soda_storyboard.compiler import character_caption, compile_geometry_map, co
 from soda_storyboard.figure_semantics import figure_page_box
 from soda_storyboard.figures import panel_figures
 from soda_storyboard.lettering import layout_texts
+from soda_storyboard.lora import panel_characters, select_lora
 
 from .check import page_graph
 from .errors import ProductionError, production_operation
@@ -39,7 +39,7 @@ from .state import PageState, digest, identifier, save_json, stamp
 from .state import page_ids as project_page_ids
 
 if TYPE_CHECKING:
-    from soda_storyboard.models import Character, Overlay, Page, Panel
+    from soda_storyboard.models import Overlay, Panel
 
     from .client import Progress
 
@@ -70,31 +70,6 @@ def _generation_seeds(count: int, seed: int | list[int] | tuple[int, ...] | None
         msg = "seed 列表不能为空"
         raise ProductionError(msg)
     return [_seed(value) for value in values]
-
-
-def panel_characters(panel: Panel) -> list[str]:
-    return list(dict.fromkeys([*panel.character_ids, *(f.character_id for f in panel.figures)]))
-
-
-def select_lora(page: Page, characters: dict[str, Character], selection: str = "auto") -> JSON | None:
-    if selection == "none":
-        return None
-    counts = Counter(c for panel in page.panels for c in panel_characters(panel))
-    counts.update(o.character_id for o in page.overlays if o.mode == "moss")
-    if selection == "auto":
-        eligible = [c for c in characters.values() if c.lora and counts[c.id]]
-        if not eligible:
-            return None
-        # Stable lexical tie-break independent of filesystem enumeration.
-        selection = min(eligible, key=lambda c: (-counts[c.id], c.id)).id
-    character = characters.get(selection)
-    if not character or not character.lora:
-        msg = f"角色 {selection} 不存在或没有 LoRA"
-        raise ProductionError(msg)
-    if not counts[selection] and not any(o.character_id == selection for o in page.overlays):
-        msg = f"角色 {selection} 没有在此页出场"
-        raise ProductionError(msg)
-    return {"character_id": selection, **character.lora.to_dict()}
 
 
 def _canvas(state: PageState) -> tuple[int, int]:
@@ -231,30 +206,11 @@ def production_plan(project_dir: str | Path, page_id: str) -> dict:
     selected = state.production.get("selected_render")
     render = next((r for r in state.production.get("renders", []) if r["path"] == selected), {})
     main = (render.get("meta", {}).get("lora") or {}).get("character_id")
-    swaps, cuts = [], []
-    for panel in sorted(state.page.panels, key=lambda p: p.order):
-        current = _selected_panel(state, panel.id)
-        done = (current or {}).get("resolved_characters", [])
-        characters = panel_characters(panel)
-        swaps.extend(
-            {
-                "panel_id": panel.id,
-                "character_id": char_id,
-                "mode": "inpaint" if len(characters) > 1 else "swap",
-                "denoise": 0.85,
-            }
-            for char_id in characters
-            if (
-                char_id != main
-                and char_id not in done
-                and state.characters.get(char_id)
-                and state.characters[char_id].lora
-            )
-        )
-        if panel.shape_type == "quad":
-            cuts.append(
-                {"panel_id": panel.id, "quad": panel.shape["points"], "cut_inset": state.config["cut_inset"]}
-            )
+    cuts = [
+        {"panel_id": panel.id, "quad": panel.shape["points"], "cut_inset": state.config["cut_inset"]}
+        for panel in sorted(state.page.panels, key=lambda p: p.order)
+        if panel.shape_type == "quad"
+    ]
     overlays = [
         {
             "overlay_id": o.id,
@@ -276,14 +232,12 @@ def production_plan(project_dir: str | Path, page_id: str) -> dict:
         "selected_render": str(state.local(selected)) if selected else None,
         "needs_pick": not bool(selected),
         "main_character": main,
-        "redraws": swaps,
+        "redraws": [],
         "cuts": cuts if not composed else [],
         "overlays": overlays,
         "lettering": {"needed": bool(texts) and not bool(lettered), "text_ids": texts},
         "needs_compose": not bool(composed),
-        "warnings": ["人物遮罩由 figures 估计；请先查看遮罩，重叠人物建议提供明确的 bbox。"]
-        if any(s["mode"] == "inpaint" for s in swaps)
-        else [],
+        "warnings": [],
     }
 
 
@@ -357,7 +311,14 @@ def _single_prompt(state: PageState, panel: Panel, character_id: str | None, *, 
                 "visible contents. Replace only the target character's appearance and identity "
                 "with the supplied character description and trigger words. Keep the existing "
                 "anime body proportions and scene continuity; use the supplied target clothing design"
-                if mode in {"swap", "inpaint"}
+                if mode == "swap"
+                else ""
+            ),
+            (
+                "Repair only the target character's local details. Preserve each character's "
+                "identity, own outfit and colors, pose, body proportions and position. "
+                "Keep all other characters, props and the scene composition unchanged"
+                if mode == "inpaint"
                 else ""
             ),
             _inpaint_geometry(state, panel, character_id) if mode == "inpaint" else "",
@@ -385,9 +346,9 @@ def _redraw(  # noqa: PLR0913, PLR0915 -- shared generation and version registra
         msg = f"角色 {character_id} 没有在格子 {panel_id} 出场"
         raise ProductionError(msg)
     chosen = None
-    if character_id:
+    if mode == "swap" and character_id:
         chosen = _character_lora(state, character_id)
-    elif mode == "detail":
+    else:
         selected = next(
             (
                 r
@@ -396,14 +357,17 @@ def _redraw(  # noqa: PLR0913, PLR0915 -- shared generation and version registra
             ),
             {},
         )
-        candidate = (selected.get("meta", {}).get("lora") or {}).get("character_id")
+        meta = selected.get("meta", {})
+        candidate = (meta.get("lora") or {}).get("character_id")
+        if "lora" not in meta:
+            candidate = (select_lora(state.page, state.characters) or {}).get("character_id")
         if candidate in panel_characters(panel):
             chosen = select_lora(state.page, state.characters, candidate)
     if mode in {"swap", "inpaint"} and not character_id:
-        msg = "换人重画必须指定 --character"
+        msg = "swap 或局部修正必须指定 --character"
         raise ProductionError(msg)
     if mode == "swap" and len(panel_characters(panel)) > 1:
-        msg = "两人同格请使用 inpaint，避免整格换人覆盖另一角色"
+        msg = "两人同格请使用 inpaint 修正细节，避免整格 swap 覆盖另一角色"
         raise ProductionError(msg)
     original = _panel_source(state, panel)
     folder = state.directory / "panels" / identifier(panel_id)

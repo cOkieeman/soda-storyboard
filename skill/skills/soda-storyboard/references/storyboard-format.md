@@ -6,10 +6,12 @@
 
 项目目录有 project.json、characters/、pages/、可选 templates/。画布默认 1024×1536，宽高应为 16 的倍数；项目有 reading_direction、default_style_prefix、default_dialogue_mode、text_direction 和 color_mode。用户选定的英文画风写入项目或页面 style_prompt；tags 是英文标签列表，页面显式 tags 覆盖项目。旧 style_prefix 仍保留，但 summary 先使用 style_prompt 或英文兜底画风，再接旧前缀。
 
-角色卡的核心字段是 id、display_name、trigger_words、lora（path / strength）、appearance（zh / en）、clothing、reference_images、approved_images，可空 age（如 20-year-old）、figure_hint（skirt 表示草稿裙摆）。appearance_en 应由 AI 根据用户中文补全。LoRA 路径由用户提供，只记录，不搜索或加载文件。
+项目 `lora_policy` 为 `single`（默认）或 `none`。页面 `lora_character` 可选角色 id、`none`，省略为自动。`--lora auto` 在 none 策略下不挂，否则先用本页指定值，再按角色出场格子的实际面积累加选择有 LoRA 的角色，同权重按 id；没有可用 LoRA 时不挂。`gen page --lora none / <角色id>` 仍可显式指定本次选择。其余角色按角色卡描述出图。
+
+角色卡核心字段为 id、display_name；可选 trigger_words、lora（path / strength）、appearance（zh / en）、clothing、reference_images、approved_images，可空 age（如 20-year-old）、figure_hint（skirt 表示草稿裙摆）。`lora` 明确可省略，创建角色无需模型。AI 帮用户补全中英文外观：发型发色、服装款式和颜色、显著标志物（尾巴、头饰等）；同页角色要有区分。`clothing` 推荐逐件写“颜色 + 款式”，appearance.en 也要保留这些信息。LoRA 路径由用户提供，只记录，不搜索或加载文件。
 
 ```shell
-soda-storyboard character new --project my-story --id girl --name "女孩" --appearance-en "short black hair" --json
+soda-storyboard character new --project my-story --id girl --name "女孩" --appearance-zh "黑色短发，白色衬衫配蓝色百褶裙，红色发夹" --appearance-en "short black hair, a white shirt and blue pleated skirt, a red hair clip" --outfit "白色衬衫" --outfit "蓝色百褶裙" --json
 soda-storyboard character set girl --project my-story --name "澪" --trigger "girl_token" --lora "models/girl.safetensors" --lora-strength 0.75 --reference "refs/front.png" --json
 soda-storyboard character list --project my-story --json
 ```
@@ -24,10 +26,12 @@ Panel 的 id 稳定不变，order 从 1 连续编号，按 order 找“第几格
 
 - shot：extreme_long、long、full、medium、close_up、extreme_close_up。
 - angle：eye、high、low、bird、worm、dutch。没有 back、over_shoulder、POV 枚举；这些观察方向写进 description，并选一个合法 angle。
-- character_ids：角色 id 数组。description：这一格的可见画面、姿势、朝向、重点。自动英文写入 caption_auto_en（text / source_hash / translated_at），先用 translate --todo 获取中文来源与哈希，再由 AI 翻译并 --apply。caption_en 仅在 use_custom_caption 或页面 legacy_caption_en 显式启用时覆盖。提示词不写格号。
+- character_ids：角色 id 数组。description：这一格的可见场景、动作、道具、朝向、重点，角色固定外观放角色卡。自动英文写入 caption_auto_en（text / source_hash / translated_at），先用 translate --todo 获取中文来源与哈希；AI 只翻场景、动作、道具，不重写外观、服装、镜头和程序姿势，再 --apply。source_hash 只覆盖待翻译中文，改角色外观不会过期。程序按“方位 → 景别、角度 → 名字 + appearance.en + 姿势 → 场景译文”组装；多人同格分别写服装并追加区分句。旧含外观整句缓存标成需要重新翻译，重跑 --todo/--apply 迁移。caption_en 仅在 use_custom_caption 或页面 legacy_caption_en 显式启用时覆盖。提示词不写格号。
 - dialogue：对象数组，包含 speaker_id、text、bubble（speech / shout / thought / narration），可选 position。不说话就空数组。
 - sfx：需要画出的拟声词字符串数组，不把速度线等画法当作文字。
 - importance：1 / 2 / 3。status：draft / approved / needs_redraw。
+
+`caption_auto_en.format` 由 translate --apply 自动写为 `scene-v1`；旧缓存缺少标记时状态为 legacy，需要按新待办重新翻译。`--todo` 的 `source_zh` 只含 description / props / atmosphere，`characters[].appearance` 标注由编译器插入，不交给翻译者重写。
 
 page new 产生空 panels。选定格数后由 AI 先创建对应数量的 Panel 对象；layout suggest --page 才能按已有 order 写回形状，格数不符会报错。仅展示候选时传 panels，不传 page。写回布局保留其他原始字段，逐格改镜头时不要重新布局。
 

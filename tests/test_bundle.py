@@ -46,10 +46,9 @@ def _envelope(*, translated: bool = False, triggers: bool = False) -> dict:
     )
     if translated:
         page.panels[0].caption_auto_en = {
+            "format": "scene-v1",
             "source_hash": source_hash(page.panels[0], page, {card.id: card}),
-            "text": "A black-haired girl, soda_girl, reads by the window."
-            if triggers
-            else "A black-haired girl reads by the window.",
+            "text": "She reads by the window.",
             "translated_at": "2026-01-01T00:00:00Z",
         }
     return {
@@ -269,9 +268,7 @@ def test_trigger_suppression_keeps_fresh_translation_and_manual_override() -> No
 
 def test_trigger_suppression_does_not_make_stale_cache_fresh() -> None:
     raw = _envelope(translated=True, triggers=True)
-    page, cards, _, _ = load_bundle(raw)
-    cards["girl"].trigger_words = []
-    raw["page"]["panels"][0]["caption_auto_en"]["source_hash"] = source_hash(page.panels[0], page, cards)
+    raw["page"]["panels"][0]["description"] = "窗边读书，合上书本"  # noqa: RUF001
     result = compile_bundle(raw, include_triggers=False)
     assert "窗边读书" in result["moss"]["items"][0]["caption"]
     assert "reads by the window" not in result["moss"]["items"][0]["caption"]

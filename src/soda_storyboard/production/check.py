@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from soda_storyboard.io import load_characters, read_json
+from soda_storyboard.io import load_characters, load_project, read_json
 
 from .client import ComfyClient
 from .errors import ProductionError
@@ -48,9 +48,12 @@ def check(project_dir: str | Path) -> JSON:  # noqa: C901, PLR0912 -- read-only 
             inpaint=True,
         )
         graph["empty"] = {"class_type": "EmptyFlux2LatentImage", "inputs": {}}
-    # Character LoRAs are checked without loading models or submitting a prompt.
-    for character in load_characters(Path(project_dir) / "characters").values():
-        if character.lora:
+    # Disabled LoRAs are not required for no-LoRA projects. Otherwise audit
+    # optional references without loading models or submitting a prompt.
+    if load_project(Path(project_dir) / "project.json").lora_policy != "none":
+        for character in load_characters(Path(project_dir) / "characters").values():
+            if not character.lora:
+                continue
             graph["check_lora_" + character.id] = {
                 "class_type": "LoraLoaderModelOnly",
                 "inputs": {"lora_name": character.lora.path},

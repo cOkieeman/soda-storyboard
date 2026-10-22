@@ -394,6 +394,13 @@
           "type": "boolean",
           "default": false
         },
+        "lora_character": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional page LoRA character id. Omit or use null for automatic area-weighted selection; none disables LoRA for this page. The project lora_policy still applies."
+        },
         "canvas_mode": {
           "enum": [
             "panels",
@@ -544,6 +551,14 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "lora_policy": {
+          "enum": [
+            "single",
+            "none"
+          ],
+          "default": "single",
+          "description": "Load at most one character LoRA per page, or disable automatic LoRA loading for the project. Character appearance descriptions remain required."
         }
       },
       "additionalProperties": true
@@ -573,6 +588,7 @@
         },
         "lora": {
           "type": "object",
+          "description": "Optional character LoRA. Omit this field for characters rendered from their appearance description alone.",
           "required": [
             "path"
           ],

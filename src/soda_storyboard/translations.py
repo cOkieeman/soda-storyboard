@@ -1,19 +1,22 @@
 """AI-assisted translation file exchange. This module never calls a service."""
 
+# ruff: noqa: RUF001 -- instructions for offline Chinese-to-English translators.
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from .captions import (
+    SCENE_TRANSLATION_FORMAT,
+    TRANSLATION_MIGRATION,
     clean_caption,
     custom_caption_enabled,
+    panel_character_ids,
     source_hash,
-    structured_caption,
+    translation_source,
     translation_state,
 )
-from .figure_semantics import figure_description
-from .figures import panel_figures
 from .panel_positions import panel_positions
 
 if TYPE_CHECKING:
@@ -25,30 +28,41 @@ if TYPE_CHECKING:
 def translation_todo(page: Page, characters: Mapping[str, Character], glossary: Mapping[str, str]) -> dict:
     return {
         "page_id": page.id,
+        "format": SCENE_TRANSLATION_FORMAT,
+        "instructions": (
+            "只翻译 source_zh 中的场景、动作和道具，保留动作的角色归属。"
+            "人物外观和服装（包括动作句中的发色、服装颜色与款式）不翻译，"
+            "不要写方位前缀、景别、角度或程序姿势；编译器会统一插入这些内容。"
+            "例如发色随风飘动只翻译为 hair blowing in the wind。"
+            "返回 panel_id、source_hash 和英文 text。"
+        ),
         "glossary": dict(glossary),
         "panels": [
             {
                 "panel_id": panel.id,
                 "position_en": panel_positions(page).get(panel.id),
-                "caption_zh": structured_caption(panel, page, characters),
+                "caption_zh": clean_caption(list(translation_source(panel).values())),
+                "source_zh": translation_source(panel),
                 "source_hash": source_hash(panel, page, characters),
                 "status": translation_state(panel, page, characters),
-                "appearances_en": {
-                    identifier: characters[identifier].appearance_en
-                    for identifier in dict.fromkeys(
-                        [*panel.character_ids, *(figure.character_id for figure in panel.figures)]
-                    )
-                    if identifier in characters and characters[identifier].appearance_en
-                },
-                "pose_templates_en": [
+                "characters": [
                     {
-                        "character_id": figure.character_id,
-                        "description": figure_description(
-                            figure, "en", head_only=panel.shot in {"close_up", "extreme_close_up"}
-                        ),
+                        "character_id": identifier,
+                        "name": characters[identifier].display_name
+                        if identifier in characters
+                        else identifier,
+                        "name_en": (characters[identifier].role_en or characters[identifier].display_name)
+                        if identifier in characters
+                        else identifier,
+                        "appearance": "[由编译器插入，不翻译]",
                     }
-                    for figure in panel_figures(panel, page)
+                    for identifier in panel_character_ids(panel, page)
                 ],
+                **(
+                    {"migration": TRANSLATION_MIGRATION}
+                    if translation_state(panel, page, characters) == "legacy"
+                    else {}
+                ),
             }
             for panel in page.panels
             if not custom_caption_enabled(panel, page)
@@ -83,6 +97,7 @@ def apply_translations(page: Page, characters: Mapping[str, Character], payload:
             continue
         seen.add(identifier)
         panel.caption_auto_en = {
+            "format": SCENE_TRANSLATION_FORMAT,
             "text": clean_caption([entry["text"]], "en"),
             "source_hash": entry["source_hash"],
             "translated_at": datetime.now(UTC).isoformat(),

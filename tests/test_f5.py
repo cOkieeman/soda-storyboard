@@ -62,7 +62,7 @@ def test_position_is_outside_translation_hash_and_in_todo() -> None:
     panel = Panel("p", 1, RectShape(600, 0, 400, 300), description="女孩读书")
     page = Page(panels=[panel])
     old_hash = source_hash(panel, page, {})
-    panel.caption_auto_en = {"text": "Medium shot. Eye level. A girl reads a book.", "source_hash": old_hash}
+    panel.caption_auto_en = {"format": "scene-v1", "text": "A girl reads a book.", "source_hash": old_hash}
     assert panel_caption(panel, page, {}).startswith(
         "Top-right horizontal panel: Medium shot, eye-level. A girl"
     )
@@ -195,12 +195,12 @@ def test_public_canvas_table_and_node_compatible_inference(space: str, box: list
 def test_formatting_alone_keeps_existing_translation_hash() -> None:
     panel = Panel("p", 1, RectShape(0, 0, 400, 300), description="女孩读书")
     page = Page(panels=[panel])
-    # F4's position-free Chinese canonical caption remains the hash input.
+    # F8 hashes only translatable scene prose, excluding the generated camera.
     import hashlib  # noqa: PLC0415 -- independent expected digest
 
-    expected = hashlib.sha256("中景，平视，女孩读书。".encode()).hexdigest()
+    expected = hashlib.sha256('{"description":"女孩读书"}'.encode()).hexdigest()
     assert source_hash(panel, page, {}) == expected
-    panel.caption_auto_en = {"text": "Medium shot, eye-level, a girl reading.", "source_hash": expected}
+    panel.caption_auto_en = {"format": "scene-v1", "text": "a girl reading.", "source_hash": expected}
     assert (
         panel_caption(panel, page, {}) == "Top-left horizontal panel: Medium shot, eye-level. a girl reading."
     )
@@ -231,7 +231,8 @@ def test_slanted_caption_is_added_once_and_matches_preview(mode: str) -> None:
     )
     panel = page.panels[0]
     panel.caption_auto_en = {
-        "text": "Medium shot, eye-level. A girl reads.",
+        "format": "scene-v1",
+        "text": "A girl reads.",
         "source_hash": source_hash(panel, page, {}),
     }
     caption = compile_page(page, slant_mode=mode)["items"][0]["caption"]

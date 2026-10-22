@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from soda_storyboard.captions import source_hash, structured_caption
+from soda_storyboard.captions import source_hash
 from soda_storyboard.cli import main
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.figures import panel_figures
@@ -127,7 +127,8 @@ def test_four_equal_bands_and_stagger_have_real_geometry() -> None:
 def test_shots_and_angles_are_natural_english(shot: str, angle: str) -> None:
     page = Page(panels=[Panel("p", 1, {"x": 0, "y": 0, "w": 500, "h": 400}, shot=shot, angle=angle)])
     page.panels[0].caption_auto_en = {
-        "text": structured_caption(page.panels[0], page, {}, "en"),
+        "format": "scene-v1",
+        "text": "A quiet scene.",
         "source_hash": source_hash(page.panels[0], page, {}),
         "translated_at": "test",
     }

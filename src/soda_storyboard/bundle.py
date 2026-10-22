@@ -28,9 +28,9 @@ from .captions import custom_caption_enabled, source_hash, translation_state
 from .compiler import compile_page
 from .io import read_json, write_json
 from .lettering import page_texts
+from .lora import lora_info, select_lora
 from .models import DIALOGUE_MODES, PAGE_FORMAT, Character, Page, Project
 from .preview import render_preview
-from .production.api import select_lora
 from .validation import validate_page
 
 # JSON boundaries preserve arbitrary metadata. Chinese diagnostics are intentional.
@@ -76,6 +76,7 @@ def _page_defaults(raw: dict, settings: dict) -> dict:
         "dialogue_mode": ("lettering_mode",),
     }
     result = copy.deepcopy(raw)
+    result["lora_policy"] = project.lora_policy
     for key, value in defaults.items():
         if key not in result and not any(alias in result for alias in aliases.get(key, ())):
             result[key] = copy.deepcopy(value)
@@ -147,11 +148,12 @@ def _validated_warnings(page: Page, cards: dict[str, Character], *, bare: bool =
     if errors:
         message = "分镜页校验失败：\n" + "\n".join(issue.message for issue in errors)
         raise ValueError(message)
-    warnings = [issue.message for issue in report.warnings]
+    warnings = [issue.message for issue in [*report.infos, *report.warnings]]
     if not cards:
         warnings.insert(0, MISSING_CHARACTERS)
     if any(
-        issue.code in {"caption_translation_missing", "caption_translation_stale"}
+        issue.code
+        in {"caption_translation_missing", "caption_translation_stale", "caption_translation_legacy"}
         for issue in report.warnings
     ):
         warnings.append("英文译文缺失或已过期；请先运行 soda-storyboard translate <页> --todo。")
@@ -417,6 +419,7 @@ def export_bundle(
         "dialogue_count": sum(text.kind == "dialogue" for text in page_texts(page)),
         "characters": appearing,
         "lora": _lora(portable_page, portable_cards),
+        "lora_info": lora_info(portable_page, portable_cards),
         "translation_status": {
             panel.id: "custom"
             if custom_caption_enabled(panel, portable_page)

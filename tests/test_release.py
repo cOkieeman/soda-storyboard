@@ -135,7 +135,7 @@ def test_wheel_contains_all_runtime_modules_and_data(
     runtime_files = [
         *package.rglob("*.py"),
         package / "recipes.json",
-        package / "data/templates.json",
+        *(package / "data").glob("*.json"),
         *[path for path in (package / "web").rglob("*") if path.is_file()],
     ]
     for source in runtime_files:

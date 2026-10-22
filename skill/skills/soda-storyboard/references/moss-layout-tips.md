@@ -4,7 +4,7 @@
 
 ## 编译器负责什么
 
-- object caption 默认用新鲜 caption_auto_en；缺失或过期退回整理后的中文并警告。先运行 translate --todo，AI 遵守 glossary、appearance_en 和英文姿势模板翻译，再 --apply。caption_en 只在显式启用手动覆盖时优先。每格独立写全外观，不加格号。
+- object caption 按“方位 → 景别、角度 → 人物（名字 + 角色卡 appearance.en + 姿势）→ 场景译文”组装。translate --todo 的 AI 只翻场景、动作、道具，遵守 glossary，人物外观以占位或排除标注交由程序插入；不要逐格重写服装。哈希只覆盖待翻译中文，改角色卡外观后缓存仍有效，下一次编译直接使用新外观。旧含外观整句缓存标成需要重新翻译，重跑 --todo/--apply 迁移。缺失或过期退回整理后的中文并提醒。caption_en 只在显式启用手动覆盖时优先，不加格号。
 - 每个 text 条目必须有 text 原文；caption 只写英文样式、方向、气泡和位置。官方要求“生成文字时需用 text 指定内容”。竖排框必须竖长，默认超过 10 字换列；文本原有换行保留。
 - summary 以英文 style_prompt 开头，没给时用按 color_mode 区分的兜底画风，随后接页面说明、tags、日漫阅读方向与白色留白；meta 为 comic、multi_panel（彩色再加 digital_painting），canvas 为 multi_panel。AI 应先给用户 2～3 段画风让其选择并保存，不能把编译器兜底当作用户已选画风。
 - bbox 为中心原点的整数 `[y_min,x_min,y_max,x_max]`；源页仍用左上角 x/y/w/h。没有文字或使用 lettering 时 summary 追加 no text, no speech bubbles。
@@ -17,9 +17,9 @@
 
 整页一次生成在已测样例中效果较好，短中文台词可直接由 MOSS 画；仍需看成图，不能把 validate 当作台词正确性的证明。只写 anime 会偏 3D 或半写实；如果用户想要二维，可提醒其明确线稿、平涂等画法，但不自动改前缀。
 
-两个人物 LoRA 同时加载会互相吞掉特征。多人页先选一个主角色 LoRA，其他角色单独出现的格子留待整格重画；两个带 LoRA 的人同格尽量拆成切换反应格。局部换人的接缝尚未解决，不承诺遮罩能一次成功。向用户说明主角色与后续处理的格子，CLI 一次只加载一个人物 LoRA，其他角色按 plan 逐格处理。
+整页采用一个角色 LoRA 或完全不用 LoRA：项目 `lora_policy` 默认 single，也可 none；页面 `lora_character` 可选角色 id、none，省略自动。auto 按格子面积加权的出场量选择有 LoRA 的角色，同权重按 id；没有可用 LoRA 就不挂。其他角色按角色卡描述出图，plan 不为其安排换人。不要因为 LoRA 改拆格；多人同格时，各人衣服必须分别写清款式和颜色，程序追加 `each character keeps their own outfit: ...` 区分句。只写“荷边连衣裙”却没颜色，或 clothing 为空，容易串成另一人的衣服；先补角色卡并处理 validate 的服装提醒。
 
-后续阶段的三类重画不能混为一谈：保细节约 0.45，换人整格约 0.85，换人局部约 0.85 加遮罩；0.95 可能崩坏。CLI 的 redraw 支持 detail / swap，inpaint 支持局部换人；确认当前候选、数量和耗时后执行。
+后期 redraw / inpaint 用于修细节，detail 默认约 0.45，inpaint 使用遮罩限制范围。redraw --mode swap 保留为手动高级选项，默认约 0.85、仅适合单人格，不推荐用于换 LoRA 角色，因为画风和比例可能不一致；0.95 可能崩坏。确认当前候选、数量和耗时后执行。
 
 单格重画提示必须只描述这一张画面，不能带“整页、多个格子、右到左读”等整页前缀，否则可能在一个格子里再画一页漫画。CLI 会保护 moss_text 原文字框；局部重绘先用 --mask-only 保存遮罩和叠加预览，给用户查看并确认后才提交采样。
 

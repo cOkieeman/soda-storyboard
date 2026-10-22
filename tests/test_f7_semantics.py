@@ -76,7 +76,8 @@ def test_t2_p4_actual_joints_reach_figure_and_panel_captions(language: str, lean
     if language == "en":
         panel = page.panels[0]
         panel.caption_auto_en = {
-            "text": descriptions[-1],
+            "format": "scene-v1",
+            "text": "Beside the rooftop railing.",
             "source_hash": source_hash(panel, page, characters),
         }
     result = compile_page(page, characters, caption_language=language)

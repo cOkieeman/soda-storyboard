@@ -91,7 +91,7 @@ def test_pudding_entire_cli_pipeline_through_http_fake(project: Path, capsys: py
         assert len(fake.prompts) == 3
 
 
-def test_lora_plan_swap_and_inpaint_candidates(project: Path) -> None:
+def test_lora_plan_leaves_supporting_cast_as_described_and_keeps_manual_tools(project: Path) -> None:
     add_loras(project)
     with FakeComfy() as fake:
         connect(project, fake)
@@ -99,28 +99,32 @@ def test_lora_plan_swap_and_inpaint_candidates(project: Path) -> None:
         api.pick_render(project, "pudding", generated[0]["path"])
         plan = api.production_plan(project, "pudding")
         assert plan["main_character"] == "younger"
-        assert {p["mode"] for p in plan["redraws"]} == {"swap", "inpaint"}
-        swap_plan = next(p for p in plan["redraws"] if p["mode"] == "swap")
-        redraw = api.redraw_panel(
-            project, "pudding", swap_plan["panel_id"], mode="swap", character_id="older"
-        )
+        assert plan["redraws"] == []
+        assert plan["warnings"] == []
+        panels = PageState(project, "pudding").page.panels
+        swap_panel = next(p for p in panels if p.character_ids == ["older"])
+        redraw = api.redraw_panel(project, "pudding", swap_panel.id, mode="swap", character_id="older")
         assert redraw["denoise"] == 0.85
         assert [
             n["inputs"]["lora_name"]
             for n in fake.prompts[-1].values()
             if n["class_type"] == "LoraLoaderModelOnly"
         ] == ["older.safetensors"]
-        api.pick_panel(project, "pudding", swap_plan["panel_id"], redraw["path"])
-        assert swap_plan not in api.production_plan(project, "pudding")["redraws"]
-        local = next(p for p in plan["redraws"] if p["mode"] == "inpaint")
+        api.pick_panel(project, "pudding", swap_panel.id, redraw["path"])
+        assert api.production_plan(project, "pudding")["redraws"] == []
+        local = next(p for p in panels if len(p.character_ids) > 1)
         with pytest.raises(ProductionError, match="两人同格"):
-            api.redraw_panel(project, "pudding", local["panel_id"], mode="swap", character_id="older")
-        painted = api.inpaint_panel(project, "pudding", local["panel_id"], character_id="older")
+            api.redraw_panel(project, "pudding", local.id, mode="swap", character_id="older")
+        painted = api.inpaint_panel(project, "pudding", local.id, character_id="older")
+        assert painted["lora"]["character_id"] == "younger"
+        assert fake.prompts[-1]["lora"]["inputs"]["lora_name"] == "younger.safetensors"
+        assert "Repair only the target character's local details" in fake.prompts[-1]["5"]["inputs"]["text"]
+        assert "Replace only" not in fake.prompts[-1]["5"]["inputs"]["text"]
         assert Path(painted["mask"]).is_file()
         assert fake.prompts[-1]["14"]["inputs"]["mask"] == ["12", 0]
         assert fake.prompts[-1]["12"]["class_type"] == "LoadImageMask"
-        api.pick_panel(project, "pudding", local["panel_id"], painted["path"])
-        assert local not in api.production_plan(project, "pudding")["redraws"]
+        api.pick_panel(project, "pudding", local.id, painted["path"])
+        assert api.production_plan(project, "pudding")["redraws"] == []
 
 
 def test_config_and_check_missing_nodes_models_and_unreachable(
@@ -149,6 +153,20 @@ def test_config_and_check_missing_nodes_models_and_unreachable(
         == "final"
     )
     assert read_json(project / "project.json")["comfy"]["preset"] == "final"
+
+
+def test_no_lora_project_does_not_require_disabled_optional_models(project: Path) -> None:
+    add_loras(project)
+    raw = read_json(project / "project.json")
+    raw["lora_policy"] = "none"
+    write_json(project / "project.json", raw)
+    with FakeComfy() as fake:
+        connect(project, fake)
+        fake.missing.add("LoraLoaderModelOnly")
+        report = check(project)
+        assert report["ok"]
+        assert "LoraLoaderModelOnly" not in report["nodes"]
+        assert not fake.prompts
 
 
 def test_v2_end_to_end_and_model_roundtrips(project: Path) -> None:

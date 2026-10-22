@@ -14,11 +14,14 @@ from math import isfinite
 from typing import Any
 
 from .captions import caption_notices
+from .clothing import clothing_profile
 from .figure_semantics import figure_page_box
 from .figures import panel_figures
 from .geometry import convex_polygon, polygons_overlap, shape_distance
 from .lettering import layout_texts
+from .lora import lora_info
 from .models import Character, Page
+from .production.errors import ProductionError
 
 
 def _get(value: Any, key: str, default: Any = None) -> Any:
@@ -200,18 +203,6 @@ def _character_ids(panel: Any) -> list[str]:
     return result
 
 
-def _has_lora(character: Any) -> bool:
-    lora = _get(character, "lora")
-    if not lora:
-        # Permit the compact JSON form ``lora_path`` too.
-        return bool(_get(character, "lora_path"))
-    if isinstance(lora, str):
-        return bool(lora.strip())
-    if isinstance(lora, Mapping):
-        return bool(lora.get("path") or lora.get("file") or lora.get("name"))
-    return bool(_get(lora, "path", _get(lora, "file")))
-
-
 def _dialogues(panel: Any) -> list[Any]:
     values = _get(panel, "dialogue", _get(panel, "dialogues", [])) or []
     if isinstance(values, (str, Mapping)):
@@ -223,7 +214,7 @@ def _dialogues(panel: Any) -> list[Any]:
 class ValidationIssue:
     """One validation finding.
 
-    ``severity`` is either ``error`` or ``warning``.  ``code`` is stable for
+    ``severity`` is ``error``, ``warning`` or ``info``. ``code`` is stable for
     callers; ``message`` is intentionally human-readable for the CLI.
     """
 
@@ -269,6 +260,10 @@ class ValidationReport:
         return [issue for issue in self.issues if issue.severity == "warning"]
 
     @property
+    def infos(self) -> list[ValidationIssue]:
+        return [issue for issue in self.issues if issue.severity == "info"]
+
+    @property
     def valid(self) -> bool:
         return not self.errors
 
@@ -307,6 +302,7 @@ class ValidationReport:
             "exit_code": self.exit_code,
             "errors": [issue.to_dict() for issue in self.errors],
             "warnings": [issue.to_dict() for issue in self.warnings],
+            "infos": [issue.to_dict() for issue in self.infos],
             "issues": [issue.to_dict() for issue in self.issues],
         }
 
@@ -424,11 +420,16 @@ def validate_page(
             caption_page = Page.from_dict(_as_dict(page))
         except (ValueError, TypeError, KeyError):
             caption_page = None
+    caption_characters = {
+        key: value if isinstance(value, Character) else Character.from_dict(_as_dict(value))
+        for key, value in char_map.items()
+    }
     if caption_page is not None:
-        caption_characters = {
-            key: value if isinstance(value, Character) else Character.from_dict(_as_dict(value))
-            for key, value in char_map.items()
-        }
+        try:
+            report.add("info", "page_lora_info", lora_info(caption_page, caption_characters))
+        except ProductionError as exc:
+            report.add("error", "invalid_lora_character", str(exc), field_name="lora_character")
+        _validate_character_clothing(caption_page, caption_characters, report)
         for panel in caption_page.panels:
             for notice in caption_notices(panel, caption_page, caption_characters):
                 report.add(
@@ -537,46 +538,7 @@ def validate_page(
             field_name="order",
         )
 
-    # The page-level LoRA warning reflects the observed MOSS limitation: two
-    # active character LoRAs can bleed into one another even when panels are
-    # otherwise valid.
     if char_map:
-        page_lora_ids = {
-            identifier
-            for panel in panels
-            for identifier in _character_ids(panel)
-            if identifier in char_map and _has_lora(char_map[identifier])
-        }
-        page_lora_ids.update(
-            identifier
-            for overlay in _get(page, "overlays", [])
-            if (identifier := _get(overlay, "character_id", "")) in char_map
-            and _has_lora(char_map[identifier])
-        )
-        if len(page_lora_ids) >= 2:
-            report.add(
-                "warning",
-                "multiple_lora_characters_page",
-                "本页出现多个带 LoRA 的角色，整页出图可能互相吞掉特征",
-                field_name="character_ids",
-                details={"character_ids": sorted(page_lora_ids)},
-            )
-        for index, panel in enumerate(panels):
-            ids = [
-                identifier
-                for identifier in _character_ids(panel)
-                if identifier in char_map and _has_lora(char_map[identifier])
-            ]
-            if len(ids) >= 2:
-                report.add(
-                    "warning",
-                    "multiple_lora_characters_panel",
-                    f"格 {_panel_id(panel, index)} 同时包含多个带 LoRA 的角色，建议逐格重画",
-                    panel_id=_panel_id(panel, index),
-                    field_name="character_ids",
-                    details={"character_ids": ids},
-                )
-
         # If callers provide explicit x positions, report left/right swaps. The
         # optional field keeps the base v1 format compact while enabling this
         # continuity check in editors that track blocking.
@@ -609,6 +571,58 @@ def validate_page(
                 issue.severity = "warning"
                 issue.message = "导入的 MOSS 格子存在重叠，原布局已保留，请核对"
     return report
+
+
+def _validate_character_clothing(
+    page: Page, characters: dict[str, Character], report: ValidationReport
+) -> None:
+    appearing = {
+        identifier
+        for panel in page.panels
+        for identifier in _character_ids(panel)
+        if identifier in characters
+    }
+    appearing.update(overlay.character_id for overlay in page.overlays if overlay.character_id in characters)
+    profiles = {identifier: clothing_profile(characters[identifier]) for identifier in sorted(appearing)}
+    for identifier, (phrases, _, colors) in profiles.items():
+        name = characters[identifier].display_name or identifier
+        if not phrases:
+            report.add(
+                "warning",
+                "character_clothing_missing",
+                f"角色 {name} 缺少服装描述（clothing 为空且外观中没有服装词），请补充服装款式和颜色",
+                field_name="appearance",
+                details={"character_id": identifier},
+            )
+        elif not colors:
+            report.add(
+                "warning",
+                "character_clothing_color_missing",
+                f"角色 {name} 的服装描述缺少颜色词，请写明服装款式和颜色（当前：{'；'.join(phrases)}）",
+                field_name="clothing",
+                details={"character_id": identifier},
+            )
+    identifiers = list(profiles)
+    for index, first in enumerate(identifiers):
+        for second in identifiers[index + 1 :]:
+            _, first_categories, first_colors = profiles[first]
+            _, second_categories, second_colors = profiles[second]
+            if (
+                first_categories & second_categories
+                or not first_colors
+                or not second_colors
+                or first_colors & second_colors
+            ):
+                first_name = characters[first].display_name or first
+                second_name = characters[second].display_name or second
+                report.add(
+                    "warning",
+                    "character_clothing_similar",
+                    f"同页角色 {first_name} 和 {second_name} 的服装类别或颜色容易混淆，"
+                    "请写明不同的服装和颜色",
+                    field_name="clothing",
+                    details={"character_ids": [first, second]},
+                )
 
 
 def _validation_shape(panel: Any, box: tuple[float, float, float, float]) -> dict[str, Any]:

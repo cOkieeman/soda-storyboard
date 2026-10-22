@@ -200,6 +200,7 @@ type EditorState = {
 
   // Canvas & Page updates
   setLegacyCaptionMode: (enabled: boolean) => void;
+  setPageLoraCharacter: (characterId: string | undefined) => void;
   updatePanel: (id: string, patch: Partial<Panel>) => void;
   updateSodaPanel: (id: string, patch: Partial<SodaPanel>) => void;
   togglePanelCharacter: (panelId: string, characterId: string) => void;
@@ -820,6 +821,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!state.sodaPage || Boolean(state.sodaPage.legacy_caption_en) === enabled) return;
     get().recordEdit("page:caption-mode", "更改提示词兼容模式");
     set({ sodaPage: { ...state.sodaPage, legacy_caption_en: enabled } });
+    get().triggerAutoSave();
+  },
+
+  setPageLoraCharacter: (characterId) => {
+    const state = get();
+    if (!state.sodaPage || state.sodaPage.lora_character === characterId) return;
+    get().recordEdit(`page:lora-character:${characterId || "auto"}`, "更改本页 LoRA 角色");
+    const sodaPage = { ...state.sodaPage };
+    if (characterId === undefined) delete sodaPage.lora_character;
+    else sodaPage.lora_character = characterId;
+    set({ sodaPage });
     get().triggerAutoSave();
   },
 

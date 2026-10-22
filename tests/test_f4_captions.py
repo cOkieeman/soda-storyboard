@@ -56,16 +56,16 @@ def test_translation_fresh_stale_missing_and_manual_override() -> None:
                 {
                     "panel_id": "p",
                     "source_hash": source_hash(panel, page, characters),
-                    "text": "Panel 1, A girl lying beside a book, cat whiskers.",
+                    "text": "Panel 1, She reads beside a book with cat whiskers drawn on its cover.",
                 }
             ]
         },
     )
     assert result["applied"] == ["p"]
-    assert (
-        compile_page(page, characters)["items"][0]["caption"]
-        == "Top-left square panel: Medium shot, eye-level. A girl lying beside a book, cat whiskers."
-    )
+    translated = compile_page(page, characters)["items"][0]["caption"]
+    assert translated.startswith("Top-left square panel: Medium shot, eye-level.")
+    assert "lying down" in translated
+    assert "She reads beside a book with cat whiskers drawn on its cover." in translated
     assert translation_todo(page, characters, {})["panels"] == []
     panel.description = "她在窗边读书"
     assert "窗边" in compile_page(page, characters)["items"][0]["caption"]

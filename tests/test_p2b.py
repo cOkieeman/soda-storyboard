@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from soda_storyboard.captions import source_hash, structured_caption
+from soda_storyboard.captions import source_hash
 from soda_storyboard.cli import main
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.figures import draw_figure, figure_framing, panel_figures
@@ -260,19 +260,22 @@ def test_pose_presets_are_visually_distinct() -> None:
     assert len(set(images)) == len(POSES)
 
 
-def test_figures_and_overlays_participate_in_lora_warnings() -> None:
+def test_figures_and_overlays_participate_in_lora_info() -> None:
     characters = {
         identifier: Character(identifier, identifier, lora=Lora(f"{identifier}.safetensors"))
         for identifier in ("a", "b")
     }
     panel = Panel("p", 1, RectShape(20, 20, 500, 900), figures=[Figure("a"), Figure("b")])
     page = Page(panels=[panel], texts=[Text("long", "台词" * 20, panel_id="p")])
-    codes = {issue.code for issue in validate_page(page, characters).warnings}
-    assert {"multiple_lora_characters_panel", "multiple_lora_characters_page", "dialogue_too_long"} <= codes
+    report = validate_page(page, characters)
+    codes = {issue.code for issue in report.warnings}
+    assert "dialogue_too_long" in codes
+    assert not any(code.startswith("multiple_lora") for code in codes)
+    assert report.infos[0].message == "本页 LoRA：a（1）；b按角色描述出图"  # noqa: RUF001
     panel.figures.pop()
     page.overlays = [Overlay("hero", "b", RectShape(100, 100, 200, 500))]
-    codes = {issue.code for issue in validate_page(page, characters).warnings}
-    assert "multiple_lora_characters_page" in codes
+    report = validate_page(page, characters)
+    assert report.infos[0].message == "本页 LoRA：a（1）；b按角色描述出图"  # noqa: RUF001
 
 
 def test_page_style_overrides_project_and_new_page_copies_defaults(
@@ -307,7 +310,8 @@ def test_caption_language_and_explicit_custom_override() -> None:
     assert "20-year-old" in chinese
     assert "short black hair" not in chinese
     panel.caption_auto_en = {
-        "text": structured_caption(panel, page, {"girl": character}, "en"),
+        "format": "scene-v1",
+        "text": "A quiet scene.",
         "source_hash": source_hash(panel, page, {"girl": character}),
         "translated_at": "test",
     }

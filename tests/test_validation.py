@@ -22,7 +22,7 @@ def test_validation_catches_overlap_and_order() -> None:
     assert "order_not_contiguous" in codes
 
 
-def test_validation_unknown_character_and_lora_warning() -> None:
+def test_validation_unknown_character_and_lora_info() -> None:
     page = Page.from_dict(
         {
             "id": "p",
@@ -50,7 +50,8 @@ def test_validation_unknown_character_and_lora_warning() -> None:
     }
     report = validate_page(page, characters)
     assert any(issue.code == "unknown_character" for issue in report.errors)
-    assert any(issue.code == "multiple_lora_characters_page" for issue in report.warnings)
+    assert not any(issue.code.startswith("multiple_lora") for issue in report.warnings)
+    assert report.infos[0].message == "本页 LoRA：A（1）；B按角色描述出图"  # noqa: RUF001
 
 
 def test_validation_dialogue_limit_is_warning() -> None:

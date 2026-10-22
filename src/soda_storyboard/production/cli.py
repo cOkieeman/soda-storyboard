@@ -197,13 +197,18 @@ def register_commands(subparsers: argparse._SubParsersAction) -> None:  # noqa: 
     pick.add_argument("render")
     _common(subparsers.add_parser("plan", help="查看后续生产计划"), "plan")
     _common(subparsers.add_parser("split", help="按 bbox 切格并保存 quad 遮罩"), "split")
-    redraw = _common(subparsers.add_parser("redraw", help="重画单格候选"), "redraw")
+    redraw = _common(subparsers.add_parser("redraw", help="重画单格以修正细节"), "redraw")
     redraw.add_argument("panel")
-    redraw.add_argument("--mode", choices=("detail", "swap"), default="detail")
+    redraw.add_argument(
+        "--mode",
+        choices=("detail", "swap"),
+        default="detail",
+        help="detail 修细节；swap 为手动高级选项，不推荐用于换 LoRA 角色",
+    )
     redraw.add_argument("--character")
     redraw.add_argument("--denoise", type=float)
     redraw.add_argument("--seed", type=int, help="指定可复现种子；省略时随机")
-    inpaint = _common(subparsers.add_parser("inpaint", help="按 figures 局部换人"), "inpaint")
+    inpaint = _common(subparsers.add_parser("inpaint", help="按 figures 局部修正人物细节"), "inpaint")
     inpaint.add_argument("panel")
     inpaint.add_argument("--character", required=True)
     inpaint.add_argument("--denoise", type=float, default=0.85)

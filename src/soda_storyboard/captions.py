@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import TYPE_CHECKING
 
+from .clothing import clothing_phrases
 from .figure_semantics import figure_description
 from .figures import panel_figures
 from .moss_roundtrip import entity_hash
@@ -17,6 +19,14 @@ if TYPE_CHECKING:
     from .models import Character, Figure, Page, Panel
 
 # ruff: noqa: RUF001 -- bilingual prompt punctuation and user-facing diagnostics.
+
+SCENE_TRANSLATION_FORMAT = "scene-v1"
+MIN_GROUP_SIZE = 2
+TRANSLATION_MIGRATION = (
+    "旧整句译文需要重新翻译：运行 translate <页> --todo，仅翻场景、动作和道具，"
+    "排除人物外观、服装、方位和程序姿势，再用 translate <页> --apply <译文文件>；"
+    "角色外观由编译器统一插入。"
+)
 
 SHOTS = {
     "extreme_long": ("大远景", "extreme long shot"),
@@ -79,6 +89,24 @@ def _contains_identity(parts: list[str], phrase: str) -> bool:
     return bool(phrase) and any(re.search(pattern, part, re.IGNORECASE) for part in parts)
 
 
+def _join_preserving(parts: list[str], language: str, *, sentence: bool = True) -> str:
+    """Join generated blocks without rewriting the canonical appearance text."""
+    result = ""
+    for part in parts:
+        if not part:
+            continue
+        if result:
+            result += (
+                (" " if language == "en" else "")
+                if result[-1] in ".。!?！？"
+                else (", " if language == "en" else "，")
+            )
+        result += part
+    if sentence and result and result[-1] not in ".。!?！？":
+        result += "." if language == "en" else "。"
+    return result
+
+
 def character_caption(identifier: str, characters: Mapping[str, Character], language: str = "zh") -> str:
     character = characters.get(identifier)
     if character is None:
@@ -88,23 +116,23 @@ def character_caption(identifier: str, characters: Mapping[str, Character], lang
         if language == "zh"
         else (character.appearance_en or character.appearance_zh or character.display_name)
     )
-    clothing = [] if language == "en" and character.appearance_en else character.clothing
-    parts = _unique([detail, *clothing])
+    parts = _unique([detail, *character.clothing])
+    # Appearance is inserted verbatim; it can already start with the name.
+    name = (character.role_en or character.display_name) if language == "en" else character.display_name
+    if not re.match(rf"^\s*{re.escape(name)}(?![A-Za-z0-9_])", detail, re.IGNORECASE):
+        parts.insert(0, name)
+    if character.age and character.age not in detail:
+        parts.insert(1, character.age)
     for trigger in character.trigger_words:
         if trigger and not _contains_identity(parts, trigger):
             parts.append(trigger)
-    # Appearance often already starts with the character's name.
-    if not _contains_identity(parts, character.display_name):
-        parts.insert(0, character.display_name)
-    if character.age and character.age not in detail:
-        parts.insert(1, character.age)
-    return clean_caption(parts, language).rstrip("。.")
+    return _join_preserving(parts, language, sentence=False)
 
 
 def figure_caption(
     figure: Figure, characters: Mapping[str, Character], language: str, shot: str | None = None
 ) -> str:
-    return clean_caption(
+    return _join_preserving(
         [
             character_caption(figure.character_id, characters, language),
             figure_description(figure, language, head_only=shot in {"close_up", "extreme_close_up"}),
@@ -144,10 +172,47 @@ def _scene_without_repeated_appearance(
     return "".join(result)
 
 
-def structured_caption(
-    panel: Panel, page: Page, characters: Mapping[str, Character], language: str = "zh"
+def panel_character_ids(panel: Panel, page: Page) -> list[str]:
+    return list(dict.fromkeys([*panel.character_ids, *(f.character_id for f in panel_figures(panel, page))]))
+
+
+def outfit_distinction(panel: Panel, page: Page, characters: Mapping[str, Character], language: str) -> str:
+    identifiers = panel_character_ids(panel, page)
+    if len(identifiers) < MIN_GROUP_SIZE:
+        return ""
+    outfits = []
+    for identifier in identifiers:
+        character = characters.get(identifier)
+        name = (
+            identifier
+            if character is None
+            else (
+                (character.role_en or character.display_name) if language == "en" else character.display_name
+            )
+        )
+        phrases = clothing_phrases(character, language) if character is not None else []
+        outfit = (", " if language == "en" else "、").join(phrases)
+        if not outfit:
+            outfit = (
+                "the outfit specified in their character card" if language == "en" else "角色卡指定的服装"
+            )
+        outfits.append(f"{name} in {outfit}" if language == "en" else f"{name}穿{outfit}")
+    if language == "en":
+        return "each character keeps their own outfit: " + "; ".join(outfits) + "."
+    return "每个角色保持各自的服装：" + "；".join(outfits) + "。"
+
+
+def translation_source(panel: Panel) -> dict[str, str]:
+    """Only scene prose is translated; cards, camera and rigs are generated."""
+    return {
+        "description": panel.description,
+        **{key: panel.extra[key] for key in ("props", "atmosphere") if isinstance(panel.extra.get(key), str)},
+    }
+
+
+def _caption_body(
+    panel: Panel, page: Page, characters: Mapping[str, Character], language: str, scene: str | None = None
 ) -> str:
-    index = language == "en"
     figures = panel_figures(panel, page)
     figure_ids = {figure.character_id for figure in figures}
     details = [figure_caption(figure, characters, language, panel.shot) for figure in figures]
@@ -156,23 +221,39 @@ def structured_caption(
         for identifier in dict.fromkeys(panel.character_ids)
         if identifier not in figure_ids
     )
-    scene = panel.description if language == "zh" else panel.extra.get("description_en") or panel.description
-    identifiers = list(dict.fromkeys([*panel.character_ids, *(figure.character_id for figure in figures)]))
+    if scene is None:
+        source = (
+            panel.description if language == "zh" else panel.extra.get("description_en") or panel.description
+        )
+        scene = clean_caption(
+            [source, *(value for key, value in translation_source(panel).items() if key != "description")],
+            language,
+        )
+    identifiers = panel_character_ids(panel, page)
     scene = _scene_without_repeated_appearance(scene, identifiers, characters, language)
-    parts = [
-        SHOTS.get(panel.shot, (panel.shot, panel.shot))[index],
-        ANGLES.get(panel.angle, (panel.angle, panel.angle))[index],
-        *details,
-        scene,
-    ]
-    parts.extend(
-        str(panel.extra[key]) for key in ("props", "atmosphere") if isinstance(panel.extra.get(key), str)
+    return _join_preserving(
+        [*details, scene, outfit_distinction(panel, page, characters, language)], language
     )
-    return clean_caption(parts, language)
+
+
+def structured_caption(
+    panel: Panel, page: Page, characters: Mapping[str, Character], language: str = "zh"
+) -> str:
+    index = language == "en"
+    return _join_preserving(
+        [
+            SHOTS.get(panel.shot, (panel.shot, panel.shot))[index],
+            ANGLES.get(panel.angle, (panel.angle, panel.angle))[index],
+            _caption_body(panel, page, characters, language),
+        ],
+        language,
+    )
 
 
 def source_hash(panel: Panel, page: Page, characters: Mapping[str, Character]) -> str:
-    return hashlib.sha256(structured_caption(panel, page, characters).encode("utf-8")).hexdigest()
+    del page, characters  # Public signature retained for existing callers.
+    source = json.dumps(translation_source(panel), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 def translation_state(panel: Panel, page: Page, characters: Mapping[str, Character]) -> str:
@@ -181,6 +262,8 @@ def translation_state(panel: Panel, page: Page, characters: Mapping[str, Charact
     cached = panel.caption_auto_en
     if not cached or not isinstance(cached.get("text"), str) or not cached["text"].strip():
         return "missing"
+    if cached.get("format") != SCENE_TRANSLATION_FORMAT:
+        return "legacy"
     return "fresh" if cached.get("source_hash") == source_hash(panel, page, characters) else "stale"
 
 
@@ -189,28 +272,8 @@ def format_scene_caption(panel: Panel, page: Page, content: str, language: str) 
     index = language == "en"
     shot = SHOTS.get(panel.shot, (panel.shot, panel.shot))[index]
     angle = ANGLES.get(panel.angle, (panel.angle, panel.angle))[index]
-    body = clean_caption([content], language)
-    if language == "en":
-        # Accept older AI punctuation and position prefixes, only at the beginning.
-        body = re.sub(
-            r"^(?:top|upper|middle|lower|bottom)[^:.]*?\bpanel\s*[:.,]\s*", "", body, flags=re.IGNORECASE
-        )
-        shot_pattern = re.escape(shot).replace(r"\-", "[- ]")
-        angle_pattern = re.escape(angle).replace(r"\-", "[- ]")
-        if panel.angle == "eye":
-            angle_pattern = r"eye[- ]level(?: view)?"
-        header_token = (
-            rf"^(?:{shot_pattern}(?: at {angle_pattern})?|(?:at )?{angle_pattern})(?:\s*[,.;:]\s*|$)"
-        )
-        for _ in range(2):
-            body = re.sub(header_token, "", body, count=1, flags=re.IGNORECASE)
-        camera = f"{shot[:1].upper() + shot[1:]}, {angle}."
-        body = clean_caption([body], language)
-    else:
-        for token in (shot, angle):
-            body = re.sub(rf"^{re.escape(token)}[，。,:：\s]*", "", body, count=1)
-        camera = f"{shot}，{angle}。"
-        body = clean_caption([body], language)
+    body = content
+    camera = f"{shot[:1].upper() + shot[1:]}, {angle}." if index else f"{shot}，{angle}。"
     position = panel_positions(page, language).get(panel.id)
     prefix = f"{position}{': ' if index else '：'}" if position else ""
     return prefix + camera + (" " if index and body else "") + body
@@ -228,8 +291,9 @@ def panel_caption(
         return preserved
     language = language or page.caption_language or "en"
     if language == "en" and translation_state(panel, page, characters) == "fresh":
-        return format_scene_caption(panel, page, panel.caption_auto_en["text"], "en")
-    return format_scene_caption(panel, page, structured_caption(panel, page, characters), "zh")
+        body = _caption_body(panel, page, characters, "en", panel.caption_auto_en["text"])
+        return format_scene_caption(panel, page, body, "en")
+    return format_scene_caption(panel, page, _caption_body(panel, page, characters, "zh"), "zh")
 
 
 def preserved_caption(panel: Panel, page: Page) -> str | None:
@@ -278,7 +342,9 @@ def caption_notices(panel: Panel, page: Page, characters: Mapping[str, Character
             notices.append(
                 {
                     "code": f"caption_translation_{state}",
-                    "message": f"第 {panel.order} 格英文译文{reason}，本次用中文",
+                    "message": f"第 {panel.order} 格：{TRANSLATION_MIGRATION} 本次用中文"
+                    if state == "legacy"
+                    else f"第 {panel.order} 格英文译文{reason}，本次用中文",
                 }
             )
     return notices

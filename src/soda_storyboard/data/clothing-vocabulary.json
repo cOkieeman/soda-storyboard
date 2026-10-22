@@ -1,0 +1,39 @@
+{
+  "categories": {
+    "dress": ["连衣裙", "洋装", "洋服", "背心裙", "吊带裙", "礼服", "dress", "dresses", "pinafore", "gown", "sundress"],
+    "shirt": ["衬衫", "上衣", "T恤", "短袖", "长袖", "背心", "shirt", "shirts", "blouse", "blouses", "top", "t-shirt", "tank top", "vest"],
+    "skirt": ["半身裙", "短裙", "长裙", "百褶裙", "裙子", "skirt", "skirts"],
+    "trousers": ["长裤", "短裤", "牛仔裤", "裤子", "trousers", "pants", "shorts", "jeans", "leggings"],
+    "coat": ["外套", "大衣", "夹克", "风衣", "coat", "jacket", "blazer", "overcoat"],
+    "knitwear": ["毛衣", "针织衫", "开衫", "卫衣", "sweater", "cardigan", "hoodie", "sweatshirt"],
+    "uniform": ["校服", "制服", "水手服", "uniform", "school uniform", "sailor suit"],
+    "robe": ["长袍", "和服", "浴衣", "旗袍", "汉服", "robe", "kimono", "yukata", "qipao", "hanfu"],
+    "suit": ["西装", "套装", "suit", "tuxedo"],
+    "swimwear": ["泳装", "泳衣", "比基尼", "swimsuit", "swimwear", "bikini"],
+    "overalls": ["背带裤", "连体衣", "overalls", "jumpsuit", "romper"],
+    "footwear": ["鞋", "靴", "袜", "shoes", "boots", "socks", "stockings", "tights", "sandals", "sneakers"],
+    "accessory": ["围巾", "领带", "领结", "手套", "帽子", "scarf", "necktie", "bow tie", "gloves", "hat", "cap"],
+    "clothes": ["衣服", "服装", "穿着", "clothes", "clothing", "outfit", "attire"]
+  },
+  "features": {
+    "hair": ["头发", "长发", "短发", "发色", "刘海", "hair", "bangs"],
+    "eyes": ["眼睛", "瞳", "eyes", "eye"],
+    "skin": ["皮肤", "肤色", "skin"],
+    "ornament": ["头饰", "尾巴", "hair ornament", "tail"]
+  },
+  "colors": {
+    "white": ["白", "乳白", "米白", "white", "ivory", "cream", "off-white"],
+    "black": ["黑", "black", "ebony"],
+    "gray": ["灰", "银", "gray", "grey", "silver", "charcoal"],
+    "red": ["红", "绯", "朱", "red", "crimson", "scarlet", "burgundy", "maroon"],
+    "orange": ["橙", "桔", "orange", "coral"],
+    "yellow": ["黄", "金", "yellow", "gold", "golden", "ochre"],
+    "green": ["绿", "青绿", "green", "olive", "mint", "emerald"],
+    "blue": ["蓝", "青色", "blue", "navy", "cyan", "teal", "turquoise", "indigo"],
+    "purple": ["紫", "purple", "violet", "lavender", "lilac"],
+    "pink": ["粉", "pink", "rose", "magenta"],
+    "brown": ["棕", "褐", "咖啡色", "卡其", "brown", "tan", "khaki", "beige"],
+    "dark": ["深色", "暗色", "dark", "dark-colored", "dark-coloured"],
+    "light": ["浅色", "淡色", "light-colored", "light-coloured", "pale-colored", "pale-coloured"]
+  }
+}
