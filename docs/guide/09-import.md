@@ -46,9 +46,9 @@ soda-storyboard import external.md --project my-project --page-id imported-page 
 soda-storyboard layout extract reference.webp --mode color --preview my-project/previews/import-overlay.png --json
 ```
 
-![颜色草图](images/initial-sketch.jpg)
+![颜色草图](images/stretch-color-sketch.png)
 
-图：按颜色约定绘制的本地草稿。工具提取的是框的几何位置，不会 OCR 识别文字；原文和画面内容由插件 AI 看图补入。
+图：「起身舒展」按颜色约定绘制的本地草稿。工具提取的是框的几何位置，不会 OCR 识别文字；原文和画面内容由插件 AI 看图补入。
 
 接下来，把原图和识别叠加图一起给插件，告诉它“按识别坐标填内容，不要重画框的位置”。AI 会补充每格画面和文字，展示新的草稿，等你确认后再翻译、编译。尤其要核对台词：提取到文字框的位置，只表示找到了框，里面的原文还需要看图补上。
 

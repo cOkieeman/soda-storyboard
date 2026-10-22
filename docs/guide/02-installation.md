@@ -4,7 +4,7 @@
 
 如果手里已有分镜包，只想在 ComfyUI 出图，可以直接看本章的 [节点包安装](#安装-comfyui-节点包) 和模型准备部分。用 CLI 直接出图则可以走默认的 minimal 后端，它使用 ComfyUI 核心节点，不需要额外装这个导入节点包。
 
-![安装完成后可打开的编辑器](images/editor-overview.jpg)
+![安装完成后可打开的编辑器](images/stretch-color-editor.png)
 
 图：核心库自带的网页编辑器。只编辑分镜时，不需要启动 ComfyUI。
 
@@ -13,11 +13,11 @@
 这里使用 wheel，也就是预先打好的 Python 安装包。安装 [uv](https://docs.astral.sh/uv/) 后，在终端运行下面两条命令：第一条安装，第二条查看命令行帮助。
 
 ```powershell
-uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.0/soda_storyboard-0.4.0-py3-none-any.whl
+uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.1/soda_storyboard-0.4.1-py3-none-any.whl
 soda-storyboard --help
 ```
 
-上面的下载地址对应已发布的 0.4.0。本指南也介绍了尚未发布的 0.4.1 功能，需要这些功能时，请等 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 提供对应 wheel 后，替换地址并加 `--force` 更新。仓库中的版本号不代表对应安装包已经发布，直接替换 URL 中的版本号可能找不到文件。
+上面的下载地址对应已发布的 0.4.1，也是本指南彩色示例使用并验证的版本。更新已有 CLI 安装时，在 `uv tool install` 后加 `--force`。后续版本的实际安装包以 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 为准。
 
 如果 uv 找不到合适的 Python，可以在安装命令后加 `--python 3.12`。安装成功后若终端仍找不到 `soda-storyboard`，执行 `uv tool update-shell`，再关闭并重开终端；也可以直接运行安装器提示的工具目录中的可执行文件。
 
@@ -57,7 +57,7 @@ claude plugin install soda-storyboard@soda-storyboard-local --scope local
 把 [ComfyUI-Soda-Storyboard](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) 放进 ComfyUI 的 `custom_nodes/ComfyUI-Soda-Storyboard/`。如果用的是便携版，在 `ComfyUI_windows_portable` 根目录运行下面的命令，用它自带的 Python 安装核心 wheel：
 
 ```powershell
-.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.0/soda_storyboard-0.4.0-py3-none-any.whl"
+.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.1/soda_storyboard-0.4.1-py3-none-any.whl"
 .\python_embeded\python.exe -c "from importlib.metadata import version; print(version('soda-storyboard'))"
 ```
 
@@ -81,10 +81,10 @@ claude plugin install soda-storyboard@soda-storyboard-local --scope local
 建立故事项目后，可以用下面的命令配置并检查 CLI 与 ComfyUI 的连接：
 
 ```powershell
-soda-storyboard comfy config --project my-project --url http://127.0.0.1:8190 --model sft --preset draft --backend minimal --json
-soda-storyboard comfy check --project my-project --json
+soda-storyboard comfy config --project examples/stretch-color --url http://127.0.0.1:8190 --model sft --preset draft --backend minimal --json
+soda-storyboard comfy check --project examples/stretch-color --json
 ```
 
-这里的端口需要换成你的 ComfyUI 实际地址。检查会读取节点和模型列表，不会生成图片；连接失败或缺少节点、模型时，会返回具体原因。导入节点负责读取分镜包，出图工作流所需的模型节点也要另外备齐。
+这两条命令从仓库根目录运行；使用自己的项目时替换项目路径。端口需要换成你的 ComfyUI 实际地址，模型放在子目录时还要按下拉列表填写 `--sft`、`--clip`、`--vae`。检查只读取节点和模型列表；导入节点负责读取分镜包，出图工作流所需的模型节点也要另外备齐。教程中的彩色成图使用配套节点工作流的 50 步与 SLG 参数，CLI 的 draft 预设用于另行试画。
 
-[下一章：十分钟做出第一页](03-first-page.md) · [返回目录](README.md)
+[下一章：从这张彩色漫画开始](03-first-page.md) · [返回目录](README.md)

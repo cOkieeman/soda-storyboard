@@ -5,14 +5,14 @@
 让 AI 打开当前页，或者自己运行：
 
 ```powershell
-soda-storyboard edit my-project --detach --page rooftop --json
+soda-storyboard edit examples/stretch-color --detach --page stretch-color --json
 ```
 
 `--detach` 会让服务留在后台，终端可以继续使用。同一项目再次打开时会复用已有服务；默认端口 8780 被占用则会换一个空闲端口，所以浏览器地址以返回的 `url` 为准。加上 `--no-browser` 可以只取得地址，稍后再打开。
 
-![编辑器分区](images/editor-overview.jpg)
+![彩色示例的网页编辑器](images/stretch-color-editor.png)
 
-编辑器的浅色界面：① 工具条 ② 页面与角色 ③ 画布 ④ 检查器 ⑤ 最终提示词 ⑥ 已有出图条。
+图中选中的是「起身舒展」第三格，左侧页面面板已收起，中央查看完整分镜，右侧填写这一格的描述和人物。命令从仓库根目录运行；自己的故事项目需要替换目录和页 id。
 
 ## 先选中，再修改
 
@@ -66,7 +66,7 @@ soda-storyboard edit my-project --detach --page rooftop --json
 | F | 聚焦当前格子 |
 | Ctrl+K / ? | 打开命令菜单 / 快捷键帮助 |
 
-界面可以切换浅色或深色主题，本文截图用的是浅色。切主题不会改变漫画的颜色设置。
+界面可以切换浅色或深色主题。开头的彩色示例截图使用深色界面，下面的提示词与冲突示意图来自其他页面的浅色界面；切主题不会改变漫画的颜色设置。
 
 ## 保存、同步和冲突
 
@@ -77,7 +77,7 @@ soda-storyboard edit my-project --detach --page rooftop --json
 用完以后可以关闭后台服务：
 
 ```powershell
-soda-storyboard edit my-project --stop --json
+soda-storyboard edit examples/stretch-color --stop --json
 ```
 
 停止前会核对项目和运行实例。若提示状态不匹配，检查是否选错了项目；旧状态里的 PID 可能已经属于别的进程，不能直接按它结束程序。
