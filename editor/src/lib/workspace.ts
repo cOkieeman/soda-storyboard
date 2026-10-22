@@ -28,3 +28,10 @@ export function anchoredPan(pan: {x:number;y:number}, point: {x:number;y:number}
   const ratio = nextZoom / oldZoom;
   return { x: point.x - center.x - (point.x - center.x - pan.x) * ratio, y: point.y - center.y - (point.y - center.y - pan.y) * ratio };
 }
+
+/** Fit the complete page to the measured content box, after the actual CSS padding. */
+export function canvasFitZoom(viewport: { width: number; height: number }, canvas: { width: number; height: number }, padding = { left: 0, right: 0, top: 0, bottom: 0 }): number {
+  const width = Math.max(1, viewport.width - padding.left - padding.right);
+  const height = Math.max(1, viewport.height - padding.top - padding.bottom);
+  return Math.max(0.05, Math.min(1, width / Math.max(1, canvas.width), height / Math.max(1, canvas.height)));
+}

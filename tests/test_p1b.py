@@ -12,6 +12,7 @@ from PIL import Image
 
 from soda_storyboard.cli import main
 from soda_storyboard.compiler import compile_page
+from soda_storyboard.figures import panel_figures
 from soda_storyboard.io import read_json, write_json
 from soda_storyboard.models import CAMERA_ANGLES, SHOT_SIZES, Dialogue, Page, Panel
 from soda_storyboard.templates import RECIPES, builtin_templates, suggest_layouts
@@ -30,7 +31,10 @@ def test_default_layouts_cover_four_candidates_and_keep_reading_order() -> None:
 def test_compile_uses_proven_caption_contract() -> None:
     page = Page(panels=[Panel("p1", 1, {"x": 0, "y": 0, "w": 512, "h": 300})])
     compiled = compile_page(page)
-    assert compiled["items"][0]["caption"].startswith("Panel 1, medium shot, eye-level:")
+    assert compiled["items"][0]["caption"] == "第1格，中景，平视，漫画场景"
+    assert compile_page(page, caption_language="en")["items"][0]["caption"].startswith(
+        "Panel 1, medium shot, eye-level:"
+    )
     assert "no text, no speech bubbles" in compiled["summary"]["caption"]
     assert set(compiled["items"][0]) == {"label", "caption", "bbox"}
     assert all(type(value) is int for value in compiled["items"][0]["bbox"])
@@ -123,7 +127,7 @@ def test_four_equal_bands_and_stagger_have_real_geometry() -> None:
 @pytest.mark.parametrize("angle", CAMERA_ANGLES)
 def test_shots_and_angles_are_natural_english(shot: str, angle: str) -> None:
     page = Page(panels=[Panel("p", 1, {"x": 0, "y": 0, "w": 500, "h": 400}, shot=shot, angle=angle)])
-    caption = compile_page(page)["items"][0]["caption"]
+    caption = compile_page(page, caption_language="en")["items"][0]["caption"]
     assert caption.startswith("Panel 1, ")
     assert "_" not in caption
     assert "景别" not in caption
@@ -286,4 +290,8 @@ def test_empty_dialogue_and_brief_summary() -> None:
         panel.sfx = []
     result = compile_page(page)
     assert result["summary"]["caption"].endswith("no text, no speech bubbles")
-    assert all(item["label"] == "object" for item in result["items"])
+    assert {item["label"] for item in result["items"]} == {"object", "character"}
+    assert sum(item["label"] == "object" for item in result["items"]) == len(page.panels)
+    assert sum(item["label"] == "character" for item in result["items"]) == sum(
+        len(panel_figures(panel, page)) for panel in page.panels
+    )

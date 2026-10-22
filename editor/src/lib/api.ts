@@ -158,6 +158,16 @@ export async function getPage(id: string): Promise<{ page: SodaPage; version: st
   return { page: data.page, version };
 }
 
+export type PanelCaptionPreview = { panel_id: string; caption: string; custom_override: boolean };
+
+/** Compile the current draft for inspection without saving files or creating a generation job. */
+export async function previewPanelCaptions(id: string, page: SodaPage, signal?: AbortSignal): Promise<PanelCaptionPreview[]> {
+  const { data } = await request<{ panels: PanelCaptionPreview[] }>(`/api/pages/${encodeURIComponent(id)}/caption-preview`, {
+    method: "POST", body: JSON.stringify({ page }), signal
+  });
+  return data.panels;
+}
+
 export type SavePageResult = {
   success: boolean;
   status: number;

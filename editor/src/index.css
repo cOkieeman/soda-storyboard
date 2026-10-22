@@ -259,6 +259,9 @@ svg.lucide { width: 16px; height: 16px; flex-shrink: 0; stroke-width: 1.7; }
 .inspector-section > summary { display: flex; align-items: center; gap: 8px; padding: 16px 20px; cursor: pointer; font-size: 14px; font-weight: 600; list-style: none; }
 .inspector-section > summary::-webkit-details-marker { display: none; }
 .inspector-section-content { padding: 0 20px 20px; }
+.inspector-section > h3 { padding: 16px 20px; }
+.caption-override-badge { padding: 8px 10px; margin-bottom: 10px; border: 1px solid var(--warning); background: var(--warning-wash); color: var(--warning); font-size: 13px; font-weight: 600; line-height: 1.6; }
+.caption-preview-text { font-size: 13px; line-height: 1.7; }
 .inspector-panel .font-mono { font-family: var(--font-sans); }
 .inspector-panel .ui-btn { font-size: 14px; }
 .validation-summary { background: var(--warning-wash); border-bottom: 1px solid var(--line); color: var(--warning); }
@@ -271,7 +274,8 @@ svg.lucide { width: 16px; height: 16px; flex-shrink: 0; stroke-width: 1.7; }
 .validation-item[data-severity="error"] { color: var(--error); }
 .canvas-page-paper { background: #fff; color-scheme: light; border: 1px solid var(--rule); box-shadow: none; }
 .canvas-heading { color: var(--muted); font-size: 13px; min-height: 48px; border-bottom-color: var(--line); }
-.canvas-workspace { background: var(--paper-wash); }
+.canvas-workspace { background: var(--paper-wash); padding: 12px 12px 52px; }
+@media (max-height: 800px) { .canvas-workspace { padding: 8px 8px 44px; } .canvas-footer { bottom: 8px; } }
 .canvas-zoom-bar { border: 1px solid var(--line); background: var(--paper); border-radius: 4px; box-shadow: none; }
 .canvas-control-button { white-space: nowrap; }
 .canvas-control-button:hover, .canvas-view-button:hover { background: var(--paper-deep); }

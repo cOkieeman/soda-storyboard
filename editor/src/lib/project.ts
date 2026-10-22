@@ -12,7 +12,7 @@ import {
   SodaText
 } from "../types";
 import { DEFAULT_BUBBLE_TEXT_COLOR, normalizeHexColor } from "./colors";
-import { normalizePanelRotation, normalizePanelShape, RECT_PANEL_SHAPE } from "./panelGeometry";
+import { getPanelLocalPoints, normalizePanelRotation, normalizePanelShape, RECT_PANEL_SHAPE } from "./panelGeometry";
 import { resolveTextFontSize } from "./lettering";
 
 export const CANVAS_PRESETS: Record<CanvasPreset, { width: number; height: number; dpi: number }> = {
@@ -189,7 +189,7 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
     let y = 0;
     let width = 200;
     let height = 200;
-    let shape = { ...RECT_PANEL_SHAPE };
+    let shape: Panel["shape"] = { ...RECT_PANEL_SHAPE };
 
     if (p.shape.type === "rect") {
       x = p.shape.x;
@@ -213,7 +213,8 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
         topLeft: (p0[0] - x) / width,
         topRight: (p1[0] - x) / width,
         bottomRight: (p2[0] - x) / width,
-        bottomLeft: (p3[0] - x) / width
+        bottomLeft: (p3[0] - x) / width,
+        points: p.shape.points.map(([px, py]) => [(px - x) / width, (py - y) / height]) as NonNullable<Panel["shape"]["points"]>
       };
     }
 
@@ -313,6 +314,7 @@ export function projectPageToSodaPage(
         order: p.order,
         description: p.sodaData?.description ?? existing.description,
         caption_en: p.sodaData?.caption_en ?? existing.caption_en,
+        ...(p.sodaData?.use_custom_caption !== undefined ? { use_custom_caption: p.sodaData.use_custom_caption } : {}),
         shot: p.sodaData?.shot ?? existing.shot,
         angle: p.sodaData?.angle ?? existing.angle,
         character_ids: p.sodaData?.character_ids ?? existing.character_ids,
@@ -321,6 +323,7 @@ export function projectPageToSodaPage(
     }
 
     const isRect =
+      !p.shape.points &&
       Math.abs(p.shape.topLeft - 0) < 0.0001 &&
       Math.abs(p.shape.topRight - 1) < 0.0001 &&
       Math.abs(p.shape.bottomRight - 1) < 0.0001 &&
@@ -338,12 +341,7 @@ export function projectPageToSodaPage(
     } else {
       shape = {
         type: "quad" as const,
-        points: [
-          [Number((p.x + p.width * p.shape.topLeft).toFixed(4)), Number(p.y.toFixed(4))],
-          [Number((p.x + p.width * p.shape.topRight).toFixed(4)), Number(p.y.toFixed(4))],
-          [Number((p.x + p.width * p.shape.bottomRight).toFixed(4)), Number((p.y + p.height).toFixed(4))],
-          [Number((p.x + p.width * p.shape.bottomLeft).toFixed(4)), Number((p.y + p.height).toFixed(4))]
-        ] as [
+        points: getPanelLocalPoints(p).map(point => [Number((p.x + point.x).toFixed(4)), Number((p.y + point.y).toFixed(4))]) as [
           [number, number],
           [number, number],
           [number, number],
@@ -359,6 +357,7 @@ export function projectPageToSodaPage(
       shape,
       description: p.sodaData?.description ?? existing.description,
       caption_en: p.sodaData?.caption_en ?? existing.caption_en,
+      ...(p.sodaData?.use_custom_caption !== undefined ? { use_custom_caption: p.sodaData.use_custom_caption } : {}),
       shot: p.sodaData?.shot ?? existing.shot,
       angle: p.sodaData?.angle ?? existing.angle,
       character_ids: p.sodaData?.character_ids ?? existing.character_ids,

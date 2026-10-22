@@ -154,9 +154,9 @@ def test_station_example_only_changes_panel_three_and_compiles_without_images(tm
     assert validate_page(page, {character.id: character}).valid
     assert main(["compile", str(path), "--output", str(tmp_path / "station.moss.json"), "--json"]) == 0
     compiled = read_json(tmp_path / "station.moss.json")
-    assert "背后" in next(
-        item["caption"] for item in compiled["items"] if item["caption"].startswith("Panel 3,")
-    )
+    panels = [item for item in compiled["items"] if item["label"] == "object"]
+    assert len(panels) == len(page.panels)
+    assert "背后" in panels[2]["caption"]
     assert all("panel_id" not in item for item in compiled["items"])
     assert (tmp_path / "station.moss.cut.json").is_file()
     assert not list(tmp_path.rglob("*.png"))

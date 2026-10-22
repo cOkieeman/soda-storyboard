@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from soda_storyboard.compiler import compile_geometry_map, compile_page
+from soda_storyboard.compiler import compile_geometry_map, compile_page, custom_caption_enabled
 from soda_storyboard.figures import sketch_geometry
 from soda_storyboard.geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from soda_storyboard.io import load_character, load_project, read_json, save_page, write_json
@@ -272,6 +272,31 @@ class Store:
                 paths["map"] = f"{page_id}.moss.map.json"
                 self.atomic(self.path(paths["map"]), compile_geometry_map(page, slant_mode=mode))
             return {"moss": compiled, "path": relative, "paths": paths}
+
+    def caption_preview(self, page_id: str, options: dict) -> dict:
+        """Compile the editor's current draft without saving or launching any job."""
+        with self.lock:
+            # Check the requested resource even when the body contains an unsaved draft.
+            self.page(page_id)
+            raw = options.get("page")
+            if raw is not None and not isinstance(raw, dict):
+                raise APIError(400, "page 必须是页面 JSON 对象")
+            page = self.render_page(page_id, raw=raw)
+            if page.page_id != page_id:
+                raise APIError(400, "预览页面 id 与请求路径不一致")
+            compiled = compile_page(page, self.character_map(), with_ids=True)
+            panels = {panel.id: panel for panel in page.panels}
+            return {
+                "panels": [
+                    {
+                        "panel_id": item["panel_id"],
+                        "caption": item["caption"],
+                        "custom_override": custom_caption_enabled(panels[item["panel_id"]], page),
+                    }
+                    for item in compiled["items"]
+                    if item["label"] == "object"
+                ]
+            }
 
     def suggest(self, page_id: str, options: dict) -> dict:
         style = options.get("style", "sketch")

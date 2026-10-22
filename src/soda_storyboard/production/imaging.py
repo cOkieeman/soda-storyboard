@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-from soda_storyboard.figures import POSITIONS, panel_figures
+from soda_storyboard.figure_semantics import figure_page_box
+from soda_storyboard.figures import panel_figures
 from soda_storyboard.geometry import shape_bbox
 from soda_storyboard.lettering import layout_texts
 
@@ -92,26 +93,14 @@ def quad_mask(panel: Panel, *, inset: float = 0) -> Image.Image:
 
 
 def _figure_box(figure: Figure, panel: Panel) -> tuple[int, int, int, int]:
-    width, height = panel_size(panel)
-    if "bbox" in figure.extra:
-        bounds = figure.extra["bbox"]
-        px, py, _, _ = panel_box(panel)
-        return tuple(
-            round(v)
-            for v in (
-                bounds["x"] - px,
-                bounds["y"] - py,
-                bounds["x"] + bounds["w"] - px,
-                bounds["y"] + bounds["h"] - py,
-            )
-        )
-    position = POSITIONS.get(figure.position, 0.5) if isinstance(figure.position, str) else figure.position
-    if not 0 <= position <= 1:
-        msg = "人物 position 必须在 0 到 1 之间"
-        raise ProductionError(msg)
-    cx = width * position
-    half = min(width * 0.21, height * 0.25)
-    return round(cx - half), round(height * 0.06), round(cx + half), round(height * 0.98)
+    # Keep the mask in panel-local coordinates while the compiler consumes
+    # the same integer footprint in page coordinates.
+    px, py, _, _ = panel_box(panel)
+    try:
+        left, top, right, bottom = figure_page_box(figure, panel)
+    except ValueError as exc:
+        raise ProductionError(str(exc)) from exc
+    return left - px, top - py, right - px, bottom - py
 
 
 def figure_mask(
@@ -129,14 +118,22 @@ def figure_mask(
     draw = ImageDraw.Draw(mask)
     for figure in targets:
         left, top, right, bottom = _figure_box(figure, panel)
-        draw.rectangle((left - margin, top - margin, right + margin, bottom + margin), fill=255)
+        if right <= left or bottom <= top:
+            continue
+        # Editor bounds are half-open; Pillow rectangles include their final
+        # pixel. Legacy masks retain their original inclusive endpoint rule.
+        end = 1 if figure.extra.get("editor") is not None else 0
+        draw.rectangle((left - margin, top - margin, right + margin - end, bottom + margin - end), fill=255)
     if feather:
         mask = mask.filter(ImageFilter.GaussianBlur(feather))
     # Protect others AFTER feathering so blur can never spill onto their silhouettes.
     draw = ImageDraw.Draw(mask)
     for figure in figures:
         if figure.character_id != character_id:
-            draw.rectangle(_figure_box(figure, panel), fill=0)
+            left, top, right, bottom = _figure_box(figure, panel)
+            if right > left and bottom > top:
+                end = 1 if figure.extra.get("editor") is not None else 0
+                draw.rectangle((left, top, right - end, bottom - end), fill=0)
     mask = ImageChops.multiply(mask, quad_mask(panel))
     if not mask.getbbox():
         msg = "人物遮罩为空或被另一角色完全遮住，请调整 figures/bbox"

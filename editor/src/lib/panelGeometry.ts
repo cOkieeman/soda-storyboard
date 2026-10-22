@@ -4,7 +4,7 @@ export type Point = {
   x: number;
   y: number;
 };
-export type PanelShapeKey = keyof PanelShape;
+export type PanelShapeKey = "topLeft" | "topRight" | "bottomRight" | "bottomLeft";
 export type PanelEdgeKey = "top" | "right" | "bottom" | "left";
 
 const MIN_PANEL_SIZE = 24;
@@ -46,6 +46,10 @@ function normalizeEdge(start: number, end: number, minSpan: number): [number, nu
 }
 
 export function normalizePanelShape(shape?: Partial<PanelShape> | null, width = 240): PanelShape {
+  if (shape?.points?.length === 4 && shape.points.every(point => point.length === 2 && point.every(Number.isFinite))) {
+    const points = shape.points.map(([x, y]) => [x, y]) as NonNullable<PanelShape["points"]>;
+    return { topLeft: points[0][0], topRight: points[1][0], bottomRight: points[2][0], bottomLeft: points[3][0], points };
+  }
   const minSpan = Math.min(0.96, MIN_PANEL_EDGE_WIDTH / Math.max(24, width));
   const [topLeft, topRight] = normalizeEdge(shape?.topLeft ?? RECT_PANEL_SHAPE.topLeft, shape?.topRight ?? RECT_PANEL_SHAPE.topRight, minSpan);
   const [bottomLeft, bottomRight] = normalizeEdge(
@@ -135,6 +139,7 @@ export function rotatePointAround(point: Point, center: Point, rotation?: number
 
 export function getPanelLocalPoints(panel: Pick<Panel, "width" | "height" | "shape">): Point[] {
   const shape = normalizePanelShape(panel.shape, panel.width);
+  if (shape.points) return shape.points.map(([x, y]) => ({ x: x * panel.width, y: y * panel.height }));
   return [
     { x: panel.width * shape.topLeft, y: 0 },
     { x: panel.width * shape.topRight, y: 0 },
@@ -147,11 +152,7 @@ export function getPanelShapeHandlePoint(
   panel: Pick<Panel, "width" | "height" | "shape">,
   key: PanelShapeKey
 ): Point {
-  const shape = normalizePanelShape(panel.shape, panel.width);
-  return {
-    x: shape[key] * panel.width,
-    y: key.startsWith("top") ? 0 : panel.height
-  };
+  return getPanelLocalPoints(panel)[PANEL_SHAPE_HANDLE_KEYS.indexOf(key)];
 }
 
 export function getPanelShapeGuideLines(panel: Pick<Panel, "width" | "height" | "shape">) {
@@ -220,6 +221,11 @@ export function clampPanelShapeHandleX(
 
 export function updatePanelShapeHandle(shape: PanelShape, key: PanelShapeKey, width: number, x: number): PanelShape {
   const clampedX = clampPanelShapeHandleX(shape, key, width, x);
+  if (shape.points) {
+    const index = PANEL_SHAPE_HANDLE_KEYS.indexOf(key);
+    const points = shape.points.map(([px, py], i) => [i === index ? clampedX / Math.max(1, width) : px, py]) as NonNullable<PanelShape["points"]>;
+    return normalizePanelShape({ ...shape, points }, width);
+  }
   return normalizePanelShape(
     {
       ...shape,
@@ -239,6 +245,18 @@ function getPanelEdgeTranslationBounds(pointA: number, pointB: number, width: nu
 }
 
 function shiftPanelVerticalEdge(shape: PanelShape, key: "left" | "right", width: number, nextCenterX: number): PanelShape {
+  if (shape.points) {
+    const indices = key === "left" ? [0, 3] : [1, 2];
+    const [first, second] = indices.map(index => shape.points![index][0] * width);
+    const span = width * Math.min(0.96, MIN_PANEL_EDGE_WIDTH / Math.max(24, width));
+    const bounds = getPanelEdgeTranslationBounds(first, second, width);
+    // Keep both endpoints on their original Y coordinates, and retain each edge's slope.
+    if (key === "left") bounds.maxShift = Math.min(bounds.maxShift, shape.points[1][0] * width - first - span, shape.points[2][0] * width - second - span);
+    else bounds.minShift = Math.max(bounds.minShift, shape.points[0][0] * width - first + span, shape.points[3][0] * width - second + span);
+    const shift = clamp(nextCenterX - (first + second) / 2, bounds.minShift, bounds.maxShift) / Math.max(1, width);
+    const points = shape.points.map(([x, y], index) => [indices.includes(index) ? x + shift : x, y]) as NonNullable<PanelShape["points"]>;
+    return normalizePanelShape({ ...shape, points }, width);
+  }
   if (key === "left") {
     const currentTop = shape.topLeft * width;
     const currentBottom = shape.bottomLeft * width;
@@ -304,7 +322,11 @@ export function updatePanelEdgeHandle(
 ) {
   const shape = normalizePanelShape(panel.shape, panel.width);
   if (key === "top" || key === "bottom") {
-    return resizePanelHorizontalEdge(panel, key, point.y);
+    const edgeY = getPanelEdgeHandlePoint(panel, key).y;
+    const ratio = edgeY / Math.max(1, panel.height);
+    const delta = point.y - edgeY;
+    const nextY = key === "top" ? delta / Math.max(0.01, 1 - ratio) : panel.height + delta / Math.max(0.01, ratio);
+    return resizePanelHorizontalEdge(panel, key, nextY);
   }
 
   return {

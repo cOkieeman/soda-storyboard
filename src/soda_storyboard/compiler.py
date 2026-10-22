@@ -7,12 +7,14 @@ from itertools import combinations
 from math import ceil, floor
 from typing import TYPE_CHECKING, Any
 
+from .figure_semantics import figure_description, figure_page_box
+from .figures import panel_figures
 from .geometry import inscribed_rect, midline_rect, panel_to_moss_bbox, shape_bbox
 from .lettering import layout_texts
 from .models import shape_to_dict
 
 if TYPE_CHECKING:
-    from .models import Character, Overlay, Page, Panel, Shape, Text
+    from .models import Character, Figure, Overlay, Page, Panel, Shape, Text
 
 TOP_ROW_LIMIT = 0.34
 BOTTOM_ROW_START = 0.72
@@ -33,6 +35,22 @@ ANGLE_PHRASES = {
     "worm": "worm's-eye view",
     "dutch": "Dutch angle",
 }
+SHOT_PHRASES_ZH = {
+    "extreme_long": "大远景",
+    "long": "远景",
+    "full": "全景",
+    "medium": "中景",
+    "close_up": "特写",
+    "extreme_close_up": "大特写",
+}
+ANGLE_PHRASES_ZH = {
+    "eye": "平视",
+    "high": "俯视",
+    "low": "仰视",
+    "bird": "鸟瞰",
+    "worm": "贴地仰视",
+    "dutch": "倾斜视角",
+}
 
 
 def _character_map(characters: Mapping[str, Character] | Iterable[Character] | None) -> dict[str, Character]:
@@ -43,12 +61,27 @@ def _character_map(characters: Mapping[str, Character] | Iterable[Character] | N
     return {character.id: character for character in characters}
 
 
-def character_caption(identifier: str, characters: Mapping[str, Character]) -> str:
+def character_caption(identifier: str, characters: Mapping[str, Character], language: str = "zh") -> str:
     character = characters.get(identifier)
     if character is None:
         return identifier
-    detail = character.appearance_en or character.appearance_zh or character.display_name
-    return ", ".join(part for part in (character.age, detail, ", ".join(character.trigger_words)) if part)
+    detail = (
+        character.appearance_zh or character.appearance_en or character.display_name
+        if language == "zh"
+        else character.appearance_en or character.appearance_zh or character.display_name
+    )
+    separator = "，" if language == "zh" else ", "
+    return separator.join(
+        part
+        for part in (
+            character.display_name,
+            character.age,
+            detail,
+            *character.clothing,
+            *character.trigger_words,
+        )
+        if part
+    )
 
 
 def panel_location(panel: Panel, page: Page) -> str:
@@ -62,17 +95,49 @@ def panel_location(panel: Panel, page: Page) -> str:
     return f"{row}-{side}{size} panel"
 
 
-def _panel_caption(panel: Panel, page: Page, characters: Mapping[str, Character]) -> str:
-    if panel.caption_en:
+def custom_caption_enabled(panel: Panel, page: Page) -> bool:
+    """Old caption strings remain data until a user explicitly enables them."""
+    return bool(
+        panel.caption_en and panel.caption_en.strip() and (panel.use_custom_caption or page.legacy_caption_en)
+    )
+
+
+def _figure_caption(figure: Figure, characters: Mapping[str, Character], language: str) -> str:
+    separator = "，" if language == "zh" else ", "
+    return separator.join(
+        part
+        for part in (
+            character_caption(figure.character_id, characters, language),
+            figure_description(figure, language),
+        )
+        if part
+    )
+
+
+def panel_caption(panel: Panel, page: Page, characters: Mapping[str, Character], language: str = "zh") -> str:
+    if custom_caption_enabled(panel, page):
         return panel.caption_en
-    identifiers = list(dict.fromkeys([*panel.character_ids, *(f.character_id for f in panel.figures)]))
-    details = "; ".join(character_caption(identifier, characters) for identifier in identifiers)
+    figures = panel_figures(panel, page)
+    identifiers = {figure.character_id for figure in figures}
+    captions = [_figure_caption(figure, characters, language) for figure in figures]
+    captions.extend(
+        character_caption(identifier, characters, language)
+        for identifier in dict.fromkeys(panel.character_ids)
+        if identifier not in identifiers
+    )
+    details = ("；" if language == "zh" else "; ").join(captions)
+    if language == "zh":
+        shot = SHOT_PHRASES_ZH.get(panel.shot, panel.shot)
+        angle = ANGLE_PHRASES_ZH.get(panel.angle, panel.angle)
+        return "，".join(
+            part
+            for part in (f"第{panel.order}格", shot, angle, panel.description or "漫画场景", details)
+            if part
+        )
     shot = SHOT_PHRASES.get(panel.shot, panel.shot.replace("_", "-"))
     angle = ANGLE_PHRASES.get(panel.angle, panel.angle.replace("_", "-"))
-    return (
-        f"Panel {panel.order}, {shot}, {angle}: {panel_location(panel, page)}, "
-        f"{details}, {panel.description or 'a manga scene'}"
-    )
+    description = panel.extra.get("description_en") or panel.description or "a manga scene"
+    return f"Panel {panel.order}, {shot}, {angle}: {panel_location(panel, page)}, {details}, {description}"
 
 
 def _integer_bbox(shape: Shape, page: Page, *, inward: bool = False) -> list[int]:
@@ -207,16 +272,38 @@ def size_check_report(page: Page, target: tuple[int, int]) -> dict[str, Any]:
     }
 
 
-def compile_page(  # noqa: C901 -- ordered object, overlay and text emission
+def _figure_items(
+    panel: Panel, page: Page, characters: Mapping[str, Character], language: str, *, with_ids: bool
+) -> list[dict[str, Any]]:
+    items = []
+    for index, figure in enumerate(panel_figures(panel, page)):
+        x, y, right, bottom = figure_page_box(figure, panel)
+        if right <= x or bottom <= y:
+            continue
+        bbox = _integer_bbox({"type": "rect", "x": x, "y": y, "w": right - x, "h": bottom - y}, page)
+        if bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
+            continue
+        item = {"label": "character", "caption": _figure_caption(figure, characters, language), "bbox": bbox}
+        if with_ids:
+            item.update(panel_id=panel.id, character_id=figure.character_id, figure_index=index)
+        items.append(item)
+    return items
+
+
+def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compilation settings
     page: Page,
     characters: Mapping[str, Character] | Iterable[Character] | None = None,
     *,
     size_check: tuple[int, int] | None = None,
     with_ids: bool = False,
     slant_mode: str = "cut",
+    caption_language: str = "zh",
 ) -> dict[str, Any]:
     """Return only the MOSS contract. Size diagnostics belong to CLI/maps."""
     _validate_slant_mode(slant_mode)
+    if caption_language not in {"zh", "en"}:
+        message = "caption_language must be zh or en"
+        raise ValueError(message)
     # Retain the public argument for clients; diagnostics never enter the prompt.
     del size_check
     character_map = _character_map(characters)
@@ -267,7 +354,7 @@ def compile_page(  # noqa: C901 -- ordered object, overlay and text emission
         (overlay for overlay in page.overlays if overlay.mode == "moss"), key=lambda overlay: overlay.z_index
     )
     for panel in sorted(page.panels, key=lambda panel: panel.order):
-        object_caption = _panel_caption(panel, page, character_map)
+        object_caption = panel_caption(panel, page, character_map, caption_language)
         if slant_mode == "hint" and panel.shape_type == "quad":
             object_caption += ", slanted panel"
         item = {
@@ -278,12 +365,17 @@ def compile_page(  # noqa: C901 -- ordered object, overlay and text emission
         if with_ids:
             item["panel_id"] = panel.id
         items.append(item)
+        items.extend(_figure_items(panel, page, character_map, caption_language, with_ids=with_ids))
         for overlay in overlays:
             if overlay.panel_id == panel.id:
-                items.append(_overlay_item(overlay, page, character_map, with_ids=with_ids))
+                items.append(
+                    _overlay_item(overlay, page, character_map, with_ids=with_ids, language=caption_language)
+                )
     for overlay in overlays:
         if overlay.panel_id is None or not any(panel.id == overlay.panel_id for panel in page.panels):
-            items.append(_overlay_item(overlay, page, character_map, with_ids=with_ids))
+            items.append(
+                _overlay_item(overlay, page, character_map, with_ids=with_ids, language=caption_language)
+            )
     _validate_cut_regions(page, slant_mode, [item["bbox"] for item in items if item["label"] == "object"])
     for text in texts:
         item = {
@@ -299,13 +391,13 @@ def compile_page(  # noqa: C901 -- ordered object, overlay and text emission
 
 
 def _overlay_item(
-    overlay: Overlay, page: Page, characters: Mapping[str, Character], *, with_ids: bool
+    overlay: Overlay, page: Page, characters: Mapping[str, Character], *, with_ids: bool, language: str
 ) -> dict[str, Any]:
     item = {
         "label": "character",
         "caption": (
             "Main center character focus breaking across the middle panels: "
-            f"{character_caption(overlay.character_id, characters)}, {overlay.description}"
+            f"{character_caption(overlay.character_id, characters, language)}, {overlay.description}"
         ),
         "bbox": _integer_bbox(overlay.rect, page),
     }
@@ -314,4 +406,4 @@ def _overlay_item(
     return item
 
 
-__all__ = ["compile_geometry_map", "compile_page"]
+__all__ = ["compile_geometry_map", "compile_page", "custom_caption_enabled", "panel_caption"]

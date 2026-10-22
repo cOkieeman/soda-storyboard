@@ -175,6 +175,32 @@ def test_project_pages_and_characters(client: Client) -> None:
     assert client.call("POST", "/api/characters", {"id": "guest"})[0] == 409
 
 
+def test_caption_preview_compiles_unsaved_changes_without_writing(client: Client) -> None:
+    raw, _ = client.page()
+    original = (client.root / "pages/pudding.json").read_bytes()
+    original_moss = (client.root / "pudding.moss.json").read_bytes()
+    raw["panels"][0]["description"] = "妹妹把布丁藏在身后"
+    endpoint = PAGE_URL + "/caption-preview"
+    status, _, preview = client.call("POST", endpoint, {"page": raw})
+    assert status == 200
+    first = preview["panels"][0]
+    compiled = compile_page(
+        client.server.store.render_page("pudding", raw=raw),
+        client.server.store.character_map(),
+        with_ids=True,
+    )
+    assert first["caption"] == compiled["items"][0]["caption"]
+    assert "妹妹把布丁藏在身后" in first["caption"]
+    assert first["custom_override"] is False
+    raw["panels"][0]["use_custom_caption"] = True
+    overridden = client.call("POST", endpoint, {"page": raw})[2]["panels"][0]
+    assert overridden["custom_override"] is True
+    assert overridden["caption"] == raw["panels"][0]["caption_en"]
+    assert (client.root / "pages/pudding.json").read_bytes() == original
+    assert (client.root / "pudding.moss.json").read_bytes() == original_moss
+    assert client.call("POST", endpoint, {"page": []})[0] == 400
+
+
 def test_character_color_conditional_save_rejects_stale_versions(client: Client) -> None:
     endpoint = "/api/characters/older"
     path = client.root / "characters/older.json"

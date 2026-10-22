@@ -200,8 +200,8 @@ function nativePage(raw: JsonObject): ImportedPageDraft {
   validateReferences(page);
   const placed = placeMissingTextBoxes(page, warnings);
   if (migrated) warnings.push(`已将 ${migrated} 条旧版台词和音效转为可编辑文字，内容已完整保留。`);
-  const englishOverrides = panels.filter(panel => panel.caption_en?.trim()).length;
-  if (englishOverrides) warnings.push(`${englishOverrides} 格包含英文覆盖，生成优先使用高级英文提示词；修改主描述时，请同步修改或清空英文提示词。`);
+  const customCaptions = panels.filter(panel => panel.caption_en?.trim()).length;
+  if (customCaptions) warnings.push(`已保留 ${customCaptions} 格原有英文提示词。默认按中文画面描述生成；只有开启“使用自定义提示词”或本页旧版兼容开关时才覆盖。`);
   if (migrated || placed) {
     if (!own(page, "import_source")) page.import_source = { format: "soda", data: clone(raw) };
     else if (!own(page, "import_original_page")) page.import_original_page = clone(raw);

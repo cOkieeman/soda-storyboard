@@ -6,7 +6,7 @@ import shutil
 import socket
 import subprocess
 import sys
-import time
+from concurrent.futures import ThreadPoolExecutor
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,7 +31,8 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def project(tmp_path: Path) -> Iterator[Path]:
     root = tmp_path / "有空格的 story"
-    shutil.copytree(ROOT / "examples/pudding", root)
+    # Example projects may contain ignored runtime files from a manual editor session.
+    shutil.copytree(ROOT / "examples/pudding", root, ignore=shutil.ignore_patterns(".soda"))
     try:
         yield root
     finally:
@@ -90,7 +91,7 @@ def test_occupied_non_http_port_selects_free_port(project: Path) -> None:
 
 def test_other_project_service_is_preserved(project: Path, tmp_path: Path) -> None:
     other = tmp_path / "other"
-    shutil.copytree(ROOT / "examples/pudding", other)
+    shutil.copytree(ROOT / "examples/pudding", other, ignore=shutil.ignore_patterns(".soda"))
     first = run(project, "--port", "0", "--detach", "--no-browser")
     try:
         second = run(other, "--port", str(first["port"]), "--detach", "--no-browser")
@@ -129,34 +130,53 @@ def test_browser_open_only_when_requested(project: Path, monkeypatch: pytest.Mon
     assert len(opened) == 1
 
 
-def test_foreground_waits_until_stopped(project: Path) -> None:
-    with subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "soda_storyboard",
-            "edit",
-            str(project),
-            "--port",
-            "0",
-            "--no-browser",
-            "--json",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-    ) as process:
+@pytest.mark.parametrize("copied_state", [False, True], ids=["clean-project", "copied-runtime-state"])
+def test_foreground_waits_until_stopped(project: Path, *, copied_state: bool) -> None:
+    state_path = project / ".soda/server.json"
+    if copied_state:
+        write_json(
+            state_path,
+            {
+                "project_dir": str(ROOT / "examples/pudding"),
+                "port": 0,
+                "pid": os.getpid(),
+                "instance_id": "copied-runtime-state",
+            },
+        )
+    with (
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "soda_storyboard",
+                "edit",
+                str(project),
+                "--port",
+                "0",
+                "--no-browser",
+                "--json",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        ) as process,
+        ThreadPoolExecutor(max_workers=1) as output,
+    ):
         try:
-            deadline = time.monotonic() + 10
-            while not (project / ".soda/server.json").exists() and time.monotonic() < deadline:
-                assert process.poll() is None
-                time.sleep(0.05)
-            assert read_json(project / ".soda/server.json")["pid"] != process.pid
+            # The CLI prints readiness only after a successful health identity check
+            # and publishing its state. A copied server.json is not a ready signal.
+            assert process.stdout is not None
+            ready = json.loads(output.submit(process.stdout.readline).result(timeout=10))
+            info = health(ready["port"])
+            assert ready["reused"] is False
+            assert Path(info["project_dir"]) == project.resolve()
+            assert ready["pid"] == info["pid"] != process.pid
+            assert read_json(state_path) == {**info, "port": ready["port"]}
             assert process.poll() is None
             assert run(project, "--stop")["stopped"]
-            process.communicate(timeout=5)
-            assert process.returncode == 0
+            _, stderr = process.communicate(timeout=5)
+            assert process.returncode == 0, stderr
         finally:
             if process.poll() is None:
                 run(project, "--stop")

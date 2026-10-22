@@ -3,7 +3,7 @@ import Konva from "konva";
 import { Circle, Group, Layer, Line as KonvaLine, Rect, Stage, Text, Transformer } from "react-konva";
 import { X } from "lucide-react";
 import { Bubble, Panel, Selection } from "../types";
-import { anchoredPan, readViewport, saveViewport } from "../lib/workspace";
+import { anchoredPan, canvasFitZoom, readViewport, saveViewport } from "../lib/workspace";
 import { panelHasLockedChildren, selectionBounds, selectionKey, selectionParent } from "../lib/batchEditing";
 import { resolvedFigures } from "../lib/figures";
 import { getFigureId } from "../lib/figureRig";
@@ -166,10 +166,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     if (panelHandleActiveRef.current) return;
     const container = workspaceRef.current;
     if (!container || !container.clientWidth || !container.clientHeight) return;
-    const fitZoom = Math.min(
-      1,
-      Math.max(0.05, Math.min((container.clientHeight - 96) / canvasHeight, (container.clientWidth - 80) / canvasWidth))
-    );
+    const style = getComputedStyle(container);
+    const fitZoom = canvasFitZoom({ width: container.clientWidth, height: container.clientHeight }, { width: canvasWidth, height: canvasHeight }, {
+      left: parseFloat(style.paddingLeft) || 0, right: parseFloat(style.paddingRight) || 0,
+      top: parseFloat(style.paddingTop) || 0, bottom: parseFloat(style.paddingBottom) || 0
+    });
     fitZoomRef.current = true;
     setZoom(Math.floor(fitZoom * 1000) / 1000);
     setPan({ x: 0, y: 0 });
@@ -470,7 +471,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       {/* Canvas Workspace with Pan & Smooth Wheel Zoom */}
       <div
         ref={workspaceRef}
-        className="canvas-workspace relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden p-8 pb-16 select-none"
+        className="canvas-workspace relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden select-none"
         style={{
           cursor: isPanning ? "grabbing" : isPanTool ? "grab" : activeTool === "text" || activeTool === "figure" ? "crosshair" : "default"
         }}

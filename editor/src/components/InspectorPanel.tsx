@@ -8,6 +8,7 @@ import FigureInspector from "./FigureInspector";
 import { resolveTextFontSize } from "../lib/lettering";
 import NumberInput from "./ui/NumberInput";
 import BatchInspector from "./BatchInspector";
+import PanelCaptionPreview from "./PanelCaptionPreview";
 
 const SHOT_OPTIONS: { value: ShotType; label: string }[] = [
   { value: "extreme_long", label: "大远景" },
@@ -139,6 +140,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const removeFigureFromPanel = useEditorStore((state) => state.removeFigureFromPanel);
   const updateFigureInPanel = useEditorStore((state) => state.updateFigureInPanel);
   const addTextToPanel = useEditorStore((state) => state.addTextToPanel);
+  const setLegacyCaptionMode = useEditorStore((state) => state.setLegacyCaptionMode);
   const selectObject = (nextSelection: Selection) => {
     selectItem(nextSelection);
     onSelectObject?.(nextSelection);
@@ -197,8 +199,9 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const selectedText = selection?.kind === "text" || selection?.kind === "bubble" ? sodaPage.texts.find((text) => text.id === selection.id) : undefined;
   const selectedOverlay = selection?.kind === "overlay" ? sodaPage.overlays?.find((overlay) => overlay.id === selection.id) : undefined;
   const hasSelection = Boolean(selectedPanel || selectedFigure || selectedText || selectedOverlay);
-  const title = selections.length > 1 ? "批量属性" : selectedFigure ? "人物" : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
-  const objectId = selectedFigure && selection?.kind === "figure" ? selection.id : selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
+  const figureName = selectedFigure ? characters.find(character => character.id === selectedFigure.character_id)?.display_name || characterDetails[selectedFigure.character_id]?.display_name || "未指定角色" : "";
+  const title = selections.length > 1 ? "批量属性" : selectedFigure ? `${figureName} · 第 ${figurePanel!.order} 格` : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
+  const objectId = selectedFigure ? "人物与姿势" : selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
   const deleteLabel = `删除${selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
   const errorCount = notices.filter((notice) => notice.severity === "error").length;
   const warningCount = notices.length - errorCount;
@@ -296,7 +299,13 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
                 <label className="min-w-0"><span className="ui-label">视角</span><InspectorSelect label="视角" value={selectedPanel.angle} options={ANGLE_OPTIONS} onChange={(value) => updateSodaPanel(selectedPanel.id, { angle: value })} /></label>
               </div>
             </InspectorSection>
-            <InspectorSection title="英文生成提示词" open={false}><textarea aria-label="英文生成提示词" rows={3} value={selectedPanel.caption_en || ""} onChange={(event) => updateSodaPanel(selectedPanel.id, { caption_en: event.target.value })} placeholder="Top-right panel: inside kitchen…" className="ui-textarea" /></InspectorSection>
+            <InspectorSection title="最终提示词预览"><PanelCaptionPreview page={sodaPage} panel={selectedPanel} /></InspectorSection>
+            <InspectorSection title="自定义提示词" open={false}>
+              <label className="figure-option flex cursor-pointer items-center gap-2 text-[13px]"><input type="checkbox" checked={Boolean(selectedPanel.use_custom_caption)} onChange={(event) => updateSodaPanel(selectedPanel.id, { use_custom_caption: event.target.checked })} />使用自定义提示词</label>
+              <textarea aria-label="自定义提示词" rows={4} value={selectedPanel.caption_en || ""} onChange={(event) => updateSodaPanel(selectedPanel.id, { caption_en: event.target.value })} placeholder="填写完整的生成提示词，可使用中文或英文" className="ui-textarea" />
+              <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">开启后，覆盖本格场景提示词；人物位置与姿势仍按编辑器编译，手写内容应与人物保持一致。留空时继续自动编译。</p>
+              {sodaPage.legacy_caption_en && <p className="caption-override-badge">本页已启用旧版兼容：非空自定义提示词都会生效。</p>}
+            </InspectorSection>
             <InspectorSection title="几何信息" open={false}>
               {selectedPanel.shape.type === "rect" ? <dl className="space-y-2 text-[12px]"><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">位置</dt><dd className="font-mono">{selectedPanel.shape.x}, {selectedPanel.shape.y}</dd></div><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">尺寸</dt><dd className="font-mono">{selectedPanel.shape.w} × {selectedPanel.shape.h}</dd></div></dl> : <p className="text-[12px] text-[var(--ink-light)]">四边形 · <span className="font-mono">{selectedPanel.shape.points?.length || 4}</span> 个顶点</p>}
             </InspectorSection>
@@ -347,6 +356,10 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
                 <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">分镜格数</dt><dd><span className="font-mono">{sodaPage.panels.length}</span> 格</dd></div>
                 <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">台词框数</dt><dd><span className="font-mono">{sodaPage.texts.length}</span> 项</dd></div>
               </dl>
+            </InspectorSection>
+            <InspectorSection title="提示词兼容">
+              <label className="figure-option flex cursor-pointer items-center gap-2 text-[13px]"><input type="checkbox" checked={Boolean(sodaPage.legacy_caption_en)} onChange={(event) => setLegacyCaptionMode(event.target.checked)} />保持旧版英文提示词覆盖行为</label>
+              <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">默认使用中文画面描述。旧项目如需保持原有出图提示词，可开启本页兼容模式：所有非空的自定义提示词自动覆盖。</p>
             </InspectorSection>
             {sodaPage.style_prompt && <InspectorSection title="画面风格提示词" open={false}><p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--ink-light)]">{sodaPage.style_prompt}</p></InspectorSection>}
           </div>

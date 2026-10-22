@@ -354,6 +354,8 @@ class Handler(BaseHTTPRequestHandler):
             )
         elif action == "compile" and method == "POST":
             self.send(200, store.compile(page_id, body))
+        elif action == "caption-preview" and method == "POST":
+            self.send(200, store.caption_preview(page_id, body))
         elif action == "layout-suggest" and method == "POST":
             self.json_response(
                 store.suggest(

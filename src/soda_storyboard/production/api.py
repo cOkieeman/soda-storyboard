@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image, ImageDraw, ImageOps
 
-from soda_storyboard.compiler import character_caption, compile_geometry_map, compile_page
+from soda_storyboard.compiler import character_caption, compile_geometry_map, compile_page, panel_caption
 from soda_storyboard.lettering import layout_texts
 
 from .check import page_graph
@@ -289,10 +289,7 @@ def _panel_source(state: PageState, panel: Panel) -> Image.Image:
 
 
 def _single_prompt(state: PageState, panel: Panel, character_id: str | None) -> str:
-    caption = panel.caption_en or panel.description
-    if not caption:
-        msg = f"格子 {panel.id} 缺少单格画面描述，请填写 caption_en"
-        raise ProductionError(msg)
+    caption = panel_caption(panel, state.page, state.characters)
     character = character_caption(character_id, state.characters) if character_id else ""
     return ". ".join(
         s

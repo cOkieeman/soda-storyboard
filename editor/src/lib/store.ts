@@ -199,6 +199,7 @@ type EditorState = {
   deletePage: (pageId: string) => Promise<void>;
 
   // Canvas & Page updates
+  setLegacyCaptionMode: (enabled: boolean) => void;
   updatePanel: (id: string, patch: Partial<Panel>) => void;
   updateSodaPanel: (id: string, patch: Partial<SodaPanel>) => void;
   togglePanelCharacter: (panelId: string, characterId: string) => void;
@@ -810,6 +811,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     } catch (err: any) {
       get().setNotice(`删除分镜页失败: ${err.message}`);
     }
+  },
+
+  setLegacyCaptionMode: (enabled) => {
+    const state = get();
+    if (!state.sodaPage || Boolean(state.sodaPage.legacy_caption_en) === enabled) return;
+    get().recordEdit("page:caption-mode", "更改提示词兼容模式");
+    set({ sodaPage: { ...state.sodaPage, legacy_caption_en: enabled } });
+    get().triggerAutoSave();
   },
 
   // Update canvas panel

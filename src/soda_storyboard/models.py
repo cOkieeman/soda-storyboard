@@ -72,6 +72,12 @@ def _text(value: Any, name: str, *, default: str = "") -> str:
     return value
 
 
+def _boolean(value: Any, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a boolean")
+    return value
+
+
 def _strings(value: Any, name: str) -> list[str]:
     if value is None:
         return []
@@ -461,6 +467,7 @@ class Panel:
 
     caption_en: str | None = None
     figures: list[Figure] = field(default_factory=list)
+    use_custom_caption: bool = False
 
     def __post_init__(self) -> None:
         self.shape = shape_to_dict(self.shape)
@@ -512,6 +519,7 @@ class Panel:
             "importance",
             "status",
             "caption_en",
+            "use_custom_caption",
             "figures",
         }
         shape = value.get("shape")
@@ -535,6 +543,7 @@ class Panel:
             if value.get("caption_en") is None
             else _text(value["caption_en"], "panel.caption_en"),
             figures=[Figure.from_dict(item) for item in value.get("figures", [])],
+            use_custom_caption=_boolean(value.get("use_custom_caption", False), "panel.use_custom_caption"),
             extra=_copy_extra(value, known),
         )
 
@@ -555,6 +564,8 @@ class Panel:
         result.update(self.extra)
         if self.caption_en is not None:
             result["caption_en"] = self.caption_en
+        if self.use_custom_caption:
+            result["use_custom_caption"] = True
         if self.figures:
             result["figures"] = [item.to_dict() for item in self.figures]
         return result
@@ -645,6 +656,7 @@ class Page:
     tags: list[str] = field(default_factory=list)
     text_font_size: float = 42
     text_max_chars: int = 10
+    legacy_caption_en: bool = False
 
     @property
     def id(self) -> str:
@@ -706,6 +718,7 @@ class Page:
             "tags",
             "text_font_size",
             "text_max_chars",
+            "legacy_caption_en",
         }
         canvas = value.get("canvas", value.get("canvas_size", {}))
         if not isinstance(canvas, Mapping):
@@ -736,6 +749,7 @@ class Page:
             tags=_strings(value.get("tags", []), "page.tags"),
             text_font_size=_number(value.get("text_font_size", 42), "page.text_font_size"),
             text_max_chars=int(value.get("text_max_chars", 10)),
+            legacy_caption_en=_boolean(value.get("legacy_caption_en", False), "page.legacy_caption_en"),
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PAGE_FORMAT), "page.format"),
         )
@@ -761,6 +775,8 @@ class Page:
             "text_max_chars": self.text_max_chars,
         }
         result.update(self.extra)
+        if self.legacy_caption_en:
+            result["legacy_caption_en"] = True
         if self.overlays:
             result["overlays"] = [overlay.to_dict() for overlay in self.overlays]
         return result

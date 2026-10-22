@@ -146,10 +146,14 @@ def test_cut_and_rect_compilation_and_sidecar_geometry() -> None:
     cut = compile_page(page)
     assert "slant" not in json.dumps(cut)
     assert "overlay" not in json.dumps(cut)
-    assert len(cut["items"]) == 5
+    objects = [item for item in cut["items"] if item["label"] == "object"]
+    figures = [item for item in cut["items"] if item["label"] == "character"]
+    assert len(objects) == 5
+    assert len(figures) == 4
+    assert len(cut["items"]) == len(objects) + len(figures)
     assert all(set(item) == {"caption", "bbox", "label"} for item in cut["items"])
     shapes = []
-    for item in cut["items"]:
+    for item in objects:
         x1, y1, x2, y2 = geometry.from_moss_bbox(item["bbox"], 1024, 1536)
         shapes.append({"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
     assert all(not geometry.polygons_overlap(a, b) for a, b in combinations(shapes, 2))
@@ -159,7 +163,7 @@ def test_cut_and_rect_compilation_and_sidecar_geometry() -> None:
     assert mapping["panels"][0]["quad"] == [
         [int(v + 0.5) for v in point] for point in page.panels[0].shape["points"]
     ]
-    assert [p["bbox"] for p in mapping["panels"]] == [item["bbox"] for item in cut["items"]]
+    assert [p["bbox"] for p in mapping["panels"]] == [item["bbox"] for item in objects]
     assert mapping["overlays"] == [o.to_dict() for o in page.overlays]
     assert page.to_dict() == before
 

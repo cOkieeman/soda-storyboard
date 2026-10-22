@@ -29,6 +29,8 @@ export type PanelShape = {
   topRight: number;
   bottomRight: number;
   bottomLeft: number;
+  /** Actual quad vertices in panel-relative units; resize applies one affine transform. */
+  points?: [QuadPoint, QuadPoint, QuadPoint, QuadPoint];
 };
 
 // OpenKoma canvas panel representation
@@ -210,6 +212,7 @@ export type SodaPanel = {
   character_ids: string[];
   description: string;
   caption_en: string;
+  use_custom_caption?: boolean;
   figures: Figure[];
   dialogue?: any[];
   sfx?: string[];
@@ -263,6 +266,7 @@ export type SodaPage = {
   color_mode: ColorMode;
   description: string;
   style_prefix?: string;
+  legacy_caption_en?: boolean;
   style_prompt?: string | null;
   tags?: string[];
   text_font_size?: number;

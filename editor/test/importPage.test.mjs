@@ -248,5 +248,7 @@ test("Native advanced English captions stay intact and visibly warn that they ta
   source.panels[0].caption_en = "A source-provided English scene caption";
   const result = parse(source);
   assert.equal(result.page.panels[0].caption_en, source.panels[0].caption_en);
-  assert.ok(result.warnings.some(message => message.includes("1 格包含英文覆盖") && message.includes("修改主描述")));
+  assert.equal(Boolean(result.page.panels[0].use_custom_caption), false);
+  assert.equal(Boolean(result.page.legacy_caption_en), false);
+  assert.ok(result.warnings.some(message => message.includes("已保留 1 格原有英文提示词") && message.includes("默认按中文画面描述生成") && message.includes("使用自定义提示词")));
 });

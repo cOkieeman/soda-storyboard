@@ -91,7 +91,17 @@ CLI 输出 UTF-8，也支持 `python -m soda_storyboard`。文件接口与网页
 
 每个 bbox 的顺序是 `[y_min, x_min, y_max, x_max]`。输入使用左上角原点；编译时减去画布中心 `(W/2, H/2)`，因此非方形画布也能保持正确的 x/y 顺序。
 
-编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。object caption 优先使用 `caption_en`，否则拼接英文景别、角度、格子位置、人物 `appearance_en` + `age` 和画面描述。每格应写完整外观；保留旧中文 description 作为兼容回退，不自动调用翻译服务。
+编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。object caption 默认从中文 `description` 拼接景别、角度、角色外观、服装及姿势，角色外观优先用 `appearance_zh`，缺失时保留已有英文外观。每个人物另编译为 `label: "character"` 条目。有人物 `editor` 数据时，bbox 直接取草稿所用骨架的外接框，包含关节、位置、大小、镜像和出框设置；旧人物继续使用原 `bbox` / `position` 估算规则。局部换人的遮罩共用该几何，输出仍裁在所属格子内。
+
+旧 `caption_en` 原文会保留，导入时默认不启用覆盖。只有格子设置 `use_custom_caption: true`，或页面设置 `legacy_caption_en: true`，非空的 `caption_en` 才替换该格的场景 caption。**这会改变已有项目的默认提示词**；需要保持原先英文覆盖习惯时，在页面检查器开启“保持旧版英文提示词覆盖行为”。独立人物条目仍来自编辑器，手写提示词应与人物姿态保持一致。每格检查器的“最终提示词预览”直接调用实际编译器，显示当前尚未保存的修改；覆盖生效时显示标记。
+
+离线语言 A/B 只写两份 MOSS JSON，不连接 ComfyUI、不提交任务：
+
+```powershell
+uv run python scripts/ab_caption_lang.py my-story/pages/page-01.json --output-dir my-story/ab
+```
+
+输出 `page-01.zh.moss.json` 和 `page-01.en.moss.json`，两者均禁用手动覆盖以比较结构化模板，保留相同几何。英文分支使用英文模板、英文角色外观和可选的格子 `description_en`；缺少译文时保留原描述并提示。完整英文剧情对照可用 `--english-page <已翻译的页面副本>`，只读取其页面描述和按格子 id 对应的剧情描述，不改变原版布局。脚本不会调用翻译服务。
 
 文字独立为 `texts`，每个 item 输出 `label: "text"`、英文样式/位置 `caption`、原文 `text`、`bbox`。原文可含换行。kind 支持 dialogue / narration / sfx / title / caption_tag，bubble 支持 speech / shout / thought / box / none，另有可空 panel_id、speaker_id、direction、bbox、style_hint。源页 bbox 是左上角像素矩形 x/y/w/h，省略时自动估算；竖排宽=列数×字宽×1.3，高=每列字数×字高×1.15，横排交换轴。页面 `text_font_size` 默认 42（按 1024 宽画布，随画布宽等比缩放），`text_max_chars` 默认 10，超过即换列/行。框形明显不符方向会 warning。旧 dialogue 和 sfx 继续编译，迁移原文到 texts 后应移除对应旧条目以免重复。
 
@@ -111,7 +121,7 @@ uv run soda-storyboard preview examples/pudding/pages/pudding.json --style boxes
 uv run soda-storyboard compile examples/pudding/pages/pudding.json --output examples/pudding/pudding.moss.json --json
 ```
 
-`preview` 默认 sketch；`--style boxes` 保留原纯框线版。`examples/pudding/` 是参考 JSON 的反向分镜示例，编译得到相同条目种类、数量、原文和 bbox，caption 可不同。为草稿每格都有人物，第 4 格把纯道具特写改成妹妹捧空布丁杯的特写；输出几何与条目结构仍保持参考一致。
+`preview` 默认 sketch；`--style boxes` 保留原纯框线版。`examples/pudding/` 是参考 JSON 的反向分镜示例，原格子、跨格人物和文字的 bbox、原文保持参考一致，另增加编辑器人物的 character 条目。为草稿每格都有人物，第 4 格把纯道具特写改成妹妹捧空布丁杯的特写。
 
 ## 版式模板
 

@@ -131,15 +131,30 @@ def test_pudding_matches_reference_contract() -> None:
     page = load_page("examples/pudding/pages/pudding.json")
     characters = load_characters("examples/pudding/characters")
     assert validate_page(page, characters).valid
-    result = compile_page(page, characters)
+    result = compile_page(page, characters, with_ids=True)
     reference = read_json("tests/fixtures/pudding-example-style.moss.json")
     assert set(result) == {"summary", "items", "bbox_coord_space", "bbox_format"}
     assert result["summary"]["caption"].startswith(page.style_prompt)
     assert result["summary"]["meta"] == reference["summary"]["meta"]
     assert result["summary"]["canvas"] == "multi_panel"
-    assert [(i["label"], i["bbox"], i.get("text")) for i in result["items"]] == [
+    # Figure entries are additive: existing panels, overlays and text retain the
+    # reference's geometry and emission order.
+    original_items = [item for item in result["items"] if "figure_index" not in item]
+    assert [(i["label"], i["bbox"], i.get("text")) for i in original_items] == [
         (i["label"], i["bbox"], i.get("text")) for i in reference["items"]
     ]
+    figure_items = [item for item in result["items"] if "figure_index" in item]
+    assert len(figure_items) == 6
+    assert all(item["label"] == "character" for item in figure_items)
+    assert [(item["panel_id"], item["character_id"], item["figure_index"]) for item in figure_items] == [
+        (panel.id, figure.character_id, index)
+        for panel in sorted(page.panels, key=lambda panel: panel.order)
+        for index, figure in enumerate(panel_figures(panel, page))
+    ]
+    assert all("editor" not in figure.extra for panel in page.panels for figure in panel.figures)
+    # No editor geometry: the first legacy position still produces its original
+    # production footprint (x=659..861, y=53..490 on the 1024x1536 page).
+    assert figure_items[0]["bbox"] == [-715, 147, -278, 349]
     for text in page.texts:
         if text.direction == "vertical":
             assert text.bbox.h > text.bbox.w
@@ -279,16 +294,25 @@ def test_page_style_overrides_project_and_new_page_copies_defaults(
     assert "sisters" not in caption
 
 
-def test_caption_en_priority_and_english_character_template() -> None:
+def test_caption_language_and_explicit_custom_override() -> None:
     character = Character(
         "girl", "女孩", appearance_zh="黑发", appearance_en="short black hair", age="20-year-old"
     )
     panel = Panel("p", 1, RectShape(600, 20, 400, 500), character_ids=["girl"])
     page = Page(panels=[panel])
-    caption = compile_page(page, {"girl": character})["items"][0]["caption"]
+    chinese = compile_page(page, {"girl": character})["items"][0]["caption"]
+    assert chinese.startswith("第1格，中景，平视")  # noqa: RUF001 -- compiled Chinese punctuation
+    assert "黑发" in chinese
+    assert "20-year-old" in chinese
+    assert "short black hair" not in chinese
+    caption = compile_page(page, {"girl": character}, caption_language="en")["items"][0]["caption"]
     assert "short black hair" in caption
     assert "20-year-old" in caption
     assert "Top-right panel" in caption
     assert "黑发" not in caption
     panel.caption_en = "The older sister enters the kitchen."
+    assert compile_page(page, {"girl": character})["items"][0]["caption"] == chinese
+    panel.use_custom_caption = True
     assert compile_page(page, {"girl": character})["items"][0]["caption"] == panel.caption_en
+    panel.use_custom_caption = False
+    assert compile_page(page, {"girl": character})["items"][0]["caption"] == chinese
