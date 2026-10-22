@@ -14,6 +14,7 @@ from .captions import (
 )
 from .figure_semantics import figure_description
 from .figures import panel_figures
+from .panel_positions import panel_positions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -28,6 +29,7 @@ def translation_todo(page: Page, characters: Mapping[str, Character], glossary: 
         "panels": [
             {
                 "panel_id": panel.id,
+                "position_en": panel_positions(page).get(panel.id),
                 "caption_zh": structured_caption(panel, page, characters),
                 "source_hash": source_hash(panel, page, characters),
                 "status": translation_state(panel, page, characters),
@@ -39,7 +41,12 @@ def translation_todo(page: Page, characters: Mapping[str, Character], glossary: 
                     if identifier in characters and characters[identifier].appearance_en
                 },
                 "pose_templates_en": [
-                    {"character_id": figure.character_id, "description": figure_description(figure, "en")}
+                    {
+                        "character_id": figure.character_id,
+                        "description": figure_description(
+                            figure, "en", head_only=panel.shot in {"close_up", "extreme_close_up"}
+                        ),
+                    }
                     for figure in panel_figures(panel, page)
                 ],
             }

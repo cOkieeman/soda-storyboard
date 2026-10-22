@@ -137,7 +137,7 @@ def test_hint_object_and_text_bboxes_stay_inside_quads(recipe: str, direction: s
             for point in ((x1, y1), (x2, y1), (x2, y2), (x1, y2))
         )
         if panel.shape_type == "quad" and item["label"] == "object":
-            assert "slanted panel" in item["caption"]
+            assert "斜格：" in item["caption"]  # noqa: RUF001 -- native Chinese position prefix
 
 
 def test_cut_and_rect_compilation_and_sidecar_geometry() -> None:
@@ -335,10 +335,10 @@ def test_cut_mode_rejects_conflicting_midlines_and_unknown_mode() -> None:
         compile_geometry_map(page, slant_mode="bad")
 
 
-def test_cut_sidecar_next_to_input_without_output_and_without_ids(tmp_path: Path) -> None:
+def test_cut_sidecar_in_production_directory_without_output_and_without_ids(tmp_path: Path) -> None:
     source = read_json(Path("examples/slanted/pages/platform-dash.json"))
     path = write_json(tmp_path / "page.json", source)
     assert main(["compile", str(path), "--json"]) == 0
-    assert (tmp_path / "page.cut.json").exists()
+    assert (tmp_path / "page" / "page.cut.json").exists()
     assert not (tmp_path / "page.map.json").exists()
     assert read_json(path) == source

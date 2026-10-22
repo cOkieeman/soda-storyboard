@@ -302,7 +302,7 @@ def test_caption_language_and_explicit_custom_override() -> None:
     panel = Panel("p", 1, RectShape(600, 20, 400, 500), character_ids=["girl"])
     page = Page(panels=[panel])
     chinese = compile_page(page, {"girl": character})["items"][0]["caption"]
-    assert chinese.startswith("中景，平视")  # noqa: RUF001 -- compiled Chinese punctuation
+    assert chinese.startswith("右上方格：中景，平视。")  # noqa: RUF001 -- compiled Chinese punctuation
     assert "黑发" in chinese
     assert "20-year-old" in chinese
     assert "short black hair" not in chinese

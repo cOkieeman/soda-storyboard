@@ -113,7 +113,7 @@ soda-storyboard edit my-story --stop --json
 soda-storyboard translate my-story/pages/page-01.json --todo --json
 ```
 
-清单非空时，由当前插件 AI 翻译每格 `caption_zh`，遵守项目 `glossary`（如“猫胡子”译为 `cat whiskers`），角色已有 `appearances_en` 直接使用。每格写成完整的 MOSS 英文画面描述，不加 `Panel N`、格号、标签或台词原文；使用清单中的 `pose_templates_en`，保持人物姿势与朝向，先人物后场景，不自行消除冲突或改写中文剧情。若清单显示描述与姿势冲突，先提醒用户确认。译文保存为：
+清单非空时，由当前插件 AI 翻译每格 `caption_zh`，遵守项目 `glossary`（如“猫胡子”译为 `cat whiskers`），角色已有 `appearances_en` 直接使用。每格写成完整的 MOSS 英文画面描述，不加 `Panel N`、格号、标签或台词原文；`position_en` 仅供核对，不写进译文，编译器自动按几何添加方位和形状。镜头写成 `Medium shot, eye-level. ...`，不要把景别和角度拆成两句。特写及大特写不补写全身姿势，只保留清单给出的朝向和头部动作；使用清单中的 `pose_templates_en`，保持人物姿势与朝向，先人物后场景，不自行消除冲突或改写中文剧情。若清单显示描述与姿势冲突，先提醒用户确认。译文保存为：
 
 ```json
 {"translations": [{"panel_id": "p1", "source_hash": "照抄 todo 中的哈希", "text": "Full shot, eye-level, a girl lying on one side facing left, reading by the window."}]}

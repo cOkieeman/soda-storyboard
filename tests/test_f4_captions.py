@@ -62,7 +62,8 @@ def test_translation_fresh_stale_missing_and_manual_override() -> None:
     )
     assert result["applied"] == ["p"]
     assert (
-        compile_page(page, characters)["items"][0]["caption"] == "A girl lying beside a book, cat whiskers."
+        compile_page(page, characters)["items"][0]["caption"]
+        == "Top-left square panel: Medium shot, eye-level. A girl lying beside a book, cat whiskers."
     )
     assert translation_todo(page, characters, {})["panels"] == []
     panel.description = "她在窗边读书"

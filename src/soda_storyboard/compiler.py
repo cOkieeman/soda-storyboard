@@ -225,7 +225,11 @@ def _figure_items(
         bbox = _integer_bbox({"type": "rect", "x": x, "y": y, "w": right - x, "h": bottom - y}, page)
         if bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
             continue
-        item = {"label": "character", "caption": _figure_caption(figure, characters, language), "bbox": bbox}
+        item = {
+            "label": "character",
+            "caption": _figure_caption(figure, characters, language, panel.shot),
+            "bbox": bbox,
+        }
         if with_ids:
             item.update(panel_id=panel.id, character_id=figure.character_id, figure_index=index)
         items.append(item)
@@ -315,8 +319,6 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
     )
     for panel in sorted(page.panels, key=lambda panel: panel.order):
         object_caption = panel_caption(panel, page, character_map, caption_language)
-        if slant_mode == "hint" and panel.shape_type == "quad":
-            object_caption += ", slanted panel"
         item = {
             "label": "object",
             "caption": object_caption,

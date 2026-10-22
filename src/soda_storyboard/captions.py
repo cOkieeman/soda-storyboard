@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from .figure_semantics import figure_description
 from .figures import panel_figures
 from .moss_roundtrip import entity_hash
+from .panel_positions import panel_positions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -91,9 +92,14 @@ def character_caption(identifier: str, characters: Mapping[str, Character], lang
     return clean_caption(parts, language).rstrip("。.")
 
 
-def figure_caption(figure: Figure, characters: Mapping[str, Character], language: str) -> str:
+def figure_caption(
+    figure: Figure, characters: Mapping[str, Character], language: str, shot: str | None = None
+) -> str:
     return clean_caption(
-        [character_caption(figure.character_id, characters, language), figure_description(figure, language)],
+        [
+            character_caption(figure.character_id, characters, language),
+            figure_description(figure, language, head_only=shot in {"close_up", "extreme_close_up"}),
+        ],
         language,
     )
 
@@ -110,7 +116,7 @@ def structured_caption(
     index = language == "en"
     figures = panel_figures(panel, page)
     figure_ids = {figure.character_id for figure in figures}
-    details = [figure_caption(figure, characters, language) for figure in figures]
+    details = [figure_caption(figure, characters, language, panel.shot) for figure in figures]
     details.extend(
         character_caption(identifier, characters, language)
         for identifier in dict.fromkeys(panel.character_ids)
@@ -153,6 +159,38 @@ def translation_state(panel: Panel, page: Page, characters: Mapping[str, Charact
     return "fresh" if cached.get("source_hash") == source_hash(panel, page, characters) else "stale"
 
 
+def format_scene_caption(panel: Panel, page: Page, content: str, language: str) -> str:
+    """Add geometry and a single camera sentence without changing the cached source."""
+    index = language == "en"
+    shot = SHOTS.get(panel.shot, (panel.shot, panel.shot))[index]
+    angle = ANGLES.get(panel.angle, (panel.angle, panel.angle))[index]
+    body = clean_caption([content], language)
+    if language == "en":
+        # Accept older AI punctuation and position prefixes, only at the beginning.
+        body = re.sub(
+            r"^(?:top|upper|middle|lower|bottom)[^:.]*?\bpanel\s*[:.,]\s*", "", body, flags=re.IGNORECASE
+        )
+        shot_pattern = re.escape(shot).replace(r"\-", "[- ]")
+        angle_pattern = re.escape(angle).replace(r"\-", "[- ]")
+        if panel.angle == "eye":
+            angle_pattern = r"eye[- ]level(?: view)?"
+        header_token = (
+            rf"^(?:{shot_pattern}(?: at {angle_pattern})?|(?:at )?{angle_pattern})(?:\s*[,.;:]\s*|$)"
+        )
+        for _ in range(2):
+            body = re.sub(header_token, "", body, count=1, flags=re.IGNORECASE)
+        camera = f"{shot[:1].upper() + shot[1:]}, {angle}."
+        body = clean_caption([body], language)
+    else:
+        for token in (shot, angle):
+            body = re.sub(rf"^{re.escape(token)}[，。,:：\s]*", "", body, count=1)
+        camera = f"{shot}，{angle}。"
+        body = clean_caption([body], language)
+    position = panel_positions(page, language).get(panel.id)
+    prefix = f"{position}{': ' if index else '：'}" if position else ""
+    return prefix + camera + (" " if index and body else "") + body
+
+
 def panel_caption(
     panel: Panel, page: Page, characters: Mapping[str, Character], language: str | None = None
 ) -> str:
@@ -165,8 +203,8 @@ def panel_caption(
         return preserved
     language = language or page.caption_language or "en"
     if language == "en" and translation_state(panel, page, characters) == "fresh":
-        return clean_caption([panel.caption_auto_en["text"]], "en")
-    return structured_caption(panel, page, characters)
+        return format_scene_caption(panel, page, panel.caption_auto_en["text"], "en")
+    return format_scene_caption(panel, page, structured_caption(panel, page, characters), "zh")
 
 
 def preserved_caption(panel: Panel, page: Page) -> str | None:
@@ -201,6 +239,13 @@ def caption_notices(panel: Panel, page: Page, characters: Mapping[str, Character
         {"code": "pose_description_conflict", "message": message}
         for message in pose_conflicts(panel, characters)
     ]
+    if custom_caption_enabled(panel, page):
+        notices.append(
+            {
+                "code": "custom_caption_position_hint",
+                "message": "建议以方位开头；手动覆盖不会自动添加格子方位。",
+            }
+        )
     if (page.caption_language or "en") == "en" and not custom_caption_enabled(panel, page):
         state = translation_state(panel, page, characters)
         if state not in {"fresh", "preserved"}:

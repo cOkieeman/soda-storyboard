@@ -8,26 +8,12 @@ import math
 import re
 from typing import Any
 
+from .canvas_sizes import infer_dimensions
 from .models import ObjectBox, Page, Panel, RectShape, Text
 from .moss_roundtrip import entity_hash
 from .templates import suggest_layouts
 
 # ruff: noqa: RUF001, PLR2004 -- untrusted heterogeneous document boundary and geometry formats.
-
-COMMON_CANVASES = [
-    (1024, 1536),
-    (1088, 1536),
-    (1024, 1792),
-    (768, 1344),
-    (1024, 1024),
-    (1536, 1536),
-    (1536, 1024),
-    (1536, 1088),
-    (1152, 1536),
-    (1536, 1152),
-    (2048, 3072),
-    (3072, 2048),
-]
 
 
 def _report() -> dict:
@@ -42,37 +28,7 @@ def _size(raw: dict, items: list[dict], report: dict) -> tuple[int, int]:
     height = raw.get("canvas_height", raw.get("height", canvas.get("height")))
     if width and height:
         return int(width), int(height)
-    boxes = [
-        item["bbox"]
-        for item in items
-        if isinstance(item.get("bbox"), list)
-        and len(item["bbox"]) == 4
-        and all(isinstance(v, (int, float)) and math.isfinite(v) for v in item["bbox"])
-    ]
-    fmt = raw.get("bbox_format", "yxyx")
-    centered = raw.get("bbox_coord_space", "abs_centralized") in {"abs_centralized", "centered"}
-    xs, ys = [], []
-    for a, b, c, d in boxes:
-        x1, y1, x2, y2 = (
-            (b, a, d, c) if fmt == "yxyx" else (a, b, a + c, b + d) if fmt == "xywh" else (a, b, c, d)
-        )
-        xs.extend((x1, x2))
-        ys.extend((y1, y2))
-    minimum_w = max((abs(x) for x in xs), default=512) * (2 if centered else 1)
-    minimum_h = max((abs(y) for y in ys), default=768) * (2 if centered else 1)
-    ratio = max(1, minimum_w) / max(1, minimum_h)
-    candidates = [(w, h) for w, h in COMMON_CANVASES if w >= minimum_w and h >= minimum_h]
-    inferred = (
-        min(
-            candidates,
-            key=lambda size: (
-                abs(math.log((size[0] / size[1]) / ratio))
-                + 0.15 * math.log(size[0] * size[1] / max(1, minimum_w * minimum_h))
-            ),
-        )
-        if candidates
-        else (math.ceil(max(16, minimum_w) / 16) * 16, math.ceil(max(16, minimum_h) / 16) * 16)
-    )
+    inferred = infer_dimensions({**raw, "items": items})
     report["guesses"].append(
         f"画布尺寸缺失；按 bbox 范围和纵横比吸附到 {inferred[0]}×{inferred[1]}，请核对原尺寸。"
     )
@@ -104,7 +60,7 @@ def _rect(box: list, width: int, height: int, fmt: str, space: str) -> RectShape
         )
     elif space in {"abs_centralized", "centered"}:
         x, right, y, bottom = x + width / 2, right + width / 2, y + height / 2, bottom + height / 2
-    elif space != "top_left_pixels":
+    elif space not in {"top_left_pixels", "abs", "absolute"}:
         message = f"Unsupported coordinate space: {space}"
         raise ValueError(message)
     if right <= x or bottom <= y:
@@ -117,7 +73,24 @@ def _contains(a: RectShape, b: RectShape) -> bool:
     return a.x <= b.x and a.y <= b.y and a.x + a.w >= b.x + b.w and a.y + a.h >= b.y + b.h
 
 
-def import_moss(raw: dict[str, Any]) -> tuple[Page, dict]:  # noqa: C901, PLR0912, PLR0915 -- classify heterogeneous MOSS entities, then record source order
+def _import_color(raw: dict, default: str, report: dict) -> str:
+    if raw.get("color_mode") in {"color", "monochrome"}:
+        return raw["color_mode"]
+    captions = [str(raw.get("summary", {}))]
+    captions.extend(str(item.get("caption", "")) for item in raw.get("items", []) if isinstance(item, dict))
+    captions.extend(str(raw.get(key, "")) for key in ("panels", "shots", "frames", "description"))
+    if re.search(
+        r"\b(?:colou?red|full[ -]colou?r|colou?rful|digital_painting)\b|彩色|全彩",
+        " ".join(captions),
+        re.IGNORECASE,
+    ):
+        report["guesses"].append("源 summary / caption 表明彩色，color_mode 设为 color。")
+        return "color"
+    report["guesses"].append(f"源文件未声明颜色模式，沿用项目设置 {default}。")
+    return default
+
+
+def import_moss(raw: dict[str, Any], *, default_color_mode: str = "monochrome") -> tuple[Page, dict]:  # noqa: C901, PLR0912, PLR0915 -- classify heterogeneous MOSS entities, then record source order
     report = _report()
     items = raw.get("items", [])
     if not isinstance(items, list):
@@ -130,7 +103,19 @@ def import_moss(raw: dict[str, Any]) -> tuple[Page, dict]:  # noqa: C901, PLR091
     boxes = {}
     for index, item in enumerate(items):
         try:
-            boxes[index] = _rect(item["bbox"], width, height, fmt, space)
+            rect = _rect(item["bbox"], width, height, fmt, space)
+            x, y = max(0, rect.x), max(0, rect.y)
+            right, bottom = min(width, rect.x + rect.w), min(height, rect.y + rect.h)
+            if right <= x or bottom <= y:
+                report["unrecognized_items"].append(
+                    {"index": index, "reason": "bbox is outside the display canvas"}
+                )
+                continue
+            boxes[index] = RectShape(x, y, right - x, bottom - y)
+            if boxes[index] != rect:
+                report["guesses"].append(
+                    f"条目 {index + 1} 超出推断画布，显示框裁到画布内，原 bbox 仍无损保留。"
+                )
         except (KeyError, ValueError, TypeError) as exc:
             report["unrecognized_items"].append({"index": index, "reason": str(exc)})
     objects = [
@@ -164,6 +149,7 @@ def import_moss(raw: dict[str, Any]) -> tuple[Page, dict]:  # noqa: C901, PLR091
         canvas_height=height,
         panel_gap=0,
         description=str(raw.get("summary", {}).get("caption", "")),
+        color_mode=_import_color(raw, default_color_mode, report),
     )
     entries = []
     for index, item in enumerate(items):
@@ -180,9 +166,13 @@ def import_moss(raw: dict[str, Any]) -> tuple[Page, dict]:  # noqa: C901, PLR091
                 page.panels.append(entity)
                 kind = "panel"
             elif item.get("label") == "text":
-                direction = (
-                    "horizontal" if re.search(r"horizontal|横排", caption, re.IGNORECASE) else "vertical"
-                )
+                direction = "vertical" if rect.h > rect.w * 1.5 else "horizontal"
+                if re.search(r"horizontal|横排", caption, re.IGNORECASE):
+                    direction = "horizontal"
+                elif re.search(r"vertical|竖排|竖写", caption, re.IGNORECASE):
+                    direction = "vertical"
+                else:
+                    report["guesses"].append(f"文字条目 {index + 1} 未写方向；按框比例推断为 {direction}。")
                 text_kind = (
                     "narration"
                     if re.search(r"narration|旁白", caption, re.IGNORECASE)
@@ -285,7 +275,9 @@ def _markdown(source: str) -> list[dict]:
     return rows
 
 
-def import_storyboard(source: str | dict | list, *, page_id: str | None = None) -> tuple[Page, dict]:
+def import_storyboard(  # noqa: C901 -- heterogeneous source formats with explicit project inheritance
+    source: str | dict | list, *, page_id: str | None = None, default_color_mode: str = "monochrome"
+) -> tuple[Page, dict]:
     if isinstance(source, str):
         content = re.sub(r"^```(?:json)?\s*|\s*```$", "", source.strip(), flags=re.IGNORECASE)
         try:
@@ -304,12 +296,15 @@ def import_storyboard(source: str | dict | list, *, page_id: str | None = None) 
     if "page" in source and isinstance(source["page"], dict):
         source = source["page"]
     if "items" in source:
-        page, report = import_moss(source)
+        page, report = import_moss(source, default_color_mode=default_color_mode)
     elif source.get("format") == "soda-storyboard-page-v1":
         page, report = Page.from_dict(source), _report()
         report.update(canvas=[page.width, page.height], panel_count=len(page.panels))
+        if "color_mode" not in source:
+            page.color_mode = _import_color(source, default_color_mode, report)
     else:
         page, report = _loose_page(source)
+        page.color_mode = _import_color(source, default_color_mode, report)
     if page_id:
         page.page_id = page_id
     return page, report

@@ -826,3 +826,28 @@ def test_caption_preview_reports_fresh_stale_missing_and_pose_conflict(client: C
     first.pop("caption_auto_en")
     info = client.call("POST", endpoint, {"page": raw})[2]["panels"][0]
     assert info["translation_status"] == "missing"
+
+
+def test_project_listing_ignores_sidecar_and_invalid_id_files(client: Client) -> None:
+    for name in ("pudding.cut.json", "pudding.map.json", "invalid.id.json"):
+        (client.root / "pages" / name).write_text("not a page or even valid JSON", encoding="utf-8")
+    status, _, body = client.call("GET", "/api/project")
+    assert status == 200
+    assert [page["id"] for page in body["pages"]] == ["pudding"]
+    assert client.call("GET", PAGE_URL)[0] == 200
+
+
+def test_external_import_inherits_project_color_and_infers_horizontal_text(client: Client) -> None:
+    source = {
+        "canvas_width": 1024,
+        "canvas_height": 1536,
+        "items": [
+            {"label": "text", "caption": "nickname", "text": "清月如故", "bbox": [-737, -430, -697, -272]}
+        ],
+    }
+    status, _, body = client.call("POST", "/api/import", {"source": source, "page_id": "live"})
+    assert status == 200
+    assert body["page"]["color_mode"] == "color"
+    assert body["page"]["texts"][0]["direction"] == "horizontal"
+    assert client.call("POST", "/api/pages", body["page"])[0] == 201
+    assert client.call("POST", "/api/pages/live/compile", {})[2]["moss"]["items"] == source["items"]

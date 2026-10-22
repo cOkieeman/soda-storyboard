@@ -108,7 +108,10 @@ def test_ab_translation_file_rejects_stale_hash_without_changing_source(tmp_path
     output = tmp_path / "ab"
     arguments = [str(path), "--translations", str(translations), "--output-dir", str(output)]
     assert entry["main"](arguments) == 0
-    assert read_json(output / "p.en.moss.json")["items"][0]["caption"] == "A book by the window."
+    assert (
+        read_json(output / "p.en.moss.json")["items"][0]["caption"]
+        == "Top-left square panel: Medium shot, eye-level. A book by the window."
+    )
     assert "窗边的书" in read_json(output / "p.zh.moss.json")["items"][0]["caption"]
     assert path.read_bytes() == original
     stale = read_json(translations)

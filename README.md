@@ -91,9 +91,9 @@ CLI 输出 UTF-8，也支持 `python -m soda_storyboard`。文件接口与网页
 
 每个 bbox 的顺序是 `[y_min, x_min, y_max, x_max]`。输入使用左上角原点；编译时减去画布中心 `(W/2, H/2)`，因此非方形画布也能保持正确的 x/y 顺序。
 
-编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。caption 按“景别和角度 → 人物外观、姿势、朝向 → 场景 → 道具和氛围”整理，移除格号前缀，去重名字、服装和触发词，统一标点。人物姿势和场景描述冲突时，校验与检查器给出提醒，不自动改剧情。每个人物另编译为 `label: "character"` 条目；有 `editor` 数据时，bbox 取草稿骨架的外接框，包含关节、位置、大小、镜像和出框设置，局部换人遮罩共用该几何。
+编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。caption 以几何计算的方位和形状开头（如 `Top-right horizontal panel:` / `右上横格：`），再按“景别和角度 → 人物外观、姿势、朝向 → 场景 → 道具和氛围”整理，移除格号前缀，去重名字、服装和触发词，统一标点。人物姿势和场景描述冲突时，校验与检查器给出提醒，不自动改剧情。每个人物另编译为 `label: "character"` 条目；有 `editor` 数据时，bbox 取草稿骨架的外接框，包含关节、位置、大小、镜像和出框设置，局部换人遮罩共用该几何。
 
-中文编辑，默认英文出图：项目 `caption_language` 默认 `en`，也可选 `zh`。每格 `caption_auto_en` 保存 `text`、中文来源 `source_hash` 和 `translated_at`。新鲜译文用于场景 caption，人物使用英文姿势模板及已有 `appearance_en`；缺失或过期时该格退回整理后的中文并警告。文字条目的台词和旁白始终保留原文。编辑器预览显示实际语言、译文状态和冲突提醒，修改中文后立即标记过期。
+中文编辑，默认英文出图：项目 `caption_language` 默认 `en`，也可选 `zh`。每格 `caption_auto_en` 保存 `text`、中文来源 `source_hash` 和 `translated_at`。新鲜译文用于场景 caption，人物使用英文姿势模板及已有 `appearance_en`；缺失或过期时该格退回整理后的中文并警告。文字条目的台词和旁白始终保留原文。编辑器预览显示实际语言、译文状态和冲突提醒，修改中文后立即标记过期。方位不参与 `source_hash`，只移动格子不会过期；手动覆盖保留原文并提示建议以方位开头。镜头合并成 `<方位>: <景别>, <角度>. <人物及场景>.`；特写和大特写不自动追加全身姿势。
 
 翻译由使用插件的 AI 完成，核心库不调用服务。可配置项目 `glossary`（如 `{"猫胡子": "cat whiskers"}`）：
 
@@ -102,6 +102,8 @@ soda-storyboard translate my-story/pages/page-01.json --todo --json
 # AI 根据清单、英文外观、姿势模板与术语表生成 translations.json
 soda-storyboard translate my-story/pages/page-01.json --apply translations.json --json
 ```
+
+`--todo` 额外提供 `position_en` 供核对方位，AI 不将它写入译文；编译器根据当前几何自动拼接。格式变化本身不改变中文语义哈希，旧英文镜头前缀可自动规范；特写姿势省略改变了源语义时会正常要求重译。
 
 译文文件格式为 `{"translations": [{"panel_id": "p1", "source_hash": "清单中的哈希", "text": "English visual description."}]}`；哈希不符的格子拒绝写入。旧文件无需升级，缺少缓存时仍可编译中文。旧 `caption_en` 保留，只有 `use_custom_caption: true` 或页面 `legacy_caption_en: true` 才启用，手动覆盖优先级最高。
 
@@ -113,6 +115,8 @@ uv run python scripts/ab_caption_lang.py my-story/pages/page-01.json --translati
 
 输出 `page-01.zh.moss.json` 和 `page-01.en.moss.json`。未提供新鲜译文的英文分支会警告并回退中文；兼容 `--english-page <翻译副本>`。
 
+stdout 编译的附属文件保存为 `pages/<id>/<id>.cut.json` 和 `<id>.map.json`；显式 `--output` 继续保存在输出 JSON 旁。编辑器忽略 `pages/` 中非法页面 id 和 `.cut.json`、`.map.json` 等附属文件。
+
 ### 外来分镜与自由画布
 
 ```powershell
@@ -120,7 +124,7 @@ soda-storyboard import external.json --project my-story --page-id imported --jso
 soda-storyboard layout extract storyboard.webp --mode color --preview overlay.png --json
 ```
 
-`import_moss` 返回分镜页和理解报告，报告列出尺寸推断、格子数、未知条目和猜测。支持 MOSS、frames / shots / panels、prompt / description、dialogue / lines、xyxy / xywh / yxyx、像素及 0–1 / 0–1000 坐标，还有 Markdown 表格或列表。坐标不明确时应核对理解报告。编辑器导入弹窗共用 Python 导入器。缺少尺寸的 MOSS 按坐标范围推断并吸附常用画布；character 仅保留人物框和描述，不编造关节或角色身份。
+`import_moss` 返回分镜页和理解报告，报告列出尺寸推断、格子数、未知条目和猜测。支持 MOSS、frames / shots / panels、prompt / description、dialogue / lines、xyxy / xywh / yxyx、像素及 0–1 / 0–1000 坐标，还有 Markdown 表格或列表。坐标不明确时应核对理解报告。编辑器导入弹窗共用 Python 导入器。缺少尺寸的 MOSS 按坐标范围的纵横比吸附常用画布（与节点一致）；核心库公开 `from soda_storyboard import CANVAS_PRESETS, infer_dimensions`。表为 1024×1536、1536×1024、1024×1024、768×1344、1344×768，按纵横比对数误差选最近项；归一化或空布局回退首项。显示框越界时裁到画布内，原 bbox 无损保留。未注明方向的文字按框高大于宽的 1.5 倍判竖排，否则横排；明确方向优先。导入发现 colored / full color / 彩色等提示则设为 color，否则继承项目颜色模式。character 仅保留人物框和描述，不编造关节或角色身份。
 
 `canvas_mode: "single"` 支持无格子的自由画布；`objects` 保存矩形 `rect`、`caption`、可空 `panel_id` 和 `label`（object / character）。物件框可新建、选择、移动、缩放和编辑描述。导入源条目及未知字段保存在 `moss_import`，未编辑条目按原顺序原样编译，只有编辑过的元素重新输出。
 
@@ -206,11 +210,11 @@ uv run soda-storyboard compile examples/slanted/pages/platform-dash.json --slant
 
 | 模式 | MOSS bbox | 提示词 | 旁路文件 |
 | --- | --- | --- | --- |
-| `cut`（默认） | 四条边中点界定的中线矩形，相邻格互不重叠 | 不自动添加斜切描述 | `<输出名>.cut.json` |
-| `hint` | quad 内的最大面积轴对齐矩形，整数坐标向内取整 | summary 加斜分割线，object 加 `slanted panel` | 无裁剪文件 |
-| `rect` | 原 quad 的外接矩形 | 不自动添加斜切描述 | 无裁剪文件，仅供调试，bbox 可能重叠 |
+| `cut`（默认） | 四条边中点界定的中线矩形，相邻格互不重叠 | 方位短语标注原 quad 的斜格形状 | `<输出名>.cut.json` |
+| `hint` | quad 内的最大面积轴对齐矩形，整数坐标向内取整 | summary 加斜分割线，object 方位短语标注斜格 | 无裁剪文件 |
+| `rect` | 原 quad 的外接矩形 | 方位短语标注原 quad 的斜格形状 | 无裁剪文件，仅供调试，bbox 可能重叠 |
 
-`cut` 的矩形连同白色格间距覆盖整行或整列；`panel_gap=0` 时直接拼接。MOSS 先按普通矩形生成，quad 由生产流程的 compose 裁剪。`.cut.json` 记录画布、坐标系、每格的 `panel_id`、`order`、原 `shape` / `quad`、`generation_rect`（左上角像素 `x,y,x2,y2`）和与 MOSS 相同的中心原点整数 `bbox`。例如输出 `page.moss.json` 对应 `page.moss.cut.json`。不指定 `--output` 时，旁路文件写在输入页旁，如 `page.cut.json`。没有 quad 的页不生成裁剪文件。
+`cut` 的矩形连同白色格间距覆盖整行或整列；`panel_gap=0` 时直接拼接。MOSS 使用矩形生成 bbox，caption 的方位短语保留原 quad 斜格形状，quad 由生产流程的 compose 裁剪。`.cut.json` 记录画布、坐标系、每格的 `panel_id`、`order`、原 `shape` / `quad`、`generation_rect`（左上角像素 `x,y,x2,y2`）和与 MOSS 相同的中心原点整数 `bbox`。例如输出 `page.moss.json` 对应 `page.moss.cut.json`。不指定 `--output` 时，旁路文件写入输入页同名的生产子目录，如 `pages/page/page.cut.json`。没有 quad 的页不生成裁剪文件。
 
 `--with-ids` 保留原来的 item 辅助 ID，同时写出同名 `.map.json`，列出每格、独立文字与出格图层。MOSS JSON 不包含 overlays 顶层字段，moss 模式会输出 character item。库函数 `compile_geometry_map(page, slant_mode="cut")` 可获得同样的映射数据。
 

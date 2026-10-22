@@ -32,7 +32,7 @@ def test_default_layouts_cover_four_candidates_and_keep_reading_order() -> None:
 def test_compile_uses_proven_caption_contract() -> None:
     page = Page(panels=[Panel("p1", 1, {"x": 0, "y": 0, "w": 512, "h": 300})])
     compiled = compile_page(page)
-    assert compiled["items"][0]["caption"] == "中景，平视。"
+    assert compiled["items"][0]["caption"] == "左上横格：中景，平视。"
     assert compile_page(page, caption_language="en")["items"][0]["caption"] == compiled["items"][0]["caption"]
     assert "no text, no speech bubbles" in compiled["summary"]["caption"]
     assert set(compiled["items"][0]) == {"label", "caption", "bbox"}

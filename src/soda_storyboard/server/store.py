@@ -59,6 +59,10 @@ class Store:
     def pages(self) -> list[dict]:
         result = []
         for path in sorted(self.path("pages").glob("*.json")):
+            try:
+                identifier(path.stem)
+            except APIError:
+                continue
             value, version = snapshot(self.page_path(path.stem))
             result.append(
                 {

@@ -449,7 +449,7 @@ def command_compile(args: argparse.Namespace) -> int:
             print(notice["message"], file=sys.stderr)
     if args.output:
         write_json(args.output, compiled)
-    target = Path(args.output) if args.output else path
+    target = Path(args.output) if args.output else path.parent / path.stem / path.name
     if args.slant_mode == "cut" and any(panel.shape_type == "quad" for panel in page.panels):
         cut_map = compile_geometry_map(page, slant_mode="cut")
         write_json(
@@ -488,7 +488,13 @@ def command_translate(args: argparse.Namespace) -> int:
 
 
 def command_import(args: argparse.Namespace) -> int:
-    page, report = import_storyboard(Path(args.file).read_text(encoding="utf-8-sig"), page_id=args.page_id)
+    page, report = import_storyboard(
+        Path(args.file).read_text(encoding="utf-8-sig"),
+        page_id=args.page_id,
+        default_color_mode=load_project(Path(args.project) / "project.json").color_mode
+        if args.project and (Path(args.project) / "project.json").is_file()
+        else "monochrome",
+    )
     result = {"page": page.to_dict(), "report": report}
     if args.project:
         from .server.common import identifier  # noqa: PLC0415 -- reuse path-safe ids at the write boundary

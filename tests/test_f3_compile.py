@@ -133,7 +133,7 @@ def test_offline_ab_script_preserves_sources_and_uses_both_templates(tmp_path: P
     en = read_json(output / "p.en.moss.json")
     assert "女孩望着窗外" in zh["items"][0]["caption"]
     assert "A girl looks out of the window" in en["items"][0]["caption"]
-    assert "medium shot" in en["items"][0]["caption"]
+    assert "Medium shot, eye-level." in en["items"][0]["caption"]
     assert "black hair" in en["items"][0]["caption"]
     assert "MANUAL OVERRIDE" not in str(zh) + str(en)
     assert [item["bbox"] for item in zh["items"]] == [item["bbox"] for item in en["items"]]

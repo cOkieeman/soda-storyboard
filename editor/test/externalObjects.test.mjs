@@ -6,6 +6,7 @@ import { useEditorStore } from "../src/lib/store.ts";
 import { sodaPageToProjectPage, projectPageToSodaPage } from "../src/lib/project.ts";
 import { deletePageSelections, selectionBounds } from "../src/lib/batchEditing.ts";
 import PageSidebar from "../src/components/PageSidebar.tsx";
+import { captionSourceKey } from "../src/components/PanelCaptionPreview.tsx";
 import InspectorPanel from "../src/components/InspectorPanel.tsx";
 import { importExternalStoryboard } from "../src/lib/api.ts";
 
@@ -45,6 +46,8 @@ test("Object inspector has description/geometry and free-canvas instructions con
     useEditorStore.setState({ selection: null, selections: [] });
     const html = render();
     assert.match(html, /单画布/);
+    assert.match(html, /!justify-start overflow-hidden/);
+    assert.match(html, /min-w-0 truncate text-left/);
     assert.doesNotMatch(html, /先建立第一个格子/);
     const sidebar = renderToStaticMarkup(React.createElement(PageSidebar));
     assert.match(sidebar, /A paper lantern/);
@@ -72,4 +75,27 @@ test("Untouched imported text does not acquire an explicit null tail during edit
   const canvas = sodaPageToProjectPage(page);
   const saved = projectPageToSodaPage(canvas, page, new Set(), new Set());
   assert.equal(Object.hasOwn(JSON.parse(JSON.stringify(saved)).texts[0], "tail_tip"), false);
+});
+
+
+test("Horizontal external names retain character order across editing, saving and reload", () => {
+  const page = source();
+  page.texts = ["清月如故", "琴声晚：姐姐好美"].map((text,index) => ({id:`t${index}`,text,kind:"dialogue",direction:"horizontal",bubble:"none",panel_id:null,speaker_id:null,bbox:{type:"rect",x:20,y:50+index*100,w:400,h:60}}));
+  let canvas=sodaPageToProjectPage(page);
+  assert.deepEqual(canvas.bubbles.map(b=>b.text),["清月如故","琴声晚：姐姐好美"]);
+  canvas.bubbles[1].text="琴声晚：姐姐好美！";
+  const saved=projectPageToSodaPage(canvas,page,new Set(),new Set());
+  const reloaded=sodaPageToProjectPage(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(reloaded.bubbles.map(b=>b.text),["清月如故","琴声晚：姐姐好美！"]);
+  assert.ok(reloaded.bubbles.every(b=>b.direction==="horizontal"));
+});
+
+
+test("Caption freshness ignores geometric panel and figure movement", () => {
+  const panel={id:"p",order:1,shot:"medium",angle:"eye",description:"女孩读书",character_ids:["girl"],shape:{type:"rect",x:20,y:30,w:400,h:300},figures:[{character_id:"girl",pose:"sit",facing:"left",bbox:{x:20,y:30,w:100,h:200},editor:{x:100,y:200,size:120,view:"side",flip:false,joints:{head:[0,0]}}}]};
+  const moved=JSON.parse(JSON.stringify(panel));
+  moved.shape.x+=500; moved.figures[0].bbox.x+=500; moved.figures[0].editor.x+=500;
+  assert.equal(captionSourceKey(panel),captionSourceKey(moved));
+  moved.description="女孩合上书";
+  assert.notEqual(captionSourceKey(panel),captionSourceKey(moved));
 });

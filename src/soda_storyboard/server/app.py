@@ -246,7 +246,11 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         elif path == "/api/import" and method == "POST":
-            page, report = import_storyboard(body.get("source", ""), page_id=body.get("page_id"))
+            page, report = import_storyboard(
+                body.get("source", ""),
+                page_id=body.get("page_id"),
+                default_color_mode=store.project()["project"].get("color_mode", "monochrome"),
+            )
             self.send(200, {"page": page.to_dict(), "report": report})
         elif path == "/api/project" and method == "GET":
             self.send(200, store.project())

@@ -228,7 +228,7 @@ def _facing_description(figure: Figure, editor: dict | None, language: str) -> s
     }.get(direction, ("", ""))[index]
 
 
-def figure_description(figure: Figure, language: str = "zh") -> str:
+def figure_description(figure: Figure, language: str = "zh", *, head_only: bool = False) -> str:
     """Describe actual presets, projected facing, mirroring and clear edits.
 
     Explicit editor flips are authoritative for left/right facing; they are
@@ -261,6 +261,9 @@ def figure_description(figure: Figure, language: str = "zh") -> str:
                     if dx > 0
                     else ("头部位于左侧", "head toward the left")[index]
                 )
+    if head_only:
+        text = ("一只手托着下巴", "one hand on the chin")[index] if "下巴" in text or "chin" in text else ""
+        details = [detail for detail in details if "头部" in detail or "head toward" in detail]
     parts = [text, _facing_description(figure, editor, language), *details]
     if editor is not None and editor["flip"]:
         parts.append(("水平镜像", "horizontally mirrored")[index])
