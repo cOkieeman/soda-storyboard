@@ -1,11 +1,13 @@
 import React, { useMemo } from "react";
-import { AlertCircle, AlertTriangle, ArrowUpRight, Check, ChevronDown, Columns2, Plus, Rows2, Trash2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowUpRight, Check, ChevronDown, Columns2, List, Plus, Rows2, Star, Trash2 } from "lucide-react";
 import { useEditorStore } from "../lib/store";
 import { Figure, ShotType, AngleType, FigurePose, TextKind, BubbleStyle, Selection } from "../types";
 import { getFigureId } from "../lib/figureRig";
 import { applyFigurePoseInPanel, editableFigureEditor, resolvedFigures } from "../lib/figures";
 import FigureInspector from "./FigureInspector";
 import { resolveTextFontSize } from "../lib/lettering";
+import NumberInput from "./ui/NumberInput";
+import BatchInspector from "./BatchInspector";
 
 const SHOT_OPTIONS: { value: ShotType; label: string }[] = [
   { value: "extreme_long", label: "大远景" },
@@ -101,14 +103,15 @@ function InspectorSection({ title, children, open = true }: {
   );
 }
 
-function InspectorSelect<T extends string>({ value, options, onChange }: {
+function InspectorSelect<T extends string>({ value, options, onChange, label }: {
   value: T;
+  label: string;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
   return (
     <span className="relative block min-w-0">
-      <select value={value} onChange={(event) => onChange(event.target.value as T)} className="ui-input w-full appearance-none pr-7">
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value as T)} className="ui-input w-full appearance-none pr-7">
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
       <ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[var(--ink-light)]" aria-hidden="true" />
@@ -126,6 +129,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const characters = useEditorStore((state) => state.characters);
   const characterDetails = useEditorStore((state) => state.characterDetails);
   const selection = useEditorStore((state) => state.selection);
+  const selections = useEditorStore((state) => state.selections);
   const selectItem = useEditorStore((state) => state.selectItem);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
   const validationIssues = useEditorStore((state) => state.validationIssues);
@@ -193,7 +197,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const selectedText = selection?.kind === "text" || selection?.kind === "bubble" ? sodaPage.texts.find((text) => text.id === selection.id) : undefined;
   const selectedOverlay = selection?.kind === "overlay" ? sodaPage.overlays?.find((overlay) => overlay.id === selection.id) : undefined;
   const hasSelection = Boolean(selectedPanel || selectedFigure || selectedText || selectedOverlay);
-  const title = selectedFigure ? "人物" : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
+  const title = selections.length > 1 ? "批量属性" : selectedFigure ? "人物" : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
   const objectId = selectedFigure && selection?.kind === "figure" ? selection.id : selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
   const deleteLabel = `删除${selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
   const errorCount = notices.filter((notice) => notice.severity === "error").length;
@@ -213,6 +217,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
       </div>
 
       <div className="inspector-content min-h-0 flex-1 overflow-y-auto">
+        <div className="flex flex-wrap gap-2 border-b border-[var(--line)] px-5 py-3"><button className="ui-btn ui-btn-sm" onClick={() => window.dispatchEvent(new Event("soda:open-dialogue-editor"))}><List size={14} />整页台词</button><button className="ui-btn ui-btn-sm" onClick={() => window.dispatchEvent(new Event("soda:open-favorites"))}><Star size={14} />收藏样式</button></div>
         {notices.length > 0 ? (
           <details className="validation-summary group" data-severity={errorCount ? "error" : "warning"} open={errorCount > 0}>
             <summary className="flex cursor-pointer select-none items-center gap-2 text-[12px] font-medium">
@@ -226,7 +231,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
           </details>
         ) : <div className="validation-summary flex items-center gap-2 text-[12px] text-[var(--ink-light)]" data-severity="success"><Check size={14} aria-hidden="true" />本页检查通过</div>}
 
-        {selectedFigure && figurePanel && selection?.kind === "figure" ? (
+        {selections.length > 1 ? <BatchInspector /> : selectedFigure && figurePanel && selection?.kind === "figure" ? (
           <FigureInspector figure={selectedFigure} figureId={selection.id} panel={figurePanel} onSelectObject={selectObject} />
         ) : selectedPanel ? (
           <div key={selectedPanel.id}>
@@ -248,8 +253,8 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
                   <div className="flex items-center justify-between"><span className="text-[12px] font-medium">人物 <span className="font-mono">{index + 1}</span></span><button type="button" onClick={() => removeFigureFromPanel(selectedPanel.id, index)} className="text-[12px] text-[var(--error)] hover:underline">移除</button></div>
                   <button type="button" className="ui-btn ui-btn-sm" onClick={() => selectObject({ kind: "figure", id: getFigureId(figure, index), panelId: selectedPanel.id })}>编辑这个人物<ArrowUpRight size={13} aria-hidden="true" /></button>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="min-w-0"><span className="ui-label">角色</span><InspectorSelect value={figure.character_id} options={characters.map((character) => ({ value: character.id, label: character.display_name }))} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { character_id: value })} /></label>
-                    <label className="min-w-0"><span className="ui-label">姿势</span><InspectorSelect value={figure.pose} options={POSE_OPTIONS} onChange={(value) => {
+                    <label className="min-w-0"><span className="ui-label">角色</span><InspectorSelect label="角色" value={figure.character_id} options={characters.map((character) => ({ value: character.id, label: character.display_name }))} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { character_id: value })} /></label>
+                    <label className="min-w-0"><span className="ui-label">姿势</span><InspectorSelect label="姿势" value={figure.pose} options={POSE_OPTIONS} onChange={(value) => {
                       const state = useEditorStore.getState();
                       const panel = state.project.pages[0]?.panels.find(item => item.id === selectedPanel.id);
                       const sketch = state.sketchGeometry?.panels.find(item => item.panel_id === selectedPanel.id)?.figures[index];
@@ -257,16 +262,12 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
                     }} /></label>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    <label className="min-w-0"><span className="ui-label">位置</span><input type="text" value={String(figure.position)} onChange={(event) => {
-                      const value = event.target.value;
-                      const number = parseFloat(value);
-                      const position = !isNaN(number) && number >= 0 && number <= 1 ? number : value as Figure["position"];
-                      const relative = typeof position === "number" ? position : ({ left: 0.23, center: 0.5, right: 0.77 } as Record<string, number>)[position];
+                    <label className="min-w-0"><span className="ui-label">水平比例</span><NumberInput aria-label="人物水平比例" value={typeof figure.position === "number" ? figure.position : ({ left: 0.23, center: 0.5, right: 0.77 })[figure.position]} min={0} max={1} step={0.01} onCommit={relative => {
                       const width = selectedPanel.shape.type === "rect" ? selectedPanel.shape.w : Math.max(...selectedPanel.shape.points.map(([x]) => x)) - Math.min(...selectedPanel.shape.points.map(([x]) => x));
-                      updateFigureInPanel(selectedPanel.id, index, { position, ...(figure.editor && relative !== undefined ? { editor: { ...figure.editor, x: width * relative } } : {}) });
-                    }} placeholder="center / 0.5" className="ui-input" /></label>
-                    <label className="min-w-0"><span className="ui-label">朝向</span><InspectorSelect value={figure.facing} options={FACING_OPTIONS} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { facing: value as Figure["facing"], ...(figure.editor ? { editor: { ...figure.editor, flip: value === "left" ? true : value === "right" ? false : figure.editor.flip } } : {}) })} /></label>
-                    <label className="min-w-0"><span className="ui-label">景框</span><InspectorSelect value={figure.framing || ""} options={FRAMING_OPTIONS} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { framing: value ? value as Figure["framing"] : null })} /></label>
+                      updateFigureInPanel(selectedPanel.id, index, { position: relative, ...(figure.editor ? { editor: { ...figure.editor, x: width * relative } } : {}) });
+                    }} /></label>
+                    <label className="min-w-0"><span className="ui-label">朝向</span><InspectorSelect label="朝向" value={figure.facing} options={FACING_OPTIONS} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { facing: value as Figure["facing"], ...(figure.editor ? { editor: { ...figure.editor, flip: value === "left" ? true : value === "right" ? false : figure.editor.flip } } : {}) })} /></label>
+                    <label className="min-w-0"><span className="ui-label">景框</span><InspectorSelect label="景框" value={figure.framing || ""} options={FRAMING_OPTIONS} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { framing: value ? value as Figure["framing"] : null })} /></label>
                   </div>
                 </div>
               ))}
@@ -289,10 +290,10 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
               }}><Plus size={14} aria-hidden="true" />添加台词</button>
             </InspectorSection>
             <InspectorSection title="镜头与阅读顺序" open={false}>
-              <label className="block"><span className="ui-label">阅读顺序</span><input type="number" min={1} value={selectedPanel.order} onChange={(event) => updateSodaPanel(selectedPanel.id, { order: Number(event.target.value) || 1 })} className="ui-input" /></label>
+              <label className="block"><span className="ui-label">阅读顺序</span><NumberInput aria-label="阅读顺序" min={1} integer value={selectedPanel.order} onCommit={value => updateSodaPanel(selectedPanel.id, { order: value })} /></label>
               <div className="grid grid-cols-2 gap-3">
-                <label className="min-w-0"><span className="ui-label">景别</span><InspectorSelect value={selectedPanel.shot} options={SHOT_OPTIONS} onChange={(value) => updateSodaPanel(selectedPanel.id, { shot: value })} /></label>
-                <label className="min-w-0"><span className="ui-label">视角</span><InspectorSelect value={selectedPanel.angle} options={ANGLE_OPTIONS} onChange={(value) => updateSodaPanel(selectedPanel.id, { angle: value })} /></label>
+                <label className="min-w-0"><span className="ui-label">景别</span><InspectorSelect label="景别" value={selectedPanel.shot} options={SHOT_OPTIONS} onChange={(value) => updateSodaPanel(selectedPanel.id, { shot: value })} /></label>
+                <label className="min-w-0"><span className="ui-label">视角</span><InspectorSelect label="视角" value={selectedPanel.angle} options={ANGLE_OPTIONS} onChange={(value) => updateSodaPanel(selectedPanel.id, { angle: value })} /></label>
               </div>
             </InspectorSection>
             <InspectorSection title="英文生成提示词" open={false}><textarea aria-label="英文生成提示词" rows={3} value={selectedPanel.caption_en || ""} onChange={(event) => updateSodaPanel(selectedPanel.id, { caption_en: event.target.value })} placeholder="Top-right panel: inside kitchen…" className="ui-textarea" /></InspectorSection>
@@ -304,19 +305,15 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
           <div key={selectedText.id}>
             {textPanel && <div className="inspection-start inspector-return"><button type="button" className="ui-btn ui-btn-sm" onClick={() => selectObject({ kind: "panel", id: textPanel.id })}>返回格子 {textPanel.order}</button></div>}
             <InspectorSection title="文字内容">
-              <label className="block"><span className="ui-label">类型</span><InspectorSelect value={selectedText.kind} options={KIND_OPTIONS} onChange={(value) => updateSodaText(selectedText.id, { kind: value })} /></label>
-              <label className="block"><span className="ui-label">原文台词</span><textarea rows={4} value={selectedText.text || ""} onChange={(event) => updateSodaText(selectedText.id, { text: event.target.value })} placeholder="输入台词，可换行" className="ui-textarea" /></label>
-              <label className="block"><span className="ui-label">说话人</span><InspectorSelect value={selectedText.speaker_id || ""} options={[{ value: "", label: "无（旁白 / 拟声）" }, ...characters.map((character) => ({ value: character.id, label: character.display_name }))]} onChange={(value) => updateSodaText(selectedText.id, { speaker_id: value || null })} /></label>
+              <label className="block"><span className="ui-label">类型</span><InspectorSelect label="类型" value={selectedText.kind} options={KIND_OPTIONS} onChange={(value) => updateSodaText(selectedText.id, { kind: value })} /></label>
+              <label className="block"><span className="ui-label">原文台词</span><textarea aria-label="原文台词" rows={4} value={selectedText.text || ""} onChange={(event) => updateSodaText(selectedText.id, { text: event.target.value })} placeholder="输入台词，可换行" className="ui-textarea" /></label>
+              <label className="block"><span className="ui-label">说话人</span><InspectorSelect label="说话人" value={selectedText.speaker_id || ""} options={[{ value: "", label: "无（旁白 / 拟声）" }, ...characters.map((character) => ({ value: character.id, label: character.display_name }))]} onChange={(value) => updateSodaText(selectedText.id, { speaker_id: value || null })} /></label>
             </InspectorSection>
             <InspectorSection title="排版与气泡">
-              <label className="block"><span className="ui-label">字号（像素）</span><input type="number" min={8} max={128} step={1} value={resolveTextFontSize(selectedText.font_size, sodaPage.text_font_size, sodaPage.canvas_width)} className="ui-input w-full" onChange={(event) => {
-                if (event.target.value === "") return;
-                const value = Number(event.target.value);
-                if (Number.isFinite(value)) updateSodaText(selectedText.id, { font_size: Math.max(8, Math.min(128, value)) });
-              }} /></label>
+              <label className="block"><span className="ui-label">字号（像素）</span><NumberInput aria-label="字号（像素）" key={selectedText.id} min={8} max={128} value={resolveTextFontSize(selectedText.font_size, sodaPage.text_font_size, sodaPage.canvas_width)} onCommit={value => updateSodaText(selectedText.id, { font_size: value })} /></label>
               <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">放不下时，文字会在框内自动缩小。放大文字框可保留设定的字号。</p>
               <div className="grid grid-cols-2 gap-3">
-                <label className="min-w-0"><span className="ui-label">排列方向</span><InspectorSelect value={selectedText.direction || "vertical"} options={DIRECTION_OPTIONS} onChange={(value) => {
+                <label className="min-w-0"><span className="ui-label">排列方向</span><InspectorSelect label="排列方向" value={selectedText.direction || "vertical"} options={DIRECTION_OPTIONS} onChange={(value) => {
                   const direction = value as "horizontal" | "vertical";
                   const box = selectedText.bbox;
                   let width = box?.w || 100;
@@ -325,7 +322,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
                   else if (direction === "vertical" && width > height * 1.2) { width = Math.max(65, Math.min(130, Math.round(height * 0.9))); height = Math.max(140, Math.min(320, Math.round((box?.w || 100) * 0.7))); }
                   updateSodaText(selectedText.id, { direction, bbox: box ? { ...box, w: width, h: height } : undefined });
                 }} /></label>
-                <label className="min-w-0"><span className="ui-label">气泡样式</span><InspectorSelect value={selectedText.bubble || "speech"} options={BUBBLE_OPTIONS} onChange={(value) => updateSodaText(selectedText.id, { bubble: value })} /></label>
+                <label className="min-w-0"><span className="ui-label">气泡样式</span><InspectorSelect label="气泡样式" value={selectedText.bubble || "speech"} options={BUBBLE_OPTIONS} onChange={(value) => updateSodaText(selectedText.id, { bubble: value })} /></label>
               </div>
               {selectedText.bubble !== "box" && selectedText.bubble !== "none" && <div><span className="ui-label">气泡引线</span><button type="button" aria-pressed={Boolean(selectedText.tail_tip)} onClick={() => updateSodaText(selectedText.id, { tail_tip: selectedText.tail_tip ? null : [Math.round((selectedText.bbox?.w || 100) / 2), Math.round((selectedText.bbox?.h || 200) + 28)] })} className="ui-btn ui-btn-sm w-full justify-start">{selectedText.tail_tip ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}{selectedText.tail_tip ? "已开启引线 · 拖拽画布红点" : "开启气泡引线"}</button></div>}
             </InspectorSection>
@@ -333,7 +330,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
           </div>
         ) : selectedOverlay ? (
           <div key={selectedOverlay.id}>
-            <InspectorSection title="人物角色"><label className="block"><span className="ui-label">角色</span><InspectorSelect value={selectedOverlay.character_id} options={characters.map((character) => ({ value: character.id, label: character.display_name }))} onChange={(value) => updateSodaOverlay(selectedOverlay.id, { character_id: value })} /></label></InspectorSection>
+            <InspectorSection title="人物角色"><label className="block"><span className="ui-label">角色</span><InspectorSelect label="角色" value={selectedOverlay.character_id} options={characters.map((character) => ({ value: character.id, label: character.display_name }))} onChange={(value) => updateSodaOverlay(selectedOverlay.id, { character_id: value })} /></label></InspectorSection>
             <InspectorSection title="出格动作描述"><textarea aria-label="出格动作描述" rows={3} value={selectedOverlay.description} onChange={(event) => updateSodaOverlay(selectedOverlay.id, { description: event.target.value })} className="ui-textarea" /></InspectorSection>
           </div>
         ) : (

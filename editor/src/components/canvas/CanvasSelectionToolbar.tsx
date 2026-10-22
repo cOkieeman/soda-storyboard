@@ -12,7 +12,7 @@ export function CanvasSelectionToolbar({ panel, canvasWidth, zoom }: { panel: Pa
   const setNotice = useEditorStore((state) => state.setNotice);
 
   return (
-    <div className="canvas-selection-toolbar absolute z-30 flex items-center gap-1 border border-[var(--line)] bg-[var(--paper-surface)] p-1 text-[var(--ink)] shadow-lg" style={{ left: Math.max(8, Math.min(canvasWidth * zoom - 196, panel.x * zoom)), top: Math.max(8, panel.y * zoom - 42) }} aria-label="分镜格快捷操作">
+    <div className="canvas-selection-toolbar flex items-center gap-1 text-[var(--ink)]" aria-label="分镜格快捷操作">
       <button type="button" className="canvas-control-button flex h-7 w-7 items-center justify-center" onClick={() => {
         const characterId = characters[0]?.id;
         if (!characterId) { setNotice("请先在角色面板添加角色"); return; }
@@ -28,7 +28,7 @@ export function CanvasSelectionToolbar({ panel, canvasWidth, zoom }: { panel: Pa
 }
 
 export function CanvasTextSelectionToolbar({ bubble, canvasWidth, zoom, onEdit }: { bubble: Bubble; canvasWidth: number; zoom: number; onEdit: () => void }) {
-  return <div className="canvas-selection-toolbar absolute z-30 border border-[var(--line)] bg-[var(--paper-surface)] p-1 text-[var(--ink)] shadow-lg" style={{ left: Math.max(8, Math.min(canvasWidth * zoom - 112, bubble.x * zoom)), top: Math.max(8, bubble.y * zoom - 44) }} aria-label="台词快捷操作">
+  return <div className="canvas-selection-toolbar text-[var(--ink)]" aria-label="台词快捷操作">
     <button type="button" className="canvas-control-button flex min-h-8 items-center gap-2 px-2 text-sm" onClick={onEdit} title="在画布上修改文字，也可双击气泡"><Pencil size={15} />编辑台词</button>
   </div>;
 }

@@ -11,7 +11,8 @@ import { useEditorStore } from "../../lib/store";
 
 type Bounds = { x: number; y: number; width: number; height: number };
 type FigureCommit = (panelId: string, figureId: string, patch: Partial<Figure>) => void;
-type FigureSelect = (panelId: string, figureId: string) => void;
+type FigureSelect = (panelId: string, figureId: string, additive?:boolean) => void;
+type BodyDragProps = { onBodyDragStart?:(event:Konva.KonvaEventObject<DragEvent>,selection:Selection)=>void; onBodyDragMove?:(event:Konva.KonvaEventObject<DragEvent>)=>void; onBodyDragEnd?:(event:Konva.KonvaEventObject<DragEvent>)=>void };
 const ACTIVE_COLOR = "#9a321f";
 const JOINT_LABELS: Record<FigureJointName, string> = {
   head: "头部", neck: "颈部", hip: "髋部", lElbow: "左肘", lHand: "左手", rElbow: "右肘", rHand: "右手",
@@ -49,12 +50,12 @@ function FigurePrimitives({ primitives, color }: { primitives: Primitive[]; colo
     : <Line key={index} points={primitive.points.flat()} closed={primitive.type === "polygon"} stroke={color} strokeWidth={primitive.width || 2.2} fill={primitive.type === "polygon" && primitive.fill ? color : undefined} lineCap="round" lineJoin="round" hitStrokeWidth={14} />)}</>;
 }
 
-function EditableFigure({ panel, figure, index, sketch, selected, editable, zoom, color, controlsRoot, onSelect, onCommit }: {
+function EditableFigure({ panel, figure, index, sketch, selected, editable, zoom, color, controlsRoot, onSelect, onCommit, onBodyDragStart,onBodyDragMove,onBodyDragEnd }: {
   panel: Panel; figure: Figure; index: number; sketch?: SketchFigure; selected: boolean; editable: boolean; zoom: number;
   controlsRoot: Konva.Group | null;
   color: string;
   onSelect: FigureSelect; onCommit: FigureCommit;
-}) {
+}&BodyDragProps) {
   const id = getFigureId(figure, index);
   const baseEditor = useMemo(() => alignedEditor(figure, panel, sketch), [figure, panel, sketch]);
   const [draft, setDraft] = useState<FigureEditor | null>(null);
@@ -71,7 +72,7 @@ function EditableFigure({ panel, figure, index, sketch, selected, editable, zoom
     : figureEditorBounds(editor);
   const handleRadius = Math.max(5, Math.min(11, 5 / zoom));
   const sizeHandle = { x: bounds.x + bounds.width + handleRadius * 1.5, y: bounds.y - handleRadius * 1.5 };
-  const select = (event?: Konva.KonvaEventObject<Event>) => { if (event) event.cancelBubble = true; if (editable) onSelect(panel.id, id); };
+  const select = (event?: Konva.KonvaEventObject<Event>) => { if (event) event.cancelBubble = true; if (editable) onSelect(panel.id, id,Boolean((event?.evt as MouseEvent)?.shiftKey)); };
   const changeDraft = (next: FigureEditor) => { draftRef.current = next; setDraft(next); };
   const commit = (next: FigureEditor) => {
     onCommit(panel.id, id, { editor: next });
@@ -91,16 +92,18 @@ function EditableFigure({ panel, figure, index, sketch, selected, editable, zoom
     name="figure-node"
     x={editor.x} y={editor.y}
     draggable={editable}
-    onMouseDown={select} onTouchStart={select} onClick={select} onTap={select} onDblClick={select} onDblTap={select}
+    onMouseDown={event=>{event.cancelBubble=true;}} onTouchStart={event=>{event.cancelBubble=true;}} onClick={select} onTap={select} onDblClick={select} onDblTap={select}
     onContextMenu={(event) => { event.evt.preventDefault(); select(event); }}
-    onDragStart={(event) => { event.cancelBubble = true; select(); interactionRef.current = { editor }; }}
+    onDragStart={(event) => { event.cancelBubble = true; if(onBodyDragStart) {onBodyDragStart(event,{kind:"figure",panelId:panel.id,id}); return;} select(); interactionRef.current = { editor }; }}
     onDragMove={(event) => {
       event.cancelBubble = true;
+      if(onBodyDragMove){onBodyDragMove(event);return;}
       const original = interactionRef.current?.editor || editor;
       changeDraft({ ...original, x: event.target.x(), y: event.target.y() });
     }}
     onDragEnd={(event) => {
       event.cancelBubble = true;
+      if(onBodyDragEnd){onBodyDragEnd(event);return;}
       commit({ ...(draftRef.current || editor), x: event.target.x(), y: event.target.y() });
     }}
     onMouseEnter={(event) => { const container = event.target.getStage()?.container(); if (container && editable) container.style.cursor = "move"; }}
@@ -108,7 +111,7 @@ function EditableFigure({ panel, figure, index, sketch, selected, editable, zoom
   >
     <Rect x={bounds.x - editor.x - 7} y={bounds.y - editor.y - 7} width={Math.max(14, bounds.width + 14)} height={Math.max(14, bounds.height + 14)} fill="rgba(0,0,0,.001)" />
     <FigurePrimitives primitives={primitives} color={color} />
-    <Group x={bounds.x - editor.x} y={bounds.y + bounds.height - editor.y + 6} listening={false}>
+    <Group name="editor-guide" x={bounds.x - editor.x} y={bounds.y + bounds.height - editor.y + 6} listening={false}>
       <Rect width={Math.max(48, (sketch?.label || figure.character_id || "人物").length * 13 + 12)} height={22} fill={color} cornerRadius={3} />
       <Text x={6} y={4} text={sketch?.label || figure.character_id || "人物"} fill="#fff" fontSize={12} fontFamily="'Microsoft YaHei', sans-serif" />
     </Group>
@@ -160,19 +163,23 @@ function EditableFigure({ panel, figure, index, sketch, selected, editable, zoom
   </Group>;
 }
 
-export function EditablePanelFigures({ panel, sketchGeometry, selection, editable, zoom, controlsRoot, readingDirection = "rtl", breakFrame = false, onSelect, onCommit }: {
+export function EditablePanelFigures({ panel, sketchGeometry, selection, editable, zoom, controlsRoot, readingDirection = "rtl", breakFrame = false, onSelect, onCommit,onBodyDragStart,onBodyDragMove,onBodyDragEnd }: {
   panel: Panel; sketchGeometry: SketchGeometry | null; selection: Selection | null; editable: boolean; zoom: number; readingDirection?: ReadingDirection; breakFrame?: boolean;
   controlsRoot: Konva.Group | null;
   onSelect: FigureSelect; onCommit: FigureCommit;
-}) {
+}&BodyDragProps) {
   const characters = useEditorStore(state => state.characters);
+  const flags=useEditorStore(state=>state.objectFlags);
+  const selections=useEditorStore(state=>state.selections);
   const figures = resolvedFigures(panel.sodaData, readingDirection).map((figure, index) => ({ figure, index }))
     .filter(({ figure }) => Boolean(figure.editor?.break_frame) === breakFrame);
   if (!figures.length) return null;
   const content = figures.map(({ figure, index }) => {
     const id = getFigureId(figure, index);
-    return <EditableFigure key={id} panel={panel} figure={figure} index={index} sketch={getLegacySketch(panel, index, sketchGeometry)}
-      selected={selection?.kind === "figure" && selection.panelId === panel.id && selection.id === id} editable={editable} zoom={zoom} color={characterSketchColor(characters.find(character => character.id === figure.character_id))} controlsRoot={controlsRoot} onSelect={onSelect} onCommit={onCommit} />;
+    const item:Selection={kind:"figure",panelId:panel.id,id};
+    const hidden=useEditorStore.getState().isObjectHidden(item);
+    return <Group key={id} name={hidden?"editor-hidden":""} visible={!hidden}><EditableFigure panel={panel} figure={figure} index={index} sketch={getLegacySketch(panel, index, sketchGeometry)}
+      selected={!hidden&&selections.length===1&&selection?.kind === "figure" && selection.panelId === panel.id && selection.id === id} editable={editable&&!hidden&&!useEditorStore.getState().isObjectLocked(item)} zoom={zoom} color={characterSketchColor(characters.find(character => character.id === figure.character_id))} controlsRoot={controlsRoot} onSelect={onSelect} onCommit={onCommit} onBodyDragStart={onBodyDragStart} onBodyDragMove={onBodyDragMove} onBodyDragEnd={onBodyDragEnd}/></Group>;
   });
   if (!breakFrame) return <>{content}</>;
   const transform = getPanelRenderTransform(panel);

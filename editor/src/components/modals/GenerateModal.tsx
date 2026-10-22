@@ -1,102 +1,25 @@
-import React, { useState } from "react";
+import { useRef, useState } from "react";
 import { useEditorStore } from "../../lib/store";
+import ModalShell from "./ModalShell";
+import NumberInput from "../ui/NumberInput";
 
-export default function GenerateModal() {
-  const generateModal = useEditorStore((state) => state.generateModal);
-  const closeGenerateModal = useEditorStore((state) => state.closeGenerateModal);
-  const submitGenerate = useEditorStore((state) => state.submitGenerate);
-
-  const [seeds, setSeeds] = useState(generateModal.seeds || 4);
-  const [preset, setPreset] = useState<"draft" | "final">(generateModal.preset || "draft");
-
-  if (!generateModal.open) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    submitGenerate({
-      seeds,
-      preset,
-      model: null,
-      lora: "auto"
-    });
+function GenerateDialog() {
+  const modal = useEditorStore(state => state.generateModal);
+  const job = useEditorStore(state => state.activeJob);
+  const [seeds, setSeeds] = useState(modal.seeds || 4);
+  const [valid, setValid] = useState(true);
+  const [preset, setPreset] = useState(modal.preset || "draft");
+  const submitting = useRef(false);
+  const active = job?.status === "queued" || job?.status === "running";
+  const close = () => useEditorStore.getState().closeGenerateModal();
+  const submit = async () => {
+    if (submitting.current || !valid || active) return;
+    submitting.current = true;
+    try { await useEditorStore.getState().submitGenerate({ seeds, preset, model: null, lora: "auto" }); }
+    finally { submitting.current = false; }
   };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
-      <div className="w-full max-w-md border border-[var(--ink)] bg-[var(--paper-lift)] p-6 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
-          <div className="flex items-center gap-2">
-            <span className="bg-[var(--signal)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--paper-lift)]">
-              GENERATE
-            </span>
-            <h3 className="font-serif text-lg font-bold text-[var(--ink)]">
-              提交分镜出图
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={closeGenerateModal}
-            className="font-mono text-base font-bold text-[var(--muted)] hover:text-[var(--ink)]"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="my-5 space-y-4">
-          <div>
-            <label className="ui-label">出图张数 (Seeds: 1 ~ 8)</label>
-            <input
-              type="number"
-              min={1}
-              max={8}
-              value={seeds}
-              onChange={(e) => setSeeds(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
-              className="ui-input"
-            />
-            <span className="mt-1 block font-mono text-[10px] text-[var(--muted)]">
-              每次任务将串行生成指定张数的候选底图
-            </span>
-          </div>
-
-          <div>
-            <label className="ui-label">生成预设 (Preset)</label>
-            <select
-              value={preset}
-              onChange={(e) => setPreset(e.target.value as "draft" | "final")}
-              className="ui-select"
-            >
-              <option value="draft">草稿质量 (Draft - 快速预览)</option>
-              <option value="final">定稿质量 (Final - 高清渲染)</option>
-            </select>
-          </div>
-
-          {generateModal.error && (
-            <div className="ui-notice-box border-l-4 border-[var(--signal)] bg-[var(--paper-surface)] p-3 text-xs leading-relaxed">
-              <span className="font-bold text-[var(--signal)]">提示: </span>
-              {generateModal.error}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--line)]">
-            <button
-              type="button"
-              onClick={closeGenerateModal}
-              className="ui-btn"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={generateModal.loading}
-              className="ui-btn ui-btn-primary"
-            >
-              {generateModal.loading ? "提交中..." : "开始出图"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+  return <ModalShell title="生成出图" description="先保存分镜，再生成一组候选。已有结果会保留。" onClose={close} busy={modal.loading} className="max-w-md" footer={<><button className="ui-btn" disabled={modal.loading} onClick={close}>取消</button><button className="ui-btn ui-btn-primary" disabled={modal.loading || !valid || active} onClick={() => void submit()}>{modal.loading ? "正在提交…" : modal.error ? "重试出图" : "开始出图"}</button></>}>
+    <div className="space-y-4 p-5"><label className="block"><span className="ui-label">候选张数</span><NumberInput aria-label="候选张数" value={seeds} min={1} max={8} integer disabled={modal.loading} onCommit={setSeeds} onValidityChange={setValid} /><span className="mt-1 block text-xs text-[var(--muted)]">每张使用不同种子，最多 8 张，逐张生成。</span></label><label className="block"><span className="ui-label">画质</span><select className="ui-select" value={preset} disabled={modal.loading} onChange={event => setPreset(event.target.value as "draft" | "final")}><option value="draft">草稿 · 较快查看构图</option><option value="final">定稿 · 较高细节</option></select></label>{active && <p role="status" className="ui-notice-box">当前任务仍在进行，请完成或取消后再生成。</p>}{modal.error && <p role="alert" className="ui-notice-box text-[var(--error)]">{modal.error}</p>}</div>
+  </ModalShell>;
 }
+export default function GenerateModal() { return useEditorStore(state => state.generateModal.open) ? <GenerateDialog /> : null; }

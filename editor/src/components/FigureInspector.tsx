@@ -4,6 +4,7 @@ import { ensureFigureEditor, FIGURE_POSE_PRESETS, getFigureId } from "../lib/fig
 import { applyFigurePoseInPanel, editableFigureEditor, resolvedFigures } from "../lib/figures";
 import { characterSketchColor } from "../lib/characterColors";
 import type { Figure, FigureEditor, FigurePose, Selection, SodaPanel } from "../types";
+import NumberInput from "./ui/NumberInput";
 
 const POSE_OPTIONS: { value: FigurePose; label: string }[] = [
   { value: "stand", label: "站立" }, { value: "walk", label: "行走" },
@@ -20,7 +21,7 @@ function FigureSection({ title, children }: { title: string; children: React.Rea
 }
 
 function FigureSelect({ value, label, options, onChange }: { value: string; label: string; options: { value: string; label: string }[]; onChange: (value: string) => void }) {
-  return <label className="block min-w-0"><span className="ui-label">{label}</span><span className="relative block"><select className="ui-input w-full appearance-none pr-7" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[var(--ink-light)]" aria-hidden="true" /></span></label>;
+  return <label className="block min-w-0"><span className="ui-label">{label}</span><span className="relative block"><select aria-label={label} className="ui-input w-full appearance-none pr-7" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[var(--ink-light)]" aria-hidden="true" /></span></label>;
 }
 
 type FigureInspectorProps = {
@@ -66,8 +67,8 @@ export default function FigureInspector({ figure, figureId, panel, onSelectObjec
       <button type="button" className="ui-btn ui-btn-sm" onClick={() => applyPose(knownPose ? figure.pose : "stand")}><RotateCcw size={13} aria-hidden="true" />重置关节为预设姿势</button>
     </FigureSection>
     <FigureSection title="位置与大小">
-      <label className="block"><span className="ui-label">人物高度（像素）</span><div className="flex items-center gap-2"><input className="min-w-0 flex-1" aria-label="人物高度滑块" type="range" min={20} max={maxSize} step={1} value={editor.size} onChange={(event) => changeNumber("size", event.target.value)} /><input className="ui-input w-20 numeric" aria-label="人物高度" type="number" min={20} step={1} value={Math.round(editor.size * 10) / 10} onChange={(event) => changeNumber("size", event.target.value)} /></div></label>
-      <div className="grid grid-cols-2 gap-3"><label className="min-w-0"><span className="ui-label">水平位置 X</span><input className="ui-input numeric w-full" type="number" step={1} value={Math.round(editor.x * 10) / 10} onChange={(event) => changeNumber("x", event.target.value)} /></label><label className="min-w-0"><span className="ui-label">垂直位置 Y</span><input className="ui-input numeric w-full" type="number" step={1} value={Math.round(editor.y * 10) / 10} onChange={(event) => changeNumber("y", event.target.value)} /></label></div>
+      <label className="block"><span className="ui-label">人物高度（像素）</span><div className="flex items-center gap-2"><input className="min-w-0 flex-1" aria-label="人物高度滑块" type="range" min={20} max={maxSize} step={1} value={editor.size} onChange={(event) => changeNumber("size", event.target.value)} /><NumberInput key={`${figureId}-size`} className="ui-input w-20 numeric" aria-label="人物高度" min={20} step={1} value={Math.round(editor.size * 10) / 10} onCommit={value => updateEditor({ size: value })} /></div></label>
+      <div className="grid grid-cols-2 gap-3"><label className="min-w-0"><span className="ui-label">水平位置 X</span><NumberInput aria-label="水平位置 X" key={`${figureId}-x`} step={1} value={Math.round(editor.x * 10) / 10} onCommit={value => updateEditor({ x: value })} /></label><label className="min-w-0"><span className="ui-label">垂直位置 Y</span><NumberInput aria-label="垂直位置 Y" key={`${figureId}-y`} step={1} value={Math.round(editor.y * 10) / 10} onCommit={value => updateEditor({ y: value })} /></label></div>
       <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">坐标以本格左上角为起点，定位到人物脚底。</p>
       <label className="figure-option flex cursor-pointer items-center gap-2 text-[13px]"><input type="checkbox" checked={editor.flip} onChange={(event) => updateEditor({ flip: event.target.checked })} />水平翻转</label>
       <label className="figure-option flex cursor-pointer items-center gap-2 text-[13px]"><input type="checkbox" checked={editor.break_frame} onChange={(event) => updateEditor({ break_frame: event.target.checked })} />允许人物出框</label>

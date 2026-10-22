@@ -1,78 +1,29 @@
-import React, { useState } from "react";
+import { useRef, useState } from "react";
 import { useEditorStore } from "../../lib/store";
+import ModalShell from "./ModalShell";
 
-export default function CompileModal() {
-  const compileModal = useEditorStore((state) => state.compileModal);
-  const closeCompileModal = useEditorStore((state) => state.closeCompileModal);
-
+function CompileDialog() {
+  const modal = useEditorStore(state => state.compileModal)!;
   const [copied, setCopied] = useState(false);
-
-  if (!compileModal?.open) return null;
-
-  const jsonString = JSON.stringify(compileModal.moss, null, 2);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(jsonString);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const [error, setError] = useState("");
+  const [retrying, setRetrying] = useState(false);
+  const retryGuard = useRef(false);
+  const busy = Boolean(modal.loading || retrying);
+  const hasResult = !busy && !modal.error && modal.moss !== null && Boolean(modal.path);
+  const json = JSON.stringify(modal.moss, null, 2);
+  const copy = async () => { try { await navigator.clipboard.writeText(json); setCopied(true); setError(""); } catch { setError("剪贴板不可用，请下载文件，或在下方选中 JSON 手动复制。"); } };
+  const close = () => useEditorStore.getState().closeCompileModal();
+  const retry = async () => {
+    if (retryGuard.current || busy) return;
+    retryGuard.current = true; setRetrying(true); setError(""); setCopied(false);
+    try { await useEditorStore.getState().openCompileModal(); }
+    catch (failure) { setError((failure as Error).message || "编译失败，请重试。"); }
+    finally { retryGuard.current = false; setRetrying(false); }
   };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
-      <div className="flex h-[85vh] w-full max-w-4xl flex-col border border-[var(--ink)] bg-[var(--paper-lift)] shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--paper-surface)] px-5 py-3">
-          <div>
-            <h3 className="font-serif text-lg font-bold text-[var(--ink)]">
-              编译产物 / COMPILED MOSS JSON
-            </h3>
-            <p className="font-mono text-xs text-[var(--muted)]">
-              已写盘到: {compileModal.path}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={closeCompileModal}
-            className="font-mono text-base font-bold text-[var(--muted)] hover:text-[var(--ink)]"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* JSON Preview */}
-        <div className="flex-1 overflow-auto p-4">
-          <pre className="h-full w-full overflow-auto border border-[var(--line)] bg-[#ffffff] p-4 font-mono text-xs text-[var(--ink)] leading-relaxed">
-            {jsonString}
-          </pre>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-[var(--line)] bg-[var(--paper-surface)] px-5 py-3">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="ui-btn ui-btn-primary"
-            >
-              {copied ? "已复制到剪贴板！" : "复制 MOSS JSON"}
-            </button>
-            <a
-              href={`/api/files/${encodeURIComponent(compileModal.path)}`}
-              download
-              className="ui-btn"
-            >
-              下载文件
-            </a>
-          </div>
-          <button
-            type="button"
-            onClick={closeCompileModal}
-            className="ui-btn"
-          >
-            关闭
-          </button>
-        </div>
-      </div>
+  return <ModalShell title="导出 MOSS 布局" description="供图像生成引擎使用。若要保留人物姿势等编辑信息，请使用“导出分镜源文件”。" onClose={close} busy={busy} className="max-w-4xl" footer={<>{hasResult && <button className="ui-btn" onClick={() => void copy()}>{copied ? "已复制" : "复制 MOSS JSON"}</button>}<button className="ui-btn" disabled={busy} onClick={close}>关闭</button></>}>
+    <div className="space-y-4 p-5">
+      {busy ? <p role="status" className="py-12 text-center text-[var(--muted)]">正在保存分镜并编译 MOSS 布局…</p> : modal.error || !hasResult ? <div className="space-y-4 py-6"><p role="alert" className="text-[var(--error)]">{modal.error || error || "没有获得编译结果，请重试。"}</p><p className="text-sm text-[var(--muted)]">当前编辑会保留。修正保存提示或恢复连接后，可以重新编译。</p><button className="ui-btn" disabled={busy} onClick={() => void retry()}>重试编译</button></div> : <><div className="flex flex-wrap gap-2">{[...new Set(modal.paths?.length ? modal.paths : [modal.path])].filter(Boolean).map(file => <a key={file} className="ui-btn" href={`/api/files/${encodeURIComponent(file)}`} download>下载 {file.split(/[\\/]/).pop()}</a>)}</div>{error && <p role="alert" className="text-[var(--error)]">{error}</p>}<pre tabIndex={0} aria-label="MOSS 布局 JSON" className="max-h-[52dvh] overflow-auto border border-[var(--line)] bg-[var(--control-surface)] p-4 text-xs">{json}</pre><p className="break-all text-xs text-[var(--muted)]">项目内文件：{modal.path}</p></>}
     </div>
-  );
+  </ModalShell>;
 }
+export default function CompileModal() { return useEditorStore(state => state.compileModal?.open) ? <CompileDialog /> : null; }

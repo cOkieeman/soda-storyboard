@@ -1,106 +1,22 @@
-import React from "react";
+import { useRef, useState } from "react";
 import { useEditorStore } from "../../lib/store";
+import ModalShell from "./ModalShell";
 
-export default function LayoutModal() {
-  const layoutModal = useEditorStore((state) => state.layoutModal);
-  const closeLayoutModal = useEditorStore((state) => state.closeLayoutModal);
-  const applyLayoutCandidate = useEditorStore((state) => state.applyLayoutCandidate);
-
-  if (!layoutModal.open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
-      <div className="flex h-[85vh] w-full max-w-4xl flex-col border border-[var(--ink)] bg-[var(--paper-lift)] shadow-2xl">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--paper-surface)] px-5 py-3.5">
-          <div>
-            <h3 className="font-serif text-lg font-bold text-[var(--ink)]">
-              版式推荐与候选 / LAYOUT SUGGESTIONS
-            </h3>
-            <p className="font-mono text-xs text-[var(--muted)]">
-              选择版式后直接应用到当前页，保留人物台词和描述，仅更新分镜几何
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={closeLayoutModal}
-            className="font-mono text-base font-bold text-[var(--muted)] hover:text-[var(--ink)]"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {layoutModal.loading ? (
-            <div className="flex h-64 flex-col items-center justify-center space-y-2">
-              <span className="font-mono text-sm text-[var(--signal)] animate-pulse">
-                正在分析当前页分镜并生成版式候选...
-              </span>
-            </div>
-          ) : layoutModal.error ? (
-            <div className="ui-notice-box text-[var(--signal)]">
-              生成候选失败: {layoutModal.error}
-            </div>
-          ) : layoutModal.candidates.length === 0 ? (
-            <div className="flex h-64 items-center justify-center text-xs text-[var(--muted)]">
-              暂无可推荐版式
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {layoutModal.candidates.map((cand) => (
-                <div
-                  key={cand.candidate_id}
-                  className="flex flex-col border border-[var(--line)] bg-[var(--paper-surface)] p-3 transition hover:border-[var(--ink)] hover:shadow-md"
-                >
-                  {/* Thumbnail */}
-                  <div className="relative aspect-[2/3] w-full overflow-hidden border border-[var(--line)] bg-[#ffffff]">
-                    <img
-                      src={cand.preview_url}
-                      alt={cand.name_zh || cand.name}
-                      className="h-full w-full object-contain p-1"
-                      loading="lazy"
-                    />
-                    <div className="absolute top-1 right-1 bg-[var(--ink)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--paper-lift)]">
-                      {cand.panel_count} 格
-                    </div>
-                  </div>
-
-                  {/* Title & Description */}
-                  <div className="mt-2.5 flex-1">
-                    <h4 className="font-mono text-xs font-bold text-[var(--ink)]">
-                      {cand.name_zh || cand.name}
-                    </h4>
-                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--muted)]">
-                      {cand.description}
-                    </p>
-                  </div>
-
-                  {/* Action */}
-                  <button
-                    type="button"
-                    onClick={() => applyLayoutCandidate(cand.candidate_id)}
-                    className="ui-btn ui-btn-primary mt-3 w-full"
-                  >
-                    应用此版式
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="flex items-center justify-end border-t border-[var(--line)] bg-[var(--paper-surface)] px-5 py-3">
-          <button
-            type="button"
-            onClick={closeLayoutModal}
-            className="ui-btn"
-          >
-            取消
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function LayoutDialog() {
+  const modal = useEditorStore(state => state.layoutModal);
+  const [applying, setApplying] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const busy = useRef(false);
+  const apply = async (id: string) => {
+    if (busy.current) return;
+    busy.current = true; setApplying(id); setError("");
+    try { if (!(await useEditorStore.getState().applyLayoutCandidate(id))) setError("版式未应用。请检查保存提示后重试，当前分镜已保留。"); }
+    catch (failure) { setError((failure as Error).message); }
+    finally { busy.current = false; setApplying(null); }
+  };
+  const close = () => useEditorStore.getState().closeLayoutModal();
+  return <ModalShell title="版式候选" description="选择新的分格布局。画面描述、人物和台词会保留。" busy={Boolean(applying)} onClose={close} className="max-w-4xl" footer={<button className="ui-btn" disabled={Boolean(applying)} onClick={close}>关闭</button>}>
+    <div className="p-5">{modal.loading ? <p role="status" className="py-16 text-center text-[var(--muted)]">正在准备版式候选…</p> : modal.error ? <div role="alert" className="space-y-3"><p>{modal.error}</p><button className="ui-btn" onClick={() => void useEditorStore.getState().openLayoutModal()}>重新获取候选</button></div> : modal.candidates.length ? <div className="grid grid-cols-2 gap-4 md:grid-cols-3">{modal.candidates.map(candidate => <section className="flex min-w-0 flex-col gap-2 border-b border-[var(--line)] pb-4" key={candidate.candidate_id}><img src={candidate.preview_url} alt={`${candidate.name_zh || candidate.name}，${candidate.panel_count} 格`} loading="lazy" className="h-52 w-full bg-white object-contain" /><h3 className="text-sm font-semibold">{candidate.name_zh || candidate.name}</h3><p className="flex-1 text-xs text-[var(--muted)]">{candidate.description}</p><button className="ui-btn w-full" disabled={Boolean(applying)} onClick={() => void apply(candidate.candidate_id)}>{applying === candidate.candidate_id ? "正在应用…" : "应用此版式"}</button></section>)}</div> : <div className="space-y-3 py-8"><p>当前格数暂无匹配版式。可以关闭后手动分格。</p><button className="ui-btn" onClick={() => void useEditorStore.getState().openLayoutModal()}>重新获取候选</button></div>}{error && <p role="alert" className="mt-4 text-[var(--error)]">{error}</p>}</div>
+  </ModalShell>;
 }
+export default function LayoutModal() { return useEditorStore(state => state.layoutModal.open) ? <LayoutDialog /> : null; }

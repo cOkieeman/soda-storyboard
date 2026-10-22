@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEditorStore } from "../lib/store";
 import type { TextPresetId } from "../lib/elementPresets";
 import type { FigurePose } from "../types";
+import { readUiPreference, saveUiPreference } from "../lib/localUiPreferences";
 
 const TEXT_PRESETS: { id: TextPresetId; label: string; description: string }[] = [
   { id: "narration_vertical", label: "竖排旁白框", description: "添加竖排方框旁白" },
@@ -34,6 +36,13 @@ export default function ElementPalette({ onAdded }: ElementPaletteProps) {
   const sodaPage = useEditorStore((state) => state.sodaPage);
   const selection = useEditorStore((state) => state.selection);
   const [pose, setPose] = useState<FigurePose>("stand");
+  const [expanded, setExpanded] = useState(() => readUiPreference<boolean>("soda.workspace.v1.element-palette-expanded", false) === true);
+  useEffect(() => { saveUiPreference("soda.workspace.v1.element-palette-expanded", expanded); }, [expanded]);
+  useEffect(() => {
+    const reset = () => setExpanded(false);
+    window.addEventListener("soda:reset-workspace", reset);
+    return () => window.removeEventListener("soda:reset-workspace", reset);
+  }, []);
   const selectedPanelId = selection?.kind === "panel" ? selection.id
     : selection?.kind === "figure" ? selection.panelId
       : selection?.kind === "text" || selection?.kind === "bubble"
@@ -46,20 +55,23 @@ export default function ElementPalette({ onAdded }: ElementPaletteProps) {
   const addText = (preset: TextPresetId) => {
     if (!panel) return;
     useEditorStore.getState().addTextPreset(preset, panel.id);
+    setExpanded(false);
     onAdded?.();
   };
   const addFigure = (pair?: "handshake" | "hug") => {
     if (!panel) return;
     useEditorStore.getState().addFigurePreset(pose, pair, panel.id);
+    setExpanded(false);
     onAdded?.();
   };
 
-  return <section className="element-palette" aria-label="添加分镜元素">
-    <div className="palette-heading">
-      <strong>添加元素</strong>
-      <span>{panel ? `添加到第 ${panel.order} 格` : "先建立一个格子，再添加元素"}</span>
+  return <section className={`element-palette${expanded ? " is-expanded" : " is-compact"}`} aria-label="添加分镜元素" data-expanded={expanded}>
+    <div className="palette-compact-toolbar flex min-w-0 flex-wrap items-center gap-2">
+      <div className="palette-heading !m-0"><strong>添加元素</strong><span>{panel ? `第 ${panel.order} 格` : "先建立格子"}</span></div>
+      {!expanded && <><button type="button" className="palette-button" disabled={disabled} onClick={() => addText("speech_vertical")}>+ 竖排气泡</button><button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure()}>+ 火柴人</button></>}
+      <button type="button" className="palette-button" aria-expanded={expanded} aria-controls="element-palette-all" onClick={() => setExpanded(value => !value)}>{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{expanded ? "收起元素" : "更多元素"}</button>
     </div>
-    <div className="palette-group" role="group" aria-label="添加文字">
+    {expanded && <div id="element-palette-all" className="mt-2 space-y-2"><div className="palette-group" role="group" aria-label="添加文字">
       <span className="palette-group-label">文字</span>
       {TEXT_PRESETS.map((preset) => <button key={preset.id} type="button" className="palette-button" disabled={disabled} onClick={() => addText(preset.id)} title={preset.description}>+ {preset.label}</button>)}
     </div>
@@ -69,6 +81,6 @@ export default function ElementPalette({ onAdded }: ElementPaletteProps) {
       <button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure()}>+ 火柴人</button>
       <button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure("handshake")}>+ 握手双人</button>
       <button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure("hug")}>+ 拥抱双人</button>
-    </div>
+    </div></div>}
   </section>;
 }

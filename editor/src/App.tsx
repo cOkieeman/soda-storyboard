@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import CanvasEditor, { CanvasEditorHandle, CanvasMode, CanvasTool } from "./components/CanvasEditor";
 import InspectorPanel from "./components/InspectorPanel";
 import PageSidebar from "./components/PageSidebar";
@@ -16,9 +16,13 @@ import { useEditorStore } from "./lib/store";
 import type { Selection } from "./types";
 import OutputInspector from "./components/OutputInspector";
 import ElementPalette from "./components/ElementPalette";
-import { getFigureId } from "./lib/figureRig";
-import { editableFigureEditor, resolvedFigures } from "./lib/figures";
 import { useTheme } from "./hooks/useTheme";
+import { clampWidth, readWorkspace, resetWorkspacePreferences, saveWorkspace } from "./lib/workspace";
+import WorkspaceResizeHandle from "./components/WorkspaceResizeHandle";
+import ShortcutHelp from "./components/ShortcutHelp";
+import { batchActions } from "./lib/editorActions";
+import DialogueEditor from "./components/modals/DialogueEditor";
+import FavoritesDialog from "./components/modals/FavoritesDialog";
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
@@ -28,8 +32,21 @@ export default function App() {
   const activeJob = useEditorStore(s => s.activeJob);
   const [mode, setMode] = useState<CanvasMode>("draft");
   const [tool, setTool] = useState<CanvasTool>("select");
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1280);
-  const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth >= 1024);
+  const [initialWorkspace] = useState(readWorkspace);
+  const [sidebarOpen, setSidebarOpen] = useState(initialWorkspace.sidebarOpen);
+  const [inspectorOpen, setInspectorOpen] = useState(initialWorkspace.inspectorOpen);
+  const [sidebarWidth, setSidebarWidth] = useState(initialWorkspace.sidebarWidth);
+  const [inspectorWidth, setInspectorWidth] = useState(initialWorkspace.inspectorWidth);
+  const [workspaceFocused, setWorkspaceFocused] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [dialogueOpen,setDialogueOpen]=useState(false);
+  const [favoritesOpen,setFavoritesOpen]=useState(false);
+  useEffect(()=>{
+    const dialogue=()=>setDialogueOpen(true),favorites=()=>setFavoritesOpen(true),help=()=>setHelpOpen(true);
+    window.addEventListener("soda:open-dialogue-editor",dialogue);window.addEventListener("soda:open-favorites",favorites);
+    window.addEventListener("soda:open-shortcut-help",help);
+    return()=>{window.removeEventListener("soda:open-dialogue-editor",dialogue);window.removeEventListener("soda:open-favorites",favorites);window.removeEventListener("soda:open-shortcut-help",help);};
+  },[]);
   const canvasRef = useRef<CanvasEditorHandle>(null);
   const completedGenerationRef = useRef<string | null>(null);
 
@@ -38,12 +55,13 @@ export default function App() {
     setTool("select");
     useEditorStore.getState().selectItem(null);
   }, []);
-  const selectObject = useCallback((selection: Selection) => {
+  const selectObject = useCallback((selection: Selection, additive=false) => {
     setMode("draft");
     setTool("select");
     setInspectorOpen(true);
     if (window.innerWidth < 1280) setSidebarOpen(false);
-    useEditorStore.getState().selectItem(selection);
+    useEditorStore.getState().selectItem(selection,additive);
+    requestAnimationFrame(() => requestAnimationFrame(() => canvasRef.current?.revealSelection()));
   }, []);
   const startPage = useCallback(() => {
     setMode("draft"); setTool("select"); setInspectorOpen(true);
@@ -59,6 +77,13 @@ export default function App() {
     if (window.innerWidth < 1280) setSidebarOpen(false);
   }, []);
   const chooseTool = (next: CanvasTool) => { setMode("draft"); setTool(next); };
+  const resetWorkspace = () => {
+    resetWorkspacePreferences(); setSidebarWidth(280); setInspectorWidth(340);
+    setSidebarOpen(window.innerWidth >= 1280); setInspectorOpen(window.innerWidth >= 1024); setWorkspaceFocused(false);
+    requestAnimationFrame(() => canvasRef.current?.fitToViewport());
+    window.dispatchEvent(new Event("soda:reset-workspace"));
+  };
+  useEffect(() => { saveWorkspace({ sidebarOpen, inspectorOpen, sidebarWidth, inspectorWidth }); }, [sidebarOpen, inspectorOpen, sidebarWidth, inspectorWidth]);
   useEffect(() => { setMode("draft"); setTool("select"); }, [activePageId]);
   useEffect(() => {
     if (activeJob?.operation === "generate" && activeJob.page_id === activePageId && activeJob.status === "completed" && completedGenerationRef.current !== activeJob.id) {
@@ -104,6 +129,7 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      if (event.isComposing || event.keyCode === 229) return;
       const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName || "") || target?.isContentEditable;
       const modified = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
@@ -111,7 +137,19 @@ export default function App() {
       if (state.importModalOpen) return;
       if (modified && key === "s") { event.preventDefault(); void state.saveCurrentPage(true); return; }
       if (modified && key === "k") { event.preventDefault(); state.openCommandPalette(); return; }
-      if (isInput || state.commandPaletteOpen || state.generateModal.open || state.layoutModal.open || state.previewModal.open || state.compileModal?.open || state.conflictModal?.open) return;
+      if (isInput || document.querySelector('[role="dialog"]') || state.commandPaletteOpen || state.generateModal.open || state.layoutModal.open || state.previewModal.open || state.compileModal?.open || state.conflictModal?.open) return;
+      if (modified && ["c", "v", "d"].includes(key)) {
+        event.preventDefault();
+        batchActions.find(action => action.id === (key === "c" ? "copy" : key === "v" ? "paste" : "duplicate"))?.run();
+        return;
+      }
+      if(modified && key==="\\") {event.preventDefault();setWorkspaceFocused(v=>!v);return;}
+      if (!modified && !event.altKey) {
+        if (key === "1") { event.preventDefault(); canvasRef.current?.fitToViewport(); return; }
+        if (key === "2") { event.preventDefault(); canvasRef.current?.fitSelection(); return; }
+        if (key === "f") { event.preventDefault(); canvasRef.current?.focusPanel(); return; }
+        if (key === "?") { event.preventDefault(); setHelpOpen(true); return; }
+      }
       if (modified && (key === "z" || key === "y")) {
         event.preventDefault();
         if (key === "y" || event.shiftKey) state.redo(); else state.undo();
@@ -127,24 +165,7 @@ export default function App() {
         const step = event.shiftKey ? 10 : 1;
         const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
         const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
-        const page = state.project.pages[0];
-        if (selection.kind === "text" || selection.kind === "bubble") {
-          const bubble = page?.bubbles.find(item => item.id === selection.id);
-          if (bubble) state.updateBubble(bubble.id, { x: bubble.x + dx, y: bubble.y + dy });
-        } else if (selection.kind === "panel") {
-          const panel = page?.panels.find(item => item.id === selection.id);
-          if (panel) state.updatePanel(panel.id, { x: panel.x + dx, y: panel.y + dy });
-        } else if (selection.kind === "figure") {
-          const panel = page?.panels.find(item => item.id === selection.panelId);
-          const figure = panel?.sodaData && resolvedFigures(panel.sodaData, state.sodaPage?.reading_direction).find((item, index) => getFigureId(item, index) === selection.id);
-          if (panel && figure) {
-            const figures = resolvedFigures(panel.sodaData!, state.sodaPage?.reading_direction);
-            const index = figures.findIndex((item, index) => getFigureId(item, index) === selection.id);
-            const sketch = state.sketchGeometry?.panels.find(item => item.panel_id === panel.id)?.figures[index];
-            const editor = editableFigureEditor(figure, panel, sketch);
-            state.updateFigureById(panel.id, selection.id, { editor: { ...editor, x: editor.x + dx, y: editor.y + dy } });
-          }
-        }
+        state.moveSelection(dx, dy);
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault(); state.deleteSelection();
       } else if (event.key === "Escape") {
@@ -158,22 +179,24 @@ export default function App() {
   }, []);
 
   return (
-    <div className="editor-shell">
-      <Toolbar toolLabel={EDITOR_TOOLS.find(item => item.id === tool)!.label} sidebarOpen={sidebarOpen} inspectorOpen={inspectorOpen} onToggleSidebar={() => setSidebarOpen(v => !v)} onToggleInspector={() => setInspectorOpen(v => !v)} theme={theme} onToggleTheme={toggleTheme} />
-      <main className={"editor-body" + (sidebarOpen ? " has-sidebar" : "") + (inspectorOpen ? " has-inspector" : "")}>
+    <div className="editor-shell" style={{ "--sidebar-width": `${sidebarWidth}px`, "--inspector-width": `${inspectorWidth}px` } as CSSProperties}>
+      <Toolbar toolLabel={EDITOR_TOOLS.find(item => item.id === tool)!.label} sidebarOpen={sidebarOpen && !workspaceFocused} inspectorOpen={inspectorOpen && !workspaceFocused} onToggleSidebar={() => { setWorkspaceFocused(false); setSidebarOpen(v => !v); }} onToggleInspector={() => { setWorkspaceFocused(false); setInspectorOpen(v => !v); }} theme={theme} onToggleTheme={toggleTheme} onExportPng={() => canvasRef.current?.exportPng()} onExportPdf={() => canvasRef.current?.exportPdf()} onFocusWorkspace={() => setWorkspaceFocused(v => !v)} onResetWorkspace={resetWorkspace} workspaceFocused={workspaceFocused} />
+      <main className={"editor-body" + (sidebarOpen && !workspaceFocused ? " has-sidebar" : "") + (inspectorOpen && !workspaceFocused ? " has-inspector" : "")}>
         <ToolRail tool={tool} onChange={chooseTool} />
-        {sidebarOpen && <section className="sidebar-slot"><PageSidebar onSelectObject={selectObject} onStartPage={startPage} /></section>}
+        {sidebarOpen && !workspaceFocused && <section className="sidebar-slot"><PageSidebar onSelectObject={selectObject} onStartPage={startPage} /><WorkspaceResizeHandle side="left" value={sidebarWidth} onChange={value => setSidebarWidth(clampWidth(value, 220, 420, 280))} /></section>}
         <section className="workspace-column" aria-label="分镜画布工作区">
           {mode === "draft" && <ElementPalette onAdded={finishAdding} />}
           <div className="canvas-slot"><CanvasEditor ref={canvasRef} activeTool={tool} mode={mode} onModeChange={changeMode} onInspect={() => setInspectorOpen(true)} onElementAdded={finishAdding} onInlineTextEdit={beginInlineTextEdit} /></div>
           <RenderBar mode={mode} onViewArtwork={() => changeMode("artwork")} />
         </section>
-        {inspectorOpen && <section className="inspector-slot" aria-label="属性检查器">{mode === "draft" ? <InspectorPanel onSelectObject={selectObject} onStartPage={startPage} /> : <OutputInspector onEdit={() => changeMode("draft")} />}</section>}
-        {sidebarOpen && <button className="sidebar-scrim" aria-label="关闭页面面板" onClick={() => setSidebarOpen(false)} />}
-        {inspectorOpen && <button className="inspector-scrim" aria-label="关闭检查器" onClick={() => setInspectorOpen(false)} />}
+        {inspectorOpen && !workspaceFocused && <section className="inspector-slot" aria-label="属性检查器">{mode === "draft" ? <InspectorPanel onSelectObject={selectObject} onStartPage={startPage} /> : <OutputInspector onEdit={() => changeMode("draft")} />}<WorkspaceResizeHandle side="right" value={inspectorWidth} onChange={value => setInspectorWidth(clampWidth(value, 280, 520, 340))} /></section>}
+        {sidebarOpen && !workspaceFocused && <button className="sidebar-scrim" aria-label="关闭页面面板" onClick={() => setSidebarOpen(false)} />}
+        {inspectorOpen && !workspaceFocused && <button className="inspector-scrim" aria-label="关闭检查器" onClick={() => setInspectorOpen(false)} />}
         {notice && <div className="editor-toast" role="status">{notice}</div>}
       </main>
       <ConflictModal /><LayoutModal /><PreviewModal /><CompileModal /><GenerateModal /><CommandPalette /><ImportModal />
+      {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
+      {dialogueOpen && <DialogueEditor onClose={()=>setDialogueOpen(false)}/>}{favoritesOpen&&<FavoritesDialog onClose={()=>setFavoritesOpen(false)}/>}
     </div>
   );
 }

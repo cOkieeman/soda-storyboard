@@ -1,96 +1,16 @@
-import React, { useState } from "react";
+import { useRef, useState } from "react";
 import { useEditorStore } from "../../lib/store";
+import ModalShell from "./ModalShell";
 
-export default function ConflictModal() {
-  const conflictModal = useEditorStore((state) => state.conflictModal);
-  const closeConflictModal = useEditorStore((state) => state.closeConflictModal);
-  const resolveConflictLoadLatest = useEditorStore((state) => state.resolveConflictLoadLatest);
-
+function ConflictDialog() {
+  const conflict = useEditorStore(state => state.conflictModal)!;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-
-  if (!conflictModal?.open) return null;
-
-  const handleCopy = () => {
-    if (conflictModal.localBackup) {
-      navigator.clipboard.writeText(conflictModal.localBackup);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
-      <div className="w-full max-w-xl border-2 border-[var(--signal)] bg-[var(--paper-lift)] p-6 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
-          <div className="flex items-center gap-2">
-            <span className="bg-[var(--signal)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--paper-lift)]">
-              409 CONFLICT
-            </span>
-            <h3 className="font-serif text-lg font-bold text-[var(--ink)]">
-              页面已被外部修改
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={closeConflictModal}
-            className="font-mono text-sm font-bold text-[var(--muted)] hover:text-[var(--ink)]"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="my-4 space-y-3 text-xs leading-relaxed text-[var(--ink)]">
-          <p>
-            {conflictModal.reason === "production_running" ? (
-              <span className="font-bold text-[var(--signal)]">
-                后台出图/生产任务正在进行中，该页处于写保护状态以避免覆盖正在生成的内容。
-              </span>
-            ) : (
-              <span>
-                分镜单文件已被 AI 助手或命令行在外部修改（版本哈希不一致）。为防止覆盖最新内容，本次保存已被中止。
-              </span>
-            )}
-          </p>
-
-          <div className="border border-[var(--line)] bg-[var(--paper)] p-3">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="font-mono text-[11px] font-bold text-[var(--muted)]">
-                本地未保存的内容副本 (可复制保留):
-              </span>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="font-mono text-[10px] text-[var(--signal)] underline"
-              >
-                {copied ? "已复制到剪贴板！" : "点击复制 JSON"}
-              </button>
-            </div>
-            <textarea
-              readOnly
-              rows={8}
-              value={conflictModal.localBackup || ""}
-              className="w-full border border-[var(--rule)] bg-[#ffffff] p-2 font-mono text-[11px] text-[var(--ink)]"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={closeConflictModal}
-            className="ui-btn"
-          >
-            保留本地修改并暂存
-          </button>
-          <button
-            type="button"
-            onClick={resolveConflictLoadLatest}
-            className="ui-btn ui-btn-primary"
-          >
-            载入最新版本 (重新加载)
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const guard = useRef(false);
+  const close = () => useEditorStore.getState().closeConflictModal();
+  const copy = async () => { try { await navigator.clipboard.writeText(conflict.localBackup || ""); setCopied(true); } catch { setError("无法自动复制，请在下方选中并复制本地草稿。"); } };
+  const load = async () => { if (guard.current) return; guard.current = true; setBusy(true); try { if (!(await useEditorStore.getState().resolveConflictLoadLatest())) setError("最新版本未能载入。本地草稿仍然保留，请检查连接后重试。"); } catch (failure) { setError((failure as Error).message); } finally { guard.current = false; setBusy(false); } };
+  return <ModalShell title="页面已被外部修改" description={conflict.reason === "production_running" ? "后台任务正在使用这一页。保留本地草稿，等待任务结束后再保存。" : "本次保存已停止。你可以保留本地修改，或确认后载入外部版本。"} onClose={close} busy={busy} footer={<><button className="ui-btn" disabled={busy} onClick={close}>保留本地修改并暂存</button><button className="ui-btn" disabled={busy || conflict.reason === "production_running"} onClick={() => void load()}>{busy ? "正在载入…" : "载入最新版本（替换当前编辑）"}</button></>}><div className="space-y-3 p-5"><div className="flex items-center justify-between gap-3"><label htmlFor="conflict-backup" className="ui-label">本地草稿备份</label><button className="ui-btn ui-btn-sm" onClick={() => void copy()}>{copied ? "已复制草稿" : "复制草稿 JSON"}</button></div><textarea id="conflict-backup" readOnly rows={9} value={conflict.localBackup || ""} className="ui-textarea numeric" /><p className="text-xs text-[var(--muted)]">关闭此窗口会保留当前编辑。载入外部版本前，建议先复制草稿。</p>{error && <p role="alert" className="text-[var(--error)]">{error}</p>}</div></ModalShell>;
 }
+export default function ConflictModal() { return useEditorStore(state => state.conflictModal?.open) ? <ConflictDialog /> : null; }

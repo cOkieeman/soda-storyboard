@@ -11,6 +11,7 @@ import {
   generatePage as apiGeneratePage,
   getCharacters as apiGetCharacters,
   getPage as apiGetPage,
+  getJob as apiGetJob,
   getPages as apiGetPages,
   getProject as apiGetProject,
   getRenders as apiGetRenders,
@@ -32,6 +33,8 @@ import { generatePageSketchGeometry } from "./sketchGeometry";
 import { ensureFigureEditor, getFigureId, withFigurePose } from "./figureRig";
 import { TEXT_PRESETS, type TextPresetId } from "./elementPresets";
 import { resolvedFigures } from "./figures";
+import { alignPageSelections, copyPageSelections, deletePageSelections, isSelectionHidden, isSelectionLocked, movePageSelections, normalizeSelections, panelHasLockedChildren, pastePageSelections, selectionKey, stylePageSelections, type SelectionClipboard } from "./batchEditing";
+import { clearRecoveryDraft, discoverProjectIdentity, readObjectFlags, readRecoveryDraft, writeObjectFlags, writeRecoveryDraft } from "./recovery";
 import {
   Bubble,
   CharacterSummary,
@@ -45,6 +48,10 @@ import {
   ProjectPage,
   RenderListResponse,
   Selection,
+  ObjectFlags,
+  RecoveryDraft,
+  SelectionAlignment,
+  SelectionStylePatch,
   SketchGeometry,
   SodaCharacter,
   SodaOverlay,
@@ -70,6 +77,7 @@ export type LayerSettings = {
   renderOpacity: number;
 };
 
+type HistorySnapshot = { project: Project; sodaPage: SodaPage; label?: string; selection?: Selection | null; selections?: Selection[] };
 type EditorState = {
   // Soda Storyboard Project State
   sodaProject: SodaProject | null;
@@ -86,6 +94,11 @@ type EditorState = {
   savePromise: Promise<boolean> | null;
   editRevision: number;
   lastSavedTime: string | null;
+  saveStatus: "saved" | "dirty" | "saving" | "error" | "conflict";
+  saveError: string | null;
+  projectIdentity: string;
+  recoveryDraft: RecoveryDraft | null;
+  recoveryStorageError: string | null;
 
   // Dirty tracking for precision & persistence (P4c Items 2 & 3)
   dirtyPanelIds: Set<string>;
@@ -98,15 +111,20 @@ type EditorState = {
   // OpenKoma canvas adaptation
   project: Project;
   selection: Selection | null;
+  selections: Selection[];
+  objectFlags: Record<string, ObjectFlags>;
+  clipboard: SelectionClipboard | null;
 
   // History / Undo / Redo (P4c Item 5)
-  historyPast: Array<{ project: Project; sodaPage: SodaPage }>;
-  historyFuture: Array<{ project: Project; sodaPage: SodaPage }>;
+  historyPast: HistorySnapshot[];
+  historyFuture: HistorySnapshot[];
+  undoLabel: string | null;
+  redoLabel: string | null;
   canUndo: boolean;
   canRedo: boolean;
   historyGroup: { key: string; timestamp: number } | null;
-  recordEdit: (key: string) => void;
-  pushHistory: () => void;
+  recordEdit: (key: string, label?: string) => void;
+  pushHistory: (label?: string) => void;
   undo: () => void;
   redo: () => void;
 
@@ -147,6 +165,8 @@ type EditorState = {
     moss: any;
     path: string;
     paths: string[];
+    loading?: boolean;
+    error?: string;
   } | null;
 
   generateModal: {
@@ -198,37 +218,58 @@ type EditorState = {
   splitPanelVertical: (panelId: string) => void;
   addTextToPanel: (panelId: string) => void;
 
-  selectItem: (selection: Selection | null) => void;
+  selectItem: (selection: Selection | null, additive?: boolean) => void;
+  selectItems: (selections: Selection[]) => void;
+  moveSelection: (dx: number, dy: number) => void;
+  duplicateSelection: (dx?: number, dy?: number) => Selection[];
+  copySelection: () => Promise<boolean>;
+  pasteSelection: () => Promise<Selection[]>;
+  applySelectionStyle: (patch: SelectionStylePatch) => void;
+  batchUpdateSelections: (patch: SelectionStylePatch) => void;
+  updateTextsBatch: (updates: Array<{ id: string; patch: Partial<SodaText> }>) => void;
+  alignSelection: (action: SelectionAlignment) => void;
+  getObjectFlags: (selection: Selection) => ObjectFlags;
+  isObjectLocked: (selection: Selection) => boolean;
+  isObjectHidden: (selection: Selection) => boolean;
+  toggleObjectLock: (selection?: Selection) => void;
+  toggleObjectVisibility: (selection?: Selection) => void;
   deleteSelection: () => void;
+  getEditableSource: () => SodaPage | null;
+  downloadSourceJson: () => void;
+  duplicatePage: (pageId?: string) => Promise<void>;
+  retrySave: () => Promise<boolean>;
+  restoreRecoveryDraft: () => Promise<boolean>;
+  discardRecoveryDraft: () => void;
+  saveRecoveryAsNewPage: () => Promise<{ id: string; selected: boolean } | null>;
 
   // Save & Sync
   saveCurrentPage: (force?: boolean) => Promise<boolean>;
   triggerAutoSave: () => void;
-  reloadCurrentPage: () => Promise<void>;
-  resolveConflictLoadLatest: () => Promise<void>;
+  reloadCurrentPage: () => Promise<boolean>;
+  resolveConflictLoadLatest: () => Promise<boolean>;
   closeConflictModal: () => void;
 
   // Modals & Tools
-  openLayoutModal: () => Promise<void>;
+  openLayoutModal: () => Promise<boolean>;
   closeLayoutModal: () => void;
-  applyLayoutCandidate: (candidateId: string) => Promise<void>;
+  applyLayoutCandidate: (candidateId: string) => Promise<boolean>;
 
   openPreviewModal: () => Promise<void>;
   closePreviewModal: () => void;
 
-  openCompileModal: () => Promise<void>;
+  openCompileModal: () => Promise<boolean>;
   closeCompileModal: () => void;
 
   openGenerateModal: () => void;
   closeGenerateModal: () => void;
-  submitGenerate: (options: { seeds: number; preset: string; model?: string | null; lora?: string }) => Promise<void>;
+  submitGenerate: (options: { seeds: number; preset: string; model?: string | null; lora?: string }) => Promise<boolean>;
 
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
   openImportModal: () => void;
   closeImportModal: () => void;
 
-  pickRender: (renderPath: string) => Promise<void>;
+  pickRender: (renderPath: string) => Promise<boolean>;
   cancelJob: (jobId: string) => Promise<void>;
 
   setLayerSettings: (patch: Partial<LayerSettings>) => void;
@@ -251,6 +292,51 @@ function insertionPanelId(state: Pick<EditorState, "selection" | "sodaPage" | "p
 let pageLoadSequence = 0;
 let pageReloadSequence = 0;
 
+function currentSelections(state: Pick<EditorState, "selection" | "selections">): Selection[] {
+  if (!state.selection) return [];
+  return state.selections.some(item => selectionKey(item) === selectionKey(state.selection!)) ? state.selections : [state.selection];
+}
+const lastSelection = (items: Selection[]) => items[items.length - 1] || null;
+function locked(state: EditorState, selection: Selection, children = false): boolean {
+  const protectedItem = !!state.sodaPage && (isSelectionLocked(state.sodaPage, state.objectFlags, selection)
+    || children && selection.kind === "panel" && panelHasLockedChildren(state.sodaPage, state.objectFlags, selection.id));
+  if (protectedItem) state.setNotice("对象已锁定，请在左侧对象列表解锁后编辑");
+  return protectedItem;
+}
+function editableSelections(state: EditorState, page: SodaPage, children = false): Selection[] {
+  return normalizeSelections(page, currentSelections(state)).filter(item => !isSelectionLocked(page, state.objectFlags, item)
+    && !(children && item.kind === "panel" && panelHasLockedChildren(page, state.objectFlags, item.id)));
+}
+function commitPageEdit(state: EditorState, set: (patch: Partial<EditorState>) => void, page: SodaPage, label: string, selected = currentSelections(state)): void {
+  state.pushHistory(label);
+  const selections = normalizeSelections(page, selected);
+  set({ sodaPage: page, project: { ...state.project, pages: [sodaPageToProjectPage(page)] },
+    sketchGeometry: generatePageSketchGeometry(page, state.characters as any), dirtyPanelIds: new Set(), dirtyBubbleIds: new Set(),
+    selections, selection: lastSelection(selections), historyGroup: null });
+  state.triggerAutoSave();
+}
+function persistCurrentDraft(state: EditorState): void {
+  const page = state.getEditableSource();
+  if (!page || !state.projectIdentity) return;
+  const saved = writeRecoveryDraft({ format: "soda-editor-recovery-v1", projectIdentity: state.projectIdentity,
+    pageId: state.activePageId, baseVersion: state.currentVersion, savedAt: Date.now(), page }, state.recoveryDraft);
+  if (!saved) useEditorStore.setState({ recoveryStorageError: "浏览器无法保存恢复副本，请下载分镜源文件保留修改" });
+  else if (state.recoveryStorageError) useEditorStore.setState({ recoveryStorageError: null });
+}
+async function createDetachedPage(source: SodaPage, get: () => EditorState, set: (patch: Partial<EditorState>) => void): Promise<{ id: string; selected: boolean }> {
+  const initialPage = get().activePageId, revision = get().editRevision;
+  const page = JSON.parse(JSON.stringify(source)) as SodaPage;
+  page.id = "copy_" + uuidv4().replace(/-/g, "").slice(0, 12);
+  delete page.page_id;
+  for (const field of ["production", "renders", "selected_render", "candidate_sheet", "composed", "lettered"]) delete page[field];
+  const created = await apiCreatePage(page);
+  // POST is the commit point. A later list/load failure must not invite a duplicate POST.
+  try { const { pages } = await apiGetPages(); set({ pages }); }
+  catch { set({ pages: [...get().pages, { id: created.page.id, description: created.page.description || "", panel_count: created.page.panels.length, version: created.version }] }); }
+  if (get().activePageId === initialPage && get().editRevision === revision && !get().hasUnsavedChanges && !get().savePromise) await get().selectPage(created.page.id);
+  return { id: created.page.id, selected: get().activePageId === created.page.id };
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   sodaProject: null,
   pages: [],
@@ -265,6 +351,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   savePromise: null,
   editRevision: 0,
   lastSavedTime: null,
+  saveStatus: "saved",
+  saveError: null,
+  projectIdentity: "",
+  recoveryDraft: null,
+  recoveryStorageError: null,
 
   dirtyPanelIds: new Set<string>(),
   dirtyBubbleIds: new Set<string>(),
@@ -274,30 +365,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   project: createEmptyProject(),
   selection: null,
+  selections: [],
+  objectFlags: {},
+  clipboard: null,
 
   historyPast: [],
   historyFuture: [],
+  undoLabel: null,
+  redoLabel: null,
   canUndo: false,
   canRedo: false,
   historyGroup: null,
 
   // Coalesce typing and continuous adjustments while keeping separate objects
   // and edits separated by a pause independently undoable.
-  recordEdit: (key) => {
+  recordEdit: (key, label) => {
     const group = get().historyGroup;
     const timestamp = Date.now();
     if (!group || group.key !== key || timestamp - group.timestamp > 750) {
-      get().pushHistory();
+      get().pushHistory(label || (key.startsWith("figure:") ? "调整人物" : key.startsWith("text:") ? "编辑台词" : "编辑格子"));
     }
     set({ historyGroup: { key, timestamp } });
   },
 
-  pushHistory: () => {
+  pushHistory: (label = "编辑对象") => {
     const state = get();
     if (!state.sodaPage) return;
     const snapshot = {
       project: JSON.parse(JSON.stringify(state.project)),
-      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds)
+      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds),
+      label, selection: state.selection, selections: currentSelections(state)
     };
     const nextPast = [...state.historyPast.slice(-29), snapshot];
     set({
@@ -305,6 +402,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       historyFuture: [],
       canUndo: true,
       canRedo: false,
+      undoLabel: label,
+      redoLabel: null,
       historyGroup: null
     });
   },
@@ -316,7 +415,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const nextPast = state.historyPast.slice(0, -1);
     const currentSnapshot = {
       project: JSON.parse(JSON.stringify(state.project)),
-      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds)
+      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds),
+      label: prev.label, selection: state.selection, selections: currentSelections(state)
     };
     set({
       project: prev.project,
@@ -329,8 +429,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       historyFuture: [currentSnapshot, ...state.historyFuture],
       canUndo: nextPast.length > 0,
       canRedo: true
+      ,undoLabel: nextPast[nextPast.length - 1]?.label || null, redoLabel: prev.label || "编辑对象",
+      selections: normalizeSelections(prev.sodaPage, prev.selections || (prev.selection ? [prev.selection] : [])),
+      selection: lastSelection(normalizeSelections(prev.sodaPage, prev.selections || (prev.selection ? [prev.selection] : [])))
     });
     get().triggerAutoSave();
+    get().setNotice("已撤销：" + (prev.label || "编辑对象"));
   },
 
   redo: () => {
@@ -340,7 +444,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const nextFuture = state.historyFuture.slice(1);
     const currentSnapshot = {
       project: JSON.parse(JSON.stringify(state.project)),
-      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds)
+      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds),
+      label: next.label, selection: state.selection, selections: currentSelections(state)
     };
     set({
       project: next.project,
@@ -353,8 +458,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       historyFuture: nextFuture,
       canUndo: true,
       canRedo: nextFuture.length > 0
+      ,undoLabel: next.label || "编辑对象", redoLabel: nextFuture[0]?.label || null,
+      selections: normalizeSelections(next.sodaPage, next.selections || (next.selection ? [next.selection] : [])),
+      selection: lastSelection(normalizeSelections(next.sodaPage, next.selections || (next.selection ? [next.selection] : [])))
     });
     get().triggerAutoSave();
+    get().setNotice("已重做：" + (next.label || "编辑对象"));
   },
 
   layerSettings: {
@@ -402,11 +511,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (get().initialized) return;
 
     try {
-      const { project, pages, characters } = await apiGetProject();
+      const [{ project, pages, characters }, projectIdentity] = await Promise.all([apiGetProject(), discoverProjectIdentity()]);
       set({
         sodaProject: project,
         pages,
         characters,
+        projectIdentity,
         initialized: true
       });
 
@@ -512,11 +622,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         return;
       }
       const openKomaPage = sodaPageToProjectPage(page);
+      const recoveryDraft = readRecoveryDraft(get().projectIdentity, pageId);
+      if (recoveryDraft) writeRecoveryDraft(recoveryDraft, recoveryDraft);
 
       set({
         activePageId: pageId,
         sodaPage: page,
         currentVersion: version,
+        saveStatus: "saved", saveError: null,
+        objectFlags: readObjectFlags(get().projectIdentity, pageId),
+        recoveryDraft,
         hasUnsavedChanges: false,
         validationIssues: [],
         selection: null,
@@ -524,6 +639,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         dirtyBubbleIds: new Set<string>(),
         historyPast: [],
         historyFuture: [],
+        undoLabel: null, redoLabel: null,
         historyGroup: null,
         canUndo: false,
         canRedo: false,
@@ -698,6 +814,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update canvas panel
   updatePanel: (id: string, patch: Partial<Panel>) => {
+    if (locked(get(), { kind: "panel", id }, ["x", "y", "width", "height", "shape"].some(key => key in patch))) return;
     get().recordEdit(`panel:${id}`);
     const state = get();
     state.dirtyPanelIds.add(id);
@@ -740,6 +857,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update Soda panel metadata (shot, angle, figures, description, caption_en)
   updateSodaPanel: (id: string, patch: Partial<SodaPanel>) => {
+    if (locked(get(), { kind: "panel", id }, !!patch.shape || "figures" in patch || "character_ids" in patch)) return;
     get().recordEdit(`panel:${id}`);
     const state = get();
     if (patch.shape) state.dirtyPanelIds.add(id);
@@ -799,6 +917,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // The cast buttons edit the visible people as well as the generated cast.
   togglePanelCharacter: (panelId, characterId) => {
+    if (locked(get(), { kind: "panel", id: panelId }, true)) return;
     const state = get();
     const panel = state.project.pages[0]?.panels.find(item => item.id === panelId);
     if (!panel?.sodaData || !state.sodaPage) return;
@@ -826,6 +945,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update Bubble (bidirectional sync with sodaData.bbox, fixing S1)
   updateBubble: (id: string, patch: Partial<Bubble>) => {
+    if (locked(get(), { kind: "text", id })) return;
     get().recordEdit(`text:${id}`);
     const state = get();
     state.dirtyBubbleIds.add(id);
@@ -870,6 +990,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update text box (bidirectional sync with OpenKoma bubble)
   updateSodaText: (id: string, patch: Partial<SodaText>) => {
+    if (locked(get(), { kind: "text", id })) return;
     get().recordEdit(`text:${id}`);
     const state = get();
     state.dirtyBubbleIds.add(id);
@@ -934,6 +1055,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update overlay
   updateSodaOverlay: (id: string, patch: Partial<SodaOverlay>) => {
+    if (locked(get(), { kind: "overlay", id })) return;
     get().recordEdit(`overlay:${id}`);
     const state = get();
     if (!state.sodaPage) return;
@@ -957,6 +1079,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   addFigureToPanel: (panelId: string, figure: Figure) => {
+    if (locked(get(), { kind: "panel", id: panelId })) return;
     const state = get();
     if (!state.sodaPage) return;
 
@@ -995,6 +1118,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const activePage = state.project.pages[0];
     if (!state.sodaPage || !activePage) return;
     const targetId = insertionPanelId(state, panelId);
+    if (targetId && locked(state, { kind: "panel", id: targetId })) return;
     const panel = activePage.panels.find(item => item.id === targetId);
     if (!panel) return;
     const existing = resolvedFigures(panel.sodaData!, state.sodaPage.reading_direction).map((figure, index) => ({ ...figure, id: getFigureId(figure, index) }));
@@ -1022,6 +1146,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateFigureById: (panelId, id, patch) => {
+    if (locked(get(), { kind: "figure", panelId, id })) return;
     const state = get();
     const panel = state.project.pages[0]?.panels.find(item => item.id === panelId);
     if (!panel?.sodaData) return;
@@ -1056,6 +1181,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   removeFigureById: (panelId, id) => {
+    if (locked(get(), { kind: "figure", panelId, id })) return;
     const state = get();
     const panel = state.project.pages[0]?.panels.find(item => item.id === panelId);
     if (!panel?.sodaData) return;
@@ -1071,6 +1197,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Floating mini-toolbar actions (P4c Item 5)
   splitPanelHorizontal: (panelId: string) => {
+    if (locked(get(), { kind: "panel", id: panelId }, true)) return;
     const state = get();
     const activePage = state.project.pages[0];
     if (!activePage || !state.sodaPage) return;
@@ -1149,6 +1276,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   splitPanelVertical: (panelId: string) => {
+    if (locked(get(), { kind: "panel", id: panelId }, true)) return;
     const state = get();
     const activePage = state.project.pages[0];
     if (!activePage || !state.sodaPage) return;
@@ -1233,6 +1361,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const activePage = state.project.pages[0];
     if (!activePage || !state.sodaPage) return;
     const targetId = insertionPanelId(state, panelId);
+    if (targetId && locked(state, { kind: "panel", id: targetId })) return;
     const panel = activePage.panels.find((p) => p.id === targetId);
     if (!panel) return;
     const preset = TEXT_PRESETS[presetId];
@@ -1289,64 +1418,169 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     get().setNotice(`已添加${preset.label}，在右侧编辑文字`);
   },
 
-  selectItem: (selection: Selection | null) => {
-    set({ selection });
-  },
-
-  deleteSelection: () => {
+  selectItem: (selection: Selection | null, additive = false) => {
     const state = get();
-    const sel = state.selection;
-    if (!sel || !state.sodaPage) return;
-    if (sel.kind === "figure") {
-      state.removeFigureById(sel.panelId, sel.id);
-      return;
-    }
-    get().pushHistory();
-
-    const activePage = state.project.pages[0];
-    if (sel.kind === "panel") {
-      const currentPage = projectPageToSodaPage(activePage, state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds);
-      const removedTextIds = new Set(currentPage.texts.filter(text => text.panel_id === sel.id).map(text => text.id));
-      const nextPanels = activePage.panels.filter((p) => p.id !== sel.id);
-      const nextSodaPage = {
-        ...currentPage,
-        panels: currentPage.panels.filter(panel => panel.id !== sel.id),
-        texts: currentPage.texts.filter(text => !removedTextIds.has(text.id)),
-        ...(currentPage.overlays ? { overlays: currentPage.overlays.filter(overlay => overlay.panel_id !== sel.id) } : {})
-      };
-      set({
-        selection: null,
-        sodaPage: nextSodaPage,
-        sketchGeometry: generatePageSketchGeometry(nextSodaPage, state.characters as any),
-        project: {
-          ...state.project,
-          pages: [{ ...activePage, panels: nextPanels, bubbles: activePage.bubbles.filter(bubble => !removedTextIds.has(bubble.id)) }]
+    if (!selection || !state.sodaPage) { set({ selection: null, selections: [] }); return; }
+    let items = additive ? currentSelections(state) : [];
+    const key = selectionKey(selection), present = items.some(item => selectionKey(item) === key);
+    items = additive && present ? items.filter(item => selectionKey(item) !== key) : [...items, selection];
+    const selections = normalizeSelections(state.getEditableSource()!, items);
+    set({ selections, selection: selections[selections.length - 1] || null });
+  },
+  selectItems: (items) => {
+    const source = get().getEditableSource();
+    const selections = source ? normalizeSelections(source, items) : [];
+    set({ selections, selection: selections[selections.length - 1] || null });
+  },
+  getEditableSource: () => {
+    const state = get(), page = state.project.pages[0];
+    return state.sodaPage && page ? projectPageToSodaPage(page, state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds) : null;
+  },
+  moveSelection: (dx, dy) => {
+    const state = get(), page = state.getEditableSource();
+    if (!page || !Number.isFinite(dx) || !Number.isFinite(dy) || (!dx && !dy)) return;
+    const selected = editableSelections(state, page, true);
+    if (!selected.length) return;
+    commitPageEdit(state, set, movePageSelections(page, selected, dx, dy, state.sketchGeometry, state.project.pages[0]), selected.length > 1 ? "移动所选对象" : "移动对象", selected);
+  },
+  duplicateSelection: (dx = 24, dy = 24) => {
+    const state = get(), page = state.getEditableSource();
+    if (!page) return [];
+    const selected = editableSelections(state, page);
+    if (!selected.length) return [];
+    const result = pastePageSelections(page, copyPageSelections(page, selected, state.projectIdentity, state.sketchGeometry), dx, dy, undefined, state.project.pages[0]);
+    if (!result.selections.length) return [];
+    commitPageEdit(state, set, result.page, "复制所选对象", result.selections);
+    return result.selections;
+  },
+  copySelection: async () => {
+    const state = get(), page = state.getEditableSource();
+    if (!page || !currentSelections(state).length) return false;
+    const clipboard = copyPageSelections(page, currentSelections(state), state.projectIdentity, state.sketchGeometry);
+    set({ clipboard });
+    try { if (typeof navigator !== "undefined") await navigator.clipboard?.writeText(JSON.stringify(clipboard)); } catch { /* The in-app clipboard remains usable when browser permission is denied. */ }
+    state.setNotice("已复制所选对象"); return true;
+  },
+  pasteSelection: async () => {
+    const state = get(), pageId = state.activePageId;
+    let clipboard = state.clipboard;
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+        const raw = await navigator.clipboard.readText();
+        if (raw.length < 5000000) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.format === "soda-editor-elements-v1" && Array.isArray(parsed.panels) && Array.isArray(parsed.texts) && Array.isArray(parsed.figures) && Array.isArray(parsed.overlays)) clipboard = parsed;
         }
-      });
-      get().triggerAutoSave();
-      get().setNotice("已删除分镜");
-    } else if (sel.kind === "text" || sel.kind === "bubble") {
-      const nextBubbles = activePage.bubbles.filter((b) => b.id !== sel.id);
-      const nextSodaTexts = state.sodaPage.texts.filter((t) => t.id !== sel.id);
-      set({
-        selection: null,
-        sodaPage: { ...state.sodaPage, texts: nextSodaTexts },
-        project: {
-          ...state.project,
-          pages: [{ ...activePage, bubbles: nextBubbles }]
-        }
-      });
-      get().triggerAutoSave();
-      get().setNotice("已删除台词框");
-    } else if (sel.kind === "overlay") {
-      const overlays = state.sodaPage.overlays || [];
-      const nextOverlays = overlays.filter((o) => o.id !== sel.id);
-      set({
-        selection: null,
-        sodaPage: { ...state.sodaPage, overlays: nextOverlays }
-      });
-      get().triggerAutoSave();
+      }
+    } catch { /* A denied or unrelated system clipboard falls back to the editor clipboard. */ }
+    const latest = get(), page = latest.getEditableSource();
+    if (!clipboard || !page || latest.activePageId !== pageId) return [];
+    if (clipboard.projectIdentity && clipboard.projectIdentity !== latest.projectIdentity) {
+      latest.setNotice("跨项目粘贴需要关联角色，请使用 JSON 导入完成角色映射"); return [];
     }
+    const target = insertionPanelId(latest);
+    if ((clipboard.figures.length || clipboard.texts.length) && target && locked(latest, { kind: "panel", id: target })) return [];
+    try {
+      const result = pastePageSelections(page, clipboard, 24, 24, target, latest.project.pages[0]);
+      if (!result.selections.length) return [];
+      commitPageEdit(latest, set, result.page, "粘贴对象", result.selections); return result.selections;
+    } catch { latest.setNotice("剪贴板对象无效，未粘贴任何内容"); return []; }
+  },
+  applySelectionStyle: (patch) => {
+    const state = get(), page = state.getEditableSource();
+    if (!page) return;
+    const selected = editableSelections(state, page, !!patch.panel?.shape);
+    const next = stylePageSelections(page, selected, patch, state.sketchGeometry);
+    if (JSON.stringify(next) !== JSON.stringify(page)) commitPageEdit(state, set, next, "批量修改属性", selected);
+  },
+  batchUpdateSelections: (patch) => get().applySelectionStyle(patch),
+  updateTextsBatch: (updates) => {
+    const state = get(), page = state.getEditableSource();
+    if (!page) return;
+    let next = page;
+    updates.forEach(({ id, patch }) => {
+      if (!isSelectionLocked(page, state.objectFlags, { kind: "text", id })) next = stylePageSelections(next, [{ kind: "text", id }], { text: patch });
+    });
+    if (JSON.stringify(next) !== JSON.stringify(page)) commitPageEdit(state, set, next, "编辑本页台词");
+  },
+  alignSelection: (action) => {
+    const state = get(), page = state.getEditableSource();
+    if (!page) return;
+    const selected = editableSelections(state, page, true), next = alignPageSelections(page, selected, action, state.sketchGeometry, state.project.pages[0]);
+    if (JSON.stringify(next) !== JSON.stringify(page)) commitPageEdit(state, set, next, action.startsWith("distribute") ? "等距分布对象" : "对齐对象", selected);
+  },
+  getObjectFlags: (selection) => ({ locked: get().isObjectLocked(selection), hidden: get().isObjectHidden(selection) }),
+  isObjectLocked: (selection) => !!get().sodaPage && isSelectionLocked(get().sodaPage!, get().objectFlags, selection),
+  isObjectHidden: (selection) => !!get().sodaPage && isSelectionHidden(get().sodaPage!, get().objectFlags, selection),
+  toggleObjectLock: (selection) => {
+    const state = get(), items = selection ? [selection] : currentSelections(state);
+    const next = !items.every(item => state.objectFlags[selectionKey(item)]?.locked), flags = { ...state.objectFlags };
+    items.forEach(item => { const key = selectionKey(item); flags[key] = { ...(flags[key] || { hidden: false, locked: false }), locked: next }; });
+    set({ objectFlags: flags }); writeObjectFlags(state.projectIdentity, state.activePageId, flags);
+  },
+  toggleObjectVisibility: (selection) => {
+    const state = get(), items = selection ? [selection] : currentSelections(state);
+    const next = !items.every(item => state.objectFlags[selectionKey(item)]?.hidden), flags = { ...state.objectFlags };
+    items.forEach(item => { const key = selectionKey(item); flags[key] = { ...(flags[key] || { hidden: false, locked: false }), hidden: next }; });
+    set({ objectFlags: flags }); writeObjectFlags(state.projectIdentity, state.activePageId, flags);
+  },
+  deleteSelection: () => {
+    const state = get(), page = state.getEditableSource();
+    if (!page) return;
+    const selected = editableSelections(state, page, true);
+    if (!selected.length) return;
+    commitPageEdit(state, set, deletePageSelections(page, selected), selected.length > 1 ? "删除所选对象" : "删除对象", []);
+    state.setNotice("已删除所选对象");
+  },
+  downloadSourceJson: () => {
+    const page = get().getEditableSource();
+    if (!page || typeof document === "undefined") return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(page, null, 2)], { type: "application/json;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = page.id + ".soda.json"; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+  duplicatePage: async (pageId) => {
+    const state = get(), id = pageId || state.activePageId;
+    try {
+      const source = id === get().activePageId ? get().getEditableSource() : (await apiGetPage(id)).page;
+      if (!source) return;
+      await createDetachedPage(source, get, set);
+      get().setNotice("已复制分镜页；原页的编辑已保留");
+    } catch (error) { get().setNotice("复制页面失败：" + (error as Error).message); }
+  },
+  retrySave: () => get().saveCurrentPage(true),
+  restoreRecoveryDraft: async () => {
+    const state = get(), draft = state.recoveryDraft;
+    if (!draft || draft.projectIdentity !== state.projectIdentity || draft.pageId !== state.activePageId) return false;
+    try {
+      const latest = await apiGetPage(draft.pageId);
+      if (get().activePageId !== draft.pageId || get().editRevision !== state.editRevision) return false;
+      if (latest.version !== draft.baseVersion) {
+        set({ saveError: "恢复草稿基于较早版本，当前文件已更新。可将草稿另存为新页，避免覆盖新内容。", saveStatus: "conflict" });
+        return false;
+      }
+      clearTimeout(get().autoSaveTimer);
+      clearRecoveryDraft(state.projectIdentity, draft.pageId, true);
+      set({ recoveryDraft: null, currentVersion: latest.version, saveError: null, saveStatus: "dirty" });
+      commitPageEdit(get(), set, JSON.parse(JSON.stringify(draft.page)), "恢复本地草稿", []);
+      return true;
+    } catch (error) { set({ saveError: "无法检查服务端版本：" + (error as Error).message, saveStatus: "error" }); return false; }
+  },
+  discardRecoveryDraft: () => {
+    const state = get(); clearRecoveryDraft(state.projectIdentity, state.activePageId, true); set({ recoveryDraft: null });
+    if (state.hasUnsavedChanges) persistCurrentDraft(get());
+    else set({ saveStatus: "saved", saveError: null });
+  },
+  saveRecoveryAsNewPage: async () => {
+    const state = get(), draft = state.recoveryDraft;
+    if (!draft || draft.projectIdentity !== state.projectIdentity) return null;
+    try {
+      const result = await createDetachedPage(draft.page, get, set);
+      clearRecoveryDraft(draft.projectIdentity, draft.pageId, true);
+      if (get().recoveryDraft === draft) set({ recoveryDraft: null });
+      if (get().activePageId === draft.pageId && get().hasUnsavedChanges) persistCurrentDraft(get());
+      return result;
+    } catch (error) { set({ saveError: "草稿另存失败：" + (error as Error).message }); return null; }
   },
 
   // Save current page
@@ -1376,12 +1610,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
               hasUnsavedChanges: !unchanged,
               lastSavedTime: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }),
               validationIssues: res.warnings || [],
+              saveStatus: unchanged ? "saved" : "saving", saveError: null,
               ...(unchanged ? {
                 sodaPage: res.page || pageToSave,
                 dirtyPanelIds: new Set<string>(), dirtyBubbleIds: new Set<string>()
               } : {})
             });
-            if (!unchanged) continue;
+            if (!unchanged) { persistCurrentDraft(get()); continue; }
+            clearRecoveryDraft(get().projectIdentity, pageId);
 
             clearTimeout(get().autoSaveTimer);
             set({ autoSaveTimer: null });
@@ -1396,7 +1632,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           }
 
           set({ hasUnsavedChanges: true });
+          persistCurrentDraft(get());
           if (res.status === 409) {
+            set({ saveStatus: "conflict", saveError: "文件已被外部修改，未覆盖本地编辑。请处理冲突或下载源文件。" });
             const latest = get();
             const backup = projectPageToSodaPage(latest.project.pages[0], latest.sodaPage!, latest.dirtyPanelIds, latest.dirtyBubbleIds);
             set({ conflictModal: {
@@ -1406,16 +1644,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             get().setNotice("保存冲突: 页面已被外部修改");
           } else if (res.status === 422) {
             const issues = res.issues || res.errors || [];
-            set({ validationIssues: issues });
+            set({ validationIssues: issues, saveStatus: "error", saveError: "保存未通过校验，请修正检查器中的错误后重试。" });
             get().setNotice(`有 ${issues.length} 个问题，已在右栏列出`);
           } else {
+            set({ saveStatus: "error", saveError: res.error || "保存失败，请重试或下载分镜源文件。" });
             get().setNotice(`保存失败: ${res.error}`);
           }
           return false;
         }
       } catch (err: any) {
         if (get().activePageId === pageId) {
-          set({ hasUnsavedChanges: true });
+          set({ hasUnsavedChanges: true, saveStatus: "error", saveError: err.message || "无法连接保存服务" });
+          persistCurrentDraft(get());
           get().setNotice(`保存异常: ${err.message}`);
         }
       }
@@ -1425,13 +1665,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const promise = drain().finally(() => {
       if (get().savePromise === promise) set({ savePromise: null, isSaving: false });
     });
-    set({ savePromise: promise, isSaving: true });
+    set({ savePromise: promise, isSaving: true, saveStatus: "saving", saveError: null });
     return promise;
   },
 
   triggerAutoSave: () => {
     const state = get();
-    set({ hasUnsavedChanges: true, editRevision: state.editRevision + 1 });
+    set({ hasUnsavedChanges: true, editRevision: state.editRevision + 1, saveStatus: state.saveStatus === "error" || state.saveStatus === "conflict" ? state.saveStatus : "dirty" });
+    persistCurrentDraft(get());
     if (state.autoSaveTimer) {
       clearTimeout(state.autoSaveTimer);
     }
@@ -1443,7 +1684,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   reloadCurrentPage: async () => {
     const state = get();
-    if (!state.activePageId) return;
+    if (!state.activePageId) return false;
     const pageId = state.activePageId;
     const revision = state.editRevision;
     const requestedVersion = state.currentVersion;
@@ -1451,7 +1692,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const reloadSequence = ++pageReloadSequence;
     try {
       const { page, version } = await apiGetPage(pageId);
-      if (requestSequence !== pageLoadSequence || reloadSequence !== pageReloadSequence || get().activePageId !== pageId || get().editRevision !== revision || get().currentVersion !== requestedVersion) return;
+      if (requestSequence !== pageLoadSequence || reloadSequence !== pageReloadSequence || get().activePageId !== pageId || get().editRevision !== revision || get().currentVersion !== requestedVersion) return false;
       const openKomaPage = sodaPageToProjectPage(page);
 
       set({
@@ -1467,13 +1708,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       });
 
       apiGetSketchGeometry(pageId).then((geo) => {
-        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return;
+        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return false;
         set({
           sketchGeometry: geo,
           sketchGeometryUnavailable: !geo
         });
       }).catch(() => {
-        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return;
+        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return false;
         set({
           sketchGeometry: null,
           sketchGeometryUnavailable: true
@@ -1481,7 +1722,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       });
 
       apiGetRenders(pageId).then((r) => {
-        if (get().activePageId !== pageId || get().currentVersion !== version) return;
+        if (get().activePageId !== pageId || get().currentVersion !== version) return false;
         let selectedUrl: string | null = null;
         if (r.selected_render) {
           const matched = r.renders.find((x) => x.path === r.selected_render);
@@ -1489,16 +1730,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }
         set({ renders: r, selectedRenderUrl: selectedUrl });
       }).catch(console.error);
+      return true;
     } catch (err: any) {
-      if (requestSequence !== pageLoadSequence || reloadSequence !== pageReloadSequence || get().activePageId !== pageId) return;
+      if (requestSequence !== pageLoadSequence || reloadSequence !== pageReloadSequence || get().activePageId !== pageId) return false;
       get().setNotice(`重新载入失败: ${err.message}`);
     }
+    return false;
   },
 
   resolveConflictLoadLatest: async () => {
-    set({ conflictModal: null });
-    await get().reloadCurrentPage();
+    if (!(await get().reloadCurrentPage())) return false;
+    set({ conflictModal: null, saveStatus: "saved", saveError: null });
     get().setNotice("已载入服务端最新版本");
+    return true;
   },
 
   closeConflictModal: () => {
@@ -1508,9 +1752,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // Layout Modal & Apply
   openLayoutModal: async () => {
     const state = get();
-    if (!state.activePageId) return;
+    if (!state.activePageId) return false;
     const pageId = state.activePageId;
-    if (!(await get().saveCurrentPage()) || get().activePageId !== pageId) return;
+    if (!(await get().saveCurrentPage()) || get().activePageId !== pageId) return false;
     const version = get().currentVersion;
 
     set({
@@ -1524,7 +1768,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     try {
       const res = await apiLayoutSuggest(pageId, { candidates: 6, skew: 0 });
-      if (get().activePageId !== pageId || get().currentVersion !== version) return;
+      if (get().activePageId !== pageId || get().currentVersion !== version) return false;
       set({
         layoutModal: {
           open: true,
@@ -1532,6 +1776,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           loading: false
         }
       });
+      return true;
     } catch (err: any) {
       set({
         layoutModal: {
@@ -1542,6 +1787,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }
       });
     }
+    return false;
   },
 
   closeLayoutModal: () => {
@@ -1549,12 +1795,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   applyLayoutCandidate: async (candidateId: string) => {
+    if (Object.values(get().objectFlags).some(flag => flag.locked)) {
+      get().setNotice("页面里有已锁定对象，请解锁后再替换整页版式"); return false;
+    }
     const pageId = get().activePageId;
-    if (!pageId) return;
+    if (!pageId) return false;
     // A clean PUT still replaces the file and changes its mtime-based ETag,
     // invalidating the candidate created for the current saved version.
-    if ((get().hasUnsavedChanges || get().savePromise) && !(await get().saveCurrentPage())) return;
-    if (get().activePageId !== pageId) return;
+    if ((get().hasUnsavedChanges || get().savePromise) && !(await get().saveCurrentPage())) return false;
+    if (get().activePageId !== pageId) return false;
     const state = get();
     const revision = state.editRevision;
     const snapshot = {
@@ -1564,11 +1813,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     try {
       const res = await apiLayoutApply(pageId, candidateId, state.currentVersion);
-      if (get().activePageId !== pageId) return;
+      if (get().activePageId !== pageId) return false;
       if (get().editRevision !== revision) {
         set({ currentVersion: res.version, layoutModal: { open: false, candidates: [], loading: false } });
         get().setNotice("应用版式期间有新的编辑，已保留你的修改；请重新选择版式");
-        return;
+        return false;
       }
       const openKomaPage = sodaPageToProjectPage(res.page);
       set({
@@ -1588,9 +1837,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }
       });
       get().setNotice("已应用版式候选");
+      return true;
     } catch (err: any) {
       get().setNotice(`应用版式失败: ${err.message}`);
     }
+    return false;
   },
 
   openPreviewModal: async () => {
@@ -1605,26 +1856,55 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   openCompileModal: async () => {
-    const pageId = get().activePageId;
-    if (!pageId || !(await get().saveCurrentPage()) || get().activePageId !== pageId) return;
+    const state = get();
+    const pageId = state.activePageId;
+    if (!pageId || state.compileModal?.loading) return false;
+    const loadSequence = pageLoadSequence;
+    const pending = { open: true, loading: true, moss: null, path: "", paths: [] as string[] };
+    set({ compileModal: pending });
+
+    const isCurrentRequest = () => get().compileModal === pending;
+    const isCurrentPage = () => get().activePageId === pageId && pageLoadSequence === loadSequence;
+    const fail = (error: string) => {
+      if (!isCurrentRequest()) return false;
+      if (!isCurrentPage()) set({ compileModal: null });
+      else {
+        set({ compileModal: { ...pending, loading: false, error } });
+        get().setNotice(error);
+      }
+      return false;
+    };
 
     try {
+      if (!(await get().saveCurrentPage())) return fail(get().saveError || "保存失败，尚未编译。请检查保存提示后重试。");
+      if (!isCurrentRequest()) return false;
+      if (!isCurrentPage()) return fail("");
+      if (get().hasUnsavedChanges) return fail("保存期间出现新的编辑，请重试以导出当前内容。");
+      const revision = get().editRevision;
+      const version = get().currentVersion;
       const res = await apiCompilePage(pageId, { with_ids: true, slant_mode: "cut" });
-      if (get().activePageId !== pageId) return;
+      if (!isCurrentRequest()) return false;
+      if (!isCurrentPage()) return fail("");
+      if (get().editRevision !== revision || get().currentVersion !== version || get().hasUnsavedChanges) {
+        return fail("编译期间分镜已变化，请重试以导出当前内容。");
+      }
       set({
         compileModal: {
           open: true,
+          loading: false,
           moss: res.moss,
           path: res.path,
-          paths: res.paths || [res.path]
+          paths: res.paths?.length ? res.paths : [res.path]
         }
       });
+      return true;
     } catch (err: any) {
-      get().setNotice(`导出/编译失败: ${err.message}`);
+      return fail(`导出/编译失败: ${err?.message || "无法连接服务，请重试。"}`);
     }
   },
 
   closeCompileModal: () => {
+    if (get().compileModal?.loading) return;
     set({ compileModal: null });
   },
 
@@ -1668,7 +1948,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   submitGenerate: async (options) => {
     const state = get();
-    if (!state.activePageId) return;
+    if (!state.activePageId) return false;
     const pageId = state.activePageId;
 
     set({ generateModal: { ...state.generateModal, loading: true, error: undefined } });
@@ -1676,15 +1956,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     try {
       if (!(await get().saveCurrentPage()) || get().activePageId !== pageId) {
         set({ generateModal: { ...get().generateModal, loading: false, error: "页面尚未保存，请先处理保存提示后重试" } });
-        return;
+        return false;
       }
       const job = await apiGeneratePage(pageId, options);
-      if (get().activePageId !== pageId) return;
+      if (get().activePageId !== pageId) return false;
       set({
         activeJob: job,
         generateModal: { ...state.generateModal, open: false, loading: false }
       });
       get().setNotice(`出图任务已提交 (${job.message || "排队中"})`);
+      return true;
     } catch (err: any) {
       const msg = err.status === 501 ? "出图功能尚未安装" : err.message;
       set({
@@ -1696,30 +1977,34 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       });
       get().setNotice(`出图提示: ${msg}`);
     }
+    return false;
   },
 
   pickRender: async (renderPath: string) => {
-    const state = get();
-    if (!state.activePageId) return;
-
+    const state = get(), pageId = state.activePageId;
+    if (!pageId) return false;
     try {
-      const job = await apiPickRender(state.activePageId, renderPath);
-      // A quick CPU pick may complete over SSE before its POST response arrives.
-      // Do not replace that terminal state with the queued response snapshot.
-      set((latest) => ({
-        activeJob: latest.activeJob?.id === job.id && ["completed", "failed", "cancelled"].includes(latest.activeJob.status)
-          ? latest.activeJob
-          : job
-      }));
-      get().setNotice(`已选择底图任务 (${job.message || "处理中"})`);
-      // Update selected render
-      const r = await apiGetRenders(state.activePageId);
-      const matched = r.renders.find((x) => x.path === renderPath);
-      const url = matched?.url || `/api/files/${renderPath}`;
-      set({ renders: r, selectedRenderUrl: url });
-    } catch (err: any) {
-      const msg = err.status === 501 ? "出图功能尚未安装" : err.message;
-      get().setNotice(`选择底图失败: ${msg}`);
+      let job = await apiPickRender(pageId, renderPath);
+      set((latest) => ({ activeJob: latest.activeJob?.id === job.id && ["completed", "failed", "cancelled"].includes(latest.activeJob.status) ? latest.activeJob : job }));
+      for (let attempt = 0; attempt < 60; attempt++) {
+        if (get().activePageId !== pageId) return false;
+        const observed = get().activeJob;
+        if (observed?.id === job.id && ["completed", "failed", "cancelled"].includes(observed.status)) job = observed;
+        if (job.status === "failed" || job.status === "cancelled") throw new Error(job.error || job.message || "选用任务未完成");
+        if (job.status === "completed") {
+          const renders = await apiGetRenders(pageId);
+          if (get().activePageId !== pageId) return false;
+          if (renders.selected_render !== renderPath) throw new Error("选用结果尚未写入，请稍后重试");
+          set({ renders, selectedRenderUrl: renders.renders.find(item => item.path === renderPath)?.url || "/api/files/" + renderPath });
+          get().setNotice("已选用这张出图"); return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 500));
+        job = await apiGetJob(job.id);
+        if (get().activePageId === pageId) set({ activeJob: job });
+      }
+      get().setNotice("选用任务仍在运行，完成后会自动更新"); return false;
+    } catch (error) {
+      get().setNotice("选择底图失败：" + (error as Error).message); return false;
     }
   },
 
@@ -1785,3 +2070,11 @@ export function getActivePage(project: Project): ProjectPage {
     bubbles: []
   };
 }
+
+// Older single-object actions and direct integration fixtures may still update
+// only selection. Keep the new collection synchronized without changing callers.
+useEditorStore.subscribe((state, previous) => {
+  if (state.selection !== previous.selection && state.selections === previous.selections) {
+    useEditorStore.setState({ selections: state.selection ? [state.selection] : [] });
+  }
+});

@@ -96,6 +96,22 @@ export type Selection =
   | { kind: "overlay"; id: string }
   | { kind: "bubble"; id: string };
 
+export type ObjectFlags = { locked: boolean; hidden: boolean };
+export type SelectionAlignment = "left" | "center-x" | "right" | "top" | "center-y" | "bottom" | "distribute-x" | "distribute-y";
+export type SelectionStylePatch = {
+  text?: Partial<SodaText>;
+  panel?: Partial<SodaPanel>;
+  figure?: Omit<Partial<Figure>, "editor"> & { editor?: Partial<FigureEditor> };
+};
+export type RecoveryDraft = {
+  format: "soda-editor-recovery-v1";
+  projectIdentity: string;
+  pageId: string;
+  baseVersion: string;
+  savedAt: number;
+  page: SodaPage;
+};
+
 // ==========================================
 // Soda Storyboard API Types
 // ==========================================

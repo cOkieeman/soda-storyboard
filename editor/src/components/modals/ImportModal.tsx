@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileUp, X } from "lucide-react";
+import { FileUp } from "lucide-react";
+import ModalShell from "./ModalShell";
+import NumberInput from "../ui/NumberInput";
 import { ApiError } from "../../lib/api";
 import { resolvedFigures } from "../../lib/figures";
 import { collectImportedCharacterIds, mapImportedCharacters, parseImportedPage, type ImportedPageDraft } from "../../lib/importPage";
@@ -37,7 +39,9 @@ function ImportDialog() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const [widthValid, setWidthValid] = useState(true);
+  const [heightValid, setHeightValid] = useState(true);
+  const [errorOffset, setErrorOffset] = useState<number | null>(null);
   const sourceRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLElement>(null);
   const busyRef = useRef(false);
@@ -49,25 +53,9 @@ function ImportDialog() {
     return mapImportedCharacters(draft.page, mapping);
   }, [draft, missingRoles, roleMapping]);
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    sourceRef.current?.focus();
-    const keyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault(); event.stopPropagation();
-        if (!busyRef.current) close();
-      } else if (event.key === "Tab") {
-        const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]') || [])].filter(element => element.getClientRects().length);
-        const first = focusable[0], last = focusable[focusable.length - 1];
-        if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-      }
-    };
-    document.addEventListener("keydown", keyboard, true);
-    return () => { fileSequence.current += 1; document.removeEventListener("keydown", keyboard, true); previous?.focus(); };
-  }, [close]);
+  useEffect(() => () => { fileSequence.current += 1; }, []);
 
-  const invalidatePreview = () => { setDraft(null); setRoleMapping({}); setDimensionsConfirmed(false); setError(null); };
+  const invalidatePreview = () => { setDraft(null); setRoleMapping({}); setDimensionsConfirmed(false); setError(null); setErrorOffset(null); };
   const readFile = async (file: File | undefined) => {
     if (!file) return;
     const request = ++fileSequence.current;
@@ -82,9 +70,21 @@ function ImportDialog() {
     finally { if (request === fileSequence.current) setReading(false); }
   };
   const parse = () => {
-    setError(null);
+    setError(null); setErrorOffset(null);
     try {
       if (new TextEncoder().encode(source).length > MAX_SOURCE_BYTES) throw new Error("内容超过 2 MB。请拆分为单页 JSON 后导入。");
+      if (!widthValid || !heightValid) throw new Error("请先修正画布宽度和高度。");
+      const trimmed = source.trim();
+      const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```$/i.exec(trimmed);
+      const json = fenced ? fenced[1].trim() : trimmed;
+      try { JSON.parse(json); } catch (syntax) {
+        const message = (syntax as Error).message;
+        const match = /position (\d+)/i.exec(message);
+        const offset = source.indexOf(json) + (match ? Number(match[1]) : json.length);
+        const prefix = source.slice(0, offset); const line = prefix.split("\n").length; const column = prefix.length - prefix.lastIndexOf("\n");
+        setErrorOffset(offset);
+        throw new Error(`JSON 语法错误：第 ${line} 行，第 ${column} 列。${message}`);
+      }
       setDraft(parseImportedPage(source, { canvasWidth: Number(width), canvasHeight: Number(height) }));
       setRoleMapping({}); setDimensionsConfirmed(false);
       if (window.innerWidth < 768) requestAnimationFrame(() => resultRef.current?.scrollIntoView({ block: "start" }));
@@ -101,24 +101,21 @@ function ImportDialog() {
       close();
     } catch (failure) {
       const issues = failure instanceof ApiError ? failure.data?.errors || failure.data?.issues : [];
-      const details = Array.isArray(issues) ? issues.map(issue => issue.message).filter(Boolean).join("；") : "";
+      const details = Array.isArray(issues) ? issues.map(issue => `${issue.field || issue.code || "页面"}：${issue.message}`).filter(Boolean).join("；") : "";
       setError(details || (failure as Error).message || "导入失败，请检查 JSON 内容后重试。");
     } finally { busyRef.current = false; setBusy(false); }
   };
   const figureCount = previewPage?.panels.reduce((count, panel) => count + resolvedFigures(panel, previewPage.reading_direction).length, 0) || 0;
 
-  return <div className="import-modal-scrim" onPointerDown={event => { if (event.target === event.currentTarget && !busyRef.current) close(); }}>
-    <div className="import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title" aria-describedby="import-description" ref={dialogRef}>
-      <header className="import-dialog-header">
-        <div><h2 id="import-title">导入 JSON</h2><p id="import-description">选择文件或粘贴内容，预览后导入为新页。</p></div>
-        <button className="icon-button" type="button" aria-label="关闭导入" disabled={busy} onClick={close}><X /></button>
-      </header>
+  const unmapped = missingRoles.filter(id => !roleChoice(roleMapping, id)).length;
+  const blocker = reading ? "正在读取文件…" : !widthValid || !heightValid ? "请修正画布尺寸" : !draft ? "请先解析并预览 JSON" : unmapped ? `还需关联 ${unmapped} 个角色` : draft.needsCanvasSize && !dimensionsConfirmed ? "请确认原画布尺寸" : "检查预览后，导入为新页。原有页面会保留。";
+  return <ModalShell title="导入 JSON" description="选择文件或粘贴内容，预览后导入为新页。" onClose={close} busy={busy} initialFocusRef={sourceRef} className="max-w-[1040px]" footer={<><span role="status" className="mr-auto text-xs text-[var(--muted)]">{blocker}</span><button className="ui-btn" disabled={busy} onClick={close}>取消</button><button className="ui-btn ui-btn-primary" disabled={busy || reading || !draft || Boolean(unmapped) || !widthValid || !heightValid || Boolean(draft?.needsCanvasSize && !dimensionsConfirmed)} onClick={() => void importPage()}>{busy ? "正在导入…" : error && draft ? "重试导入" : "导入为新页"}</button></>}>
       <div className="import-dialog-body">
         <section className="import-source" aria-label="JSON 来源">
           <div className="import-source-heading"><label className="ui-btn import-file-button"><FileUp size={16} />选择 JSON 文件<input type="file" accept=".json,application/json" aria-label="选择 JSON 文件" disabled={busy || reading} onChange={event => { void readFile(event.target.files?.[0]); event.target.value = ""; }} /></label><span>{reading ? "读取中…" : filename || "支持分镜单 / MOSS 布局"}</span></div>
           <label className="ui-label" htmlFor="import-json-source">或粘贴 JSON 内容</label>
           <textarea id="import-json-source" ref={sourceRef} value={source} disabled={busy || reading} spellCheck={false} placeholder={'{\n  "panels": [...],\n  "texts": [...]\n}'} onChange={event => { fileSequence.current += 1; setSource(event.target.value); setFilename(""); invalidatePreview(); }} />
-          <div className="import-canvas-size"><label>原画布宽度<input type="number" min="1" max="8192" value={width} disabled={busy} onChange={event => { setWidth(event.target.value); invalidatePreview(); }} /></label><span>×</span><label>原画布高度<input type="number" min="1" max="8192" value={height} disabled={busy} onChange={event => { setHeight(event.target.value); invalidatePreview(); }} /></label></div>
+          <div className="import-canvas-size"><label>原画布宽度<NumberInput aria-label="原画布宽度" min={1} max={8192} integer value={Number(width)} disabled={busy} onValidityChange={setWidthValid} onCommit={value => { setWidth(String(value)); invalidatePreview(); }} /></label><span>×</span><label>原画布高度<NumberInput aria-label="原画布高度" min={1} max={8192} integer value={Number(height)} disabled={busy} onValidityChange={setHeightValid} onCommit={value => { setHeight(String(value)); invalidatePreview(); }} /></label></div>
           <p className="import-help">MOSS 缺少画布尺寸时使用上方数值；分镜单使用文件自带尺寸。每次导入一页，最大 2 MB。</p>
           <button className="ui-btn" type="button" onClick={parse} disabled={busy || reading || !source.trim()}>解析并预览</button>
         </section>
@@ -133,10 +130,9 @@ function ImportDialog() {
           </> : <div className="import-preview-empty"><FileUp size={32} /><h3>先看版式，再导入</h3><p>读取后会显示格子、文字和人物图层范围。原有页面会保留。</p><p>支持 Soda 分镜单和 MOSS 的 summary / items 布局。ComfyUI 工作流等其他 JSON 需要先转换。</p></div>}
         </section>
       </div>
-      {error && <p className="import-error" role="alert">{error}</p>}
-      <footer className="import-dialog-footer"><span>导入时会先保存当前页。</span><div><button className="ui-btn" type="button" disabled={busy} onClick={close}>取消</button><button className="ui-btn ui-btn-primary" type="button" disabled={busy || reading || !draft || missingRoles.some(id => !roleChoice(roleMapping, id)) || (Boolean(draft?.needsCanvasSize) && !dimensionsConfirmed)} onClick={() => void importPage()}>{busy ? "正在导入…" : "导入为新页"}</button></div></footer>
-    </div>
-  </div>;
+      {error && <div className="import-error" role="alert"><p>{error}</p>{errorOffset !== null && <button className="ui-btn ui-btn-sm mt-2" onClick={() => { sourceRef.current?.focus(); sourceRef.current?.setSelectionRange(errorOffset, errorOffset + 1); }}>定位错误位置</button>}</div>}
+    </ModalShell>;
+
 }
 
 export default function ImportModal() {

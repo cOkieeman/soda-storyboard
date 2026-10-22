@@ -1,15 +1,17 @@
+import { useEffect, useRef } from "react";
 import Konva from "konva";
 import { Arrow, Circle, Ellipse, Group, Image as KonvaImage, Line as KonvaLine, Rect, Shape, Text } from "react-konva";
 import useImage from "use-image";
 import { Bubble, Panel, SketchGeometry } from "../../types";
 import {
-  PANEL_EDGE_HANDLE_KEYS, PANEL_SHAPE_HANDLE_KEYS, PanelShapeKey, Point,
-  getPanelCanvasPoint, getPanelCenter, getPanelEdgeHandlePoint, getPanelShapeHandlePoint,
-  normalizePanelShape, updatePanelEdgeHandle, updatePanelShapeHandle
+  PANEL_EDGE_HANDLE_KEYS, PANEL_SHAPE_HANDLE_KEYS, Point,
+  getPanelCanvasPoint, getPanelCenter, getPanelEdgeHandlePoint, getPanelShapeHandlePoint
 } from "../../lib/panelGeometry";
 import { drawPanelPath, getPanelImageLayout } from "../../lib/panelRender";
 import { fitHorizontalFontSize, layoutVerticalText, translateVerticalForms, verticalColumns } from "../../lib/lettering";
 import { layoutShoutText, shoutBubblePoints } from "../../lib/bubbleGeometry";
+
+import { startPanelHandleDrag, updatePanelHandleDrag, type PanelHandle, type PanelHandleDrag } from "../../lib/panelHandleDrag";
 
 const SKEW_HANDLE_RADIUS = 10;
 const SKEW_HANDLE_HIT_RADIUS = 24;
@@ -43,6 +45,7 @@ export function PanelBorderShape({
 
   return (
     <Shape
+      name="panel-border"
       sceneFunc={(context, shape) => {
         context.beginPath();
         drawPanelPath(context, panel);
@@ -221,116 +224,111 @@ export function SketchGeometryPanelLayer({
 }
 
 // Skew & Edge Push/Pull Handles
-export function PanelSkewHandles({
-  panel,
-  onDraftChange,
-  onCommit
-}: {
+export function PanelSkewHandles({ panel, onDraftChange, onCommit, onCancel, onInteractionChange }: {
   panel: Panel;
   onDraftChange: (patch: Partial<Panel>) => void;
   onCommit: (patch: Partial<Panel>) => void;
+  onCancel: () => void;
+  onInteractionChange?: (active: boolean) => void;
 }) {
-  const shape = normalizePanelShape(panel.shape, panel.width);
-
-  const getLocalPointer = (node: Konva.Node): Point | null => {
-    const parent = node.getParent();
-    const stage = node.getStage();
-    const pointer = stage?.getPointerPosition();
-    if (!parent || !pointer) {
-      return null;
-    }
-    return parent.getAbsoluteTransform().copy().invert().point(pointer);
-  };
-
-  const createBoundFunc =
-    (key: PanelShapeKey) =>
-    function dragBoundFunc(this: Konva.Node, position: Konva.Vector2d) {
-      const localPoint = getLocalPointer(this);
-      if (!localPoint) {
-        return position;
-      }
-
-      const nextShape = updatePanelShapeHandle(shape, key, panel.width, localPoint.x);
-      const nextLocalPoint = getPanelShapeHandlePoint({ width: panel.width, height: panel.height, shape: nextShape }, key);
-
-      return getPanelCanvasPoint(panel, nextLocalPoint);
+  const interaction = useRef<{ node: Konva.Node; drag: PanelHandleDrag; last: ReturnType<typeof updatePanelHandleDrag> | null } | null>(null);
+  const interactionCallback = useRef(onInteractionChange);
+  const cancelCallback = useRef(onCancel);
+  interactionCallback.current = onInteractionChange;
+  cancelCallback.current = onCancel;
+  useEffect(() => {
+    const release = () => interactionCallback.current?.(false);
+    const cancel = () => {
+      const current = interaction.current;
+      if (!current) return;
+      interaction.current = null;
+      if (current.node.isDragging()) current.node.stopDrag();
+      cancelCallback.current();
+      release();
     };
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || !interaction.current?.node.isDragging()) return;
+      event.preventDefault(); event.stopPropagation(); cancel();
+    };
+    window.addEventListener("keydown", keyboard, true);
+    window.addEventListener("blur", cancel);
+    window.addEventListener("mouseup", release);
+    window.addEventListener("touchend", release);
+    window.addEventListener("touchcancel", release);
+    return () => {
+      window.removeEventListener("mouseup", release);
+      window.removeEventListener("touchend", release);
+      window.removeEventListener("touchcancel", release);
+      window.removeEventListener("keydown", keyboard, true);
+      window.removeEventListener("blur", cancel);
+      cancel(); release();
+    };
+  }, []);
 
-  return (
-    <Group name="panel-skew-overlay">
-      {/* 4 Corner Skew Handles */}
-      {PANEL_SHAPE_HANDLE_KEYS.map((key) => {
-        const point = getPanelShapeHandlePoint({ width: panel.width, height: panel.height, shape }, key);
+  const pagePointer = (node: Konva.Node): Point | null => {
+    const stage = node.getStage(), point = stage?.getPointerPosition();
+    return stage && point ? stage.getAbsoluteTransform().copy().invert().point(point) : null;
+  };
+  const begin = (event: Konva.KonvaEventObject<Event>, handle: PanelHandle) => {
+    event.cancelBubble = true;
+    const pointer = pagePointer(event.target);
+    if (!pointer) return;
+    interaction.current = { node: event.target, drag: startPanelHandleDrag(panel, handle, pointer), last: null };
+    interactionCallback.current?.(true);
+  };
+  const candidate = (node: Konva.Node) => {
+    const current = interaction.current, pointer = pagePointer(node);
+    if (!current || !pointer) return null;
+    current.last = updatePanelHandleDrag(current.drag, pointer);
+    return current.last;
+  };
+  const bounds = function(this: Konva.Node, position: Konva.Vector2d) {
+    const next = candidate(this), stage = this.getStage();
+    // Konva's bound function consumes absolute stage pixels, not page units.
+    return next && stage ? stage.getAbsoluteTransform().point(next.point) : position;
+  };
+  const move = (event: Konva.KonvaEventObject<DragEvent>) => {
+    event.cancelBubble = true;
+    const next = candidate(event.target);
+    if (next) onDraftChange(next.patch);
+  };
+  const finish = (event: Konva.KonvaEventObject<DragEvent>) => {
+    event.cancelBubble = true;
+    const last = interaction.current?.last;
+    interaction.current = null;
+    interactionCallback.current?.(false);
+    // The preview already contains the final result; recalculating against
+    // displayPanel on mouseup would apply top-edge resizing a second time.
+    if (last?.changed) onCommit(last.patch);
+    else onCancel();
+  };
+  const events = (handle: PanelHandle) => ({
+    onMouseDown: (event: Konva.KonvaEventObject<MouseEvent>) => begin(event, handle),
+    onTouchStart: (event: Konva.KonvaEventObject<TouchEvent>) => begin(event, handle),
+    onDragStart: (event: Konva.KonvaEventObject<DragEvent>) => {
+      event.cancelBubble = true;
+      if (!interaction.current) begin(event, handle);
+      interactionCallback.current?.(true);
+    },
+    onDragMove: move,
+    onDragEnd: finish,
+    dragBoundFunc: bounds
+  });
 
-        return (
-          <Circle
-            key={key}
-            name="panel-skew-handle"
-            x={panel.x + point.x}
-            y={panel.y + point.y}
-            radius={SKEW_HANDLE_RADIUS}
-            hitStrokeWidth={SKEW_HANDLE_HIT_RADIUS * 2}
-            fill="#fbf6ec"
-            stroke={SKEW_HANDLE_COLOR}
-            strokeWidth={2.5}
-            draggable
-            dragBoundFunc={createBoundFunc(key)}
-            onDragMove={(event: any) => {
-              event.cancelBubble = true;
-              const localPointer = getLocalPointer(event.target);
-              if (!localPointer) return;
-              onDraftChange({
-                shape: updatePanelShapeHandle(shape, key, panel.width, localPointer.x)
-              });
-            }}
-            onDragEnd={(event: any) => {
-              event.cancelBubble = true;
-              const localPointer = getLocalPointer(event.target);
-              if (!localPointer) return;
-              onCommit({
-                shape: updatePanelShapeHandle(shape, key, panel.width, localPointer.x)
-              });
-            }}
-          />
-        );
-      })}
-
-      {/* 4 Edge Midpoint Handles */}
-      {PANEL_EDGE_HANDLE_KEYS.map((key) => {
-        const point = getPanelEdgeHandlePoint({ width: panel.width, height: panel.height, shape }, key);
-
-        return (
-          <Rect
-            key={`edge-${key}`}
-            name="panel-edge-handle"
-            x={panel.x + point.x - 7}
-            y={panel.y + point.y - 7}
-            width={14}
-            height={14}
-            cornerRadius={3}
-            fill="#171815"
-            stroke="#fbf6ec"
-            strokeWidth={2}
-            draggable
-            onDragMove={(event: any) => {
-              event.cancelBubble = true;
-              const localPointer = getLocalPointer(event.target);
-              if (!localPointer) return;
-              const updated = updatePanelEdgeHandle(panel, key, localPointer);
-              onDraftChange(updated);
-            }}
-            onDragEnd={(event: any) => {
-              event.cancelBubble = true;
-              const localPointer = getLocalPointer(event.target);
-              if (!localPointer) return;
-              const updated = updatePanelEdgeHandle(panel, key, localPointer);
-              onCommit(updated);
-            }}
-          />
-        );
-      })}
-    </Group>
-  );
+  return <Group name="panel-skew-overlay">
+    {PANEL_SHAPE_HANDLE_KEYS.map(key => {
+      const point = getPanelCanvasPoint(panel, getPanelShapeHandlePoint(panel, key));
+      return <Circle key={key} name="panel-skew-handle" id={`panel-corner-${panel.id}-${key}`}
+        x={point.x} y={point.y} radius={SKEW_HANDLE_RADIUS} hitStrokeWidth={SKEW_HANDLE_HIT_RADIUS * 2}
+        fill="#fbf6ec" stroke={SKEW_HANDLE_COLOR} strokeWidth={2.5} draggable {...events({ kind: "corner", key })} />;
+    })}
+    {PANEL_EDGE_HANDLE_KEYS.map(key => {
+      const point = getPanelCanvasPoint(panel, getPanelEdgeHandlePoint(panel, key));
+      return <Rect key={key} name="panel-edge-handle" id={`panel-edge-${panel.id}-${key}`}
+        x={point.x} y={point.y} width={14} height={14} offsetX={7} offsetY={7} rotation={panel.rotation}
+        cornerRadius={3} fill="#171815" stroke="#fbf6ec" strokeWidth={2} draggable {...events({ kind: "edge", key })} />;
+    })}
+  </Group>;
 }
 
 // Smart Snapping & Guides Helper

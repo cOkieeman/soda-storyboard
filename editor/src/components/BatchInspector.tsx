@@ -1,0 +1,28 @@
+import { useEditorStore } from "../lib/store";
+import { resolvedFigures } from "../lib/figures";
+import { getFigureId } from "../lib/figureRig";
+import type { SelectionStylePatch, BubbleStyle, FigureEditor, FigureFacing, ShotType, AngleType } from "../types";
+import NumberInput from "./ui/NumberInput";
+
+export function commonValue<T>(values: T[]): T | undefined { return values.length && values.every(value => Object.is(value, values[0])) ? values[0] : undefined; }
+function MixedSelect({ label, values, options, onChange }: { label: string; values: (string | null | undefined)[]; options: [string, string][]; onChange: (value: string) => void }) {
+  const common = commonValue(values.map(value => value ?? ""));
+  return <label className="block"><span className="ui-label">{label}</span><select className="ui-select" aria-label={`批量${label}`} value={common === undefined ? "__mixed" : common} onChange={event => onChange(event.target.value)}>{common === undefined && <option value="__mixed" disabled>混合值</option>}{options.map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></label>;
+}
+
+export default function BatchInspector() {
+  const page = useEditorStore(state => state.sodaPage);
+  const selections = useEditorStore(state => state.selections);
+  const characters = useEditorStore(state => state.characters);
+  const apply = (patch: SelectionStylePatch) => useEditorStore.getState().applySelectionStyle(patch);
+  if (!page) return null;
+  const texts = page.texts.filter(text => selections.some(item => ["text", "bubble"].includes(item.kind) && item.id === text.id));
+  const panels = page.panels.filter(panel => selections.some(item => item.kind === "panel" && item.id === panel.id));
+  const figures = page.panels.flatMap(panel => resolvedFigures(panel, page.reading_direction).filter((figure, index) => selections.some(item => item.kind === "figure" && item.panelId === panel.id && item.id === getFigureId(figure, index))));
+  const locked = selections.filter(item => useEditorStore.getState().isObjectLocked(item)).length;
+  return <div className="batch-inspector"><div className="inspection-start"><h3 className="font-semibold">已选择 {selections.length} 个对象</h3><p className="mt-2 text-xs text-[var(--muted)]">修改只应用到对应类型；混合值表示当前属性不同。{locked ? `其中 ${locked} 个锁定对象会跳过。` : "所有修改可一次撤销。"}</p></div>
+    {texts.length > 0 && <section className="inspector-section p-5"><h3 className="mb-3 font-semibold">台词样式 · {texts.length}</h3><div className="space-y-3"><MixedSelect label="气泡" values={texts.map(text => text.bubble)} options={[["speech", "对话"], ["shout", "喊叫"], ["thought", "思考"], ["box", "方框"], ["none", "无气泡"]]} onChange={value => apply({ text: { bubble: value as BubbleStyle } })} /><MixedSelect label="方向" values={texts.map(text => text.direction || page.text_direction || "vertical")} options={[["vertical", "竖排"], ["horizontal", "横排"]]} onChange={value => apply({ text: { direction: value as "vertical" | "horizontal" } })} /><MixedSelect label="说话人" values={texts.map(text => text.speaker_id)} options={[["", "无说话人"], ...characters.map(character => [character.id, character.display_name] as [string, string])]} onChange={value => apply({ text: { speaker_id: value || null } })} /><label className="block"><span className="ui-label">字号（像素）</span><NumberInput aria-label="批量字号" placeholder="混合值" value={commonValue(texts.map(text => text.font_size ?? page.text_font_size ?? 42)) ?? null} min={8} max={128} onCommit={value => apply({ text: { font_size: value } })} /></label></div></section>}
+    {figures.length > 0 && <section className="inspector-section space-y-3 p-5"><h3 className="font-semibold">人物样式 · {figures.length}</h3><MixedSelect label="姿势预设" values={figures.map(figure => figure.pose)} options={[["stand", "站立"], ["walk", "行走"], ["run", "奔跑"], ["sit", "坐下"], ["crouch", "蹲下"], ["wave", "挥手"], ["point", "指向"], ["arms_up", "举手"], ["hands_clasped", "双手合十"], ["hand_on_chin", "托腮"], ["lie", "侧视躺卧"], ["back_view", "背影"], ["handshake", "握手"], ["hug", "拥抱"]]} onChange={value => apply({ figure: { pose: value } })} /><MixedSelect label="人物样式" values={figures.map(figure => figure.editor?.style || "stick")} options={[["stick", "火柴人"], ["box", "方块人体"], ["rough", "人体粗稿"]]} onChange={value => apply({ figure: { editor: { style: value as FigureEditor["style"] } } })} /><MixedSelect label="身体视角" values={figures.map(figure => figure.editor?.view || "front")} options={[["front", "正面"], ["side", "侧面"]]} onChange={value => apply({ figure: { editor: { view: value as FigureEditor["view"] } } })} /><MixedSelect label="朝向" values={figures.map(figure => figure.facing)} options={[["front", "正面"], ["left", "向左"], ["right", "向右"], ["back", "背面"]]} onChange={value => apply({ figure: { facing: value as FigureFacing } })} /><MixedSelect label="水平翻转" values={figures.map(figure => String(Boolean(figure.editor?.flip)))} options={[["false", "不翻转"], ["true", "翻转"]]} onChange={value => apply({ figure: { editor: { flip: value === "true" } } })} /></section>}
+    {panels.length > 0 && <section className="inspector-section space-y-3 p-5"><h3 className="font-semibold">镜头 · {panels.length}</h3><MixedSelect label="景别" values={panels.map(panel => panel.shot)} options={[["extreme_long", "大远景"], ["long", "远景"], ["full", "全景"], ["medium", "中景"], ["close_up", "特写"], ["extreme_close_up", "大特写"]]} onChange={value => apply({ panel: { shot: value as ShotType } })} /><MixedSelect label="视角" values={panels.map(panel => panel.angle)} options={[["eye", "平视"], ["high", "俯视"], ["low", "仰视"], ["bird", "鸟瞰"], ["worm", "虫视"], ["dutch", "倾斜"]]} onChange={value => apply({ panel: { angle: value as AngleType } })} /></section>}
+  </div>;
+}

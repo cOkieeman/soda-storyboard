@@ -143,7 +143,13 @@ for (const [name, operation] of Object.entries(operations)) {
       assert.equal(requests[0].method, "PUT");
       assert.equal(useEditorStore.getState().hasUnsavedChanges, true);
       assert.equal(useEditorStore.getState().previewModal.open, false);
-      assert.equal(useEditorStore.getState().compileModal, null);
+      if (name === "compile") {
+        const modal = useEditorStore.getState().compileModal;
+        assert.equal(modal.open, true);
+        assert.equal(modal.loading, false);
+        assert.equal(modal.moss, null);
+        assert.ok(modal.error, "failed saves keep an actionable compile error");
+      } else assert.equal(useEditorStore.getState().compileModal, null);
       assert.equal(useEditorStore.getState().generateModal.loading, false);
       assert.equal(useEditorStore.getState().layoutModal.open, false);
     });

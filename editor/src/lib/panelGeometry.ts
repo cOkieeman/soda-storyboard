@@ -111,6 +111,15 @@ export function getPanelCanvasPoint(
   );
 }
 
+/** Convert a page point into the panel's unrotated coordinate system. */
+export function getPanelLocalPoint(
+  panel: Pick<Panel, "x" | "y" | "width" | "height" | "rotation">,
+  canvasPoint: Point
+): Point {
+  const unrotated = rotatePointAround(canvasPoint, getPanelCenter(panel), -panel.rotation);
+  return { x: unrotated.x - panel.x, y: unrotated.y - panel.y };
+}
+
 export function rotatePointAround(point: Point, center: Point, rotation?: number): Point {
   const radians = (normalizePanelRotation(rotation) * Math.PI) / 180;
   const cos = Math.cos(radians);
