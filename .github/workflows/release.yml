@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --dev
+      - name: Check tag and all release versions
+        id: version
+        shell: bash
+        run: |
+          version="$(uv run --no-sync python scripts/check_release_version.py "$GITHUB_REF_NAME")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync pytest
+      - name: Build wheel and source distribution
+        run: uv build --offline --out-dir dist
+      - name: Publish GitHub Release with wheel and source distribution
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/soda_storyboard-${VERSION}-py3-none-any.whl" \
+            "dist/soda_storyboard-${VERSION}.tar.gz" \
+            --verify-tag --title "$GITHUB_REF_NAME" --generate-notes

@@ -136,6 +136,35 @@ soda-storyboard layout extract storyboard.webp --mode color --preview overlay.pn
 
 默认画面 item 含 label、caption、bbox，文字额外含 text。`compile --with-ids` 保留调试 ID，并生成 `.map.json`，生产输出不推荐使用。项目和页面仍可设置 `text_direction`（默认 vertical）、`color_mode`（默认 monochrome）；旧 style_prefix 也保留。`--size-check` 的核对只出现在命令 `--json` 报告和 map 文件中，`--output` 文件只有 summary、items、bbox_coord_space、bbox_format 四个顶层字段。
 
+## 单文件分镜包与 ComfyUI
+
+完成翻译和编译后，可把当前页导出为一个 JSON 文件，在 ComfyUI 的“导入分镜”节点中上传或拖入：
+
+```powershell
+soda-storyboard export-bundle my-story/pages/page-01.json --json
+soda-storyboard export-bundle my-story/pages/page-01.json --output my-story/exports/page-01.storyboard.json --no-sketch --json
+```
+
+默认保存到项目 `exports/<页id>.storyboard.json`。导出前校验，有 error 就拒绝写文件；英文译文缺失或过期会提醒先运行 `translate --todo`，仍允许携带中文后备导出。`--json` 返回输出路径、格数、台词数、出场角色、建议 LoRA 和译文状态。此操作不连接 ComfyUI、不提交生成任务。
+
+包格式为 `soda-storyboard-bundle-v1`，包含 `exported_at`、`generator`、项目设置 `project`、完整分镜单 `page`、该页实际引用的 `characters`，以及可选 `sketch_png_base64`。译文缓存和扩展字段保留；角色参考图仅留文件名，LoRA 等本机文件信息便携化，不打包参考图或模型文件。草稿是本地绘制的 PNG，长边 768，最多 2 MiB / 400 万像素，分镜 JSON 最多 16 MiB；`--no-sketch` 可省略草稿。格式见 [schema](schema/storyboard-v1.schema.json)。
+
+共享读取与编译接口供节点集成，示例：
+
+```python
+from soda_storyboard.bundle import load_bundle, compile_bundle
+
+page, characters, project_settings, warnings = load_bundle("page-01.storyboard.json")
+result = compile_bundle(
+    "page-01.storyboard.json", dialogue_mode=None, slant_mode="cut", include_triggers=True
+)
+moss = result["moss"]  # dict，直接来自同一套 compile_page
+width, height = result["width"], result["height"]
+lora, warnings = result["lora"], result["warnings"]
+```
+
+裸分镜单 JSON 也可读取，缺少角色卡会警告。详细类型、项目默认值继承、触发词开关、限制和兼容约定见 [共享接口说明](docs/bundle-api.md)。公开的 `soda_storyboard.importers.import_moss` / `import_storyboard` 返回 `(Page, 理解报告)`，区分格子与单画布；`canvas_sizes.CANVAS_PRESETS` / `infer_dimensions` 供节点共用尺寸规则。这些名称已写入模块 `__all__`，也可从包根导入。
+
 ## 人物与文字草稿
 
 每格可选 `figures` 数组，指定 character_id、pose、position（0～1 或 left / center / right）、facing（left / right / front / back）、可空 framing（full / waist / bust / face）。缺省时按 character_ids 自动排开，RTL 第一个角色在右边；远景/全景画全身，中景到腰，近景到胸，特写画头。角色卡可加 age 和 figure_hint: skirt。
@@ -381,3 +410,28 @@ uv run ruff format --check .
 uv run ruff check .
 uv run pytest
 ```
+
+## 0.4.0 发布与便携版安装
+
+仓库已配置 CI 和发布工作流，本地准备产物不会自动发布。`.github/workflows/ci.yml` 在 push / PR 时校验 Python 格式、lint、测试，并执行编辑器的 `npm ci`、`npm run build`、`npm test`。`release.yml` 在未来推送 `v*` 标签时检查标签与 `pyproject.toml` 版本一致，运行校验、构建 wheel 和 sdist，创建 GitHub Release 并附上两个产物。
+
+发布前先审阅 CHANGELOG、把 `pyproject.toml` 和三个插件清单同步到同一版本、同步锁文件，并确认前端产物的源码指纹测试通过。若前端源码有改动，先运行 `uv run python scripts/build_editor.py` 更新随包静态文件。下面的构建和检查不会创建 Release：
+
+```powershell
+uv sync --locked
+uv run ruff format --check .
+uv run ruff check .
+uv run pytest
+uv build
+```
+
+检查 `dist/soda_storyboard-0.4.0-py3-none-any.whl` 和 `.tar.gz`，确认 wheel 包含 `web/`、`recipes.json` 和 `data/templates.json`。完成审阅并得到发布授权后，由发布者提交变更、创建并推送 `v0.4.0` 标签；工作流将再次检查版本和测试。标签不匹配、检查失败或产物缺失都会中止发布。
+
+0.4.0 Release 发布成功后，在便携版 ComfyUI 根目录执行（`python_embeded` 是便携版实际目录名；需要 Python 3.12+）：
+
+```powershell
+.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.0/soda_storyboard-0.4.0-py3-none-any.whl"
+.\python_embeded\python.exe -c "from importlib.metadata import version; print(version('soda-storyboard'))"
+```
+
+wheel 已包含运行时数据和编辑器，不需要 Git、uv、`uv_build` 或 Node 来安装核心库。重启 ComfyUI 后使用节点；节点仓库后续应同步其 requirements wheel URL 到 0.4.0，并用共享接口替换重复读取/编译逻辑。以上 URL 需等 0.4.0 Release 发布成功后才能下载。

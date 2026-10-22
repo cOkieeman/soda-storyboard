@@ -11,6 +11,9 @@
     },
     {
       "$ref": "#/$defs/character"
+    },
+    {
+      "$ref": "#/$defs/bundle"
     }
   ],
   "$defs": {
@@ -1008,6 +1011,85 @@
             "string",
             "null"
           ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "bundle": {
+      "type": "object",
+      "required": [
+        "format",
+        "exported_at",
+        "generator",
+        "project",
+        "page",
+        "characters"
+      ],
+      "properties": {
+        "format": {
+          "const": "soda-storyboard-bundle-v1"
+        },
+        "exported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "generator": {
+          "type": "string",
+          "pattern": "^soda-storyboard "
+        },
+        "project": {
+          "type": "object",
+          "description": "Portable project settings, retaining forward-compatible fields and legacy aliases."
+        },
+        "page": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/page"
+            },
+            {
+              "type": "object",
+              "required": [
+                "panels"
+              ],
+              "properties": {
+                "panels": {
+                  "type": "array"
+                }
+              },
+              "additionalProperties": true
+            }
+          ],
+          "description": "Complete page including caption_auto_en and unknown fields; file metadata is portable."
+        },
+        "characters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/character"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            ]
+          },
+          "description": "Only roles referenced by this page, keyed by matching character id; raw legacy aliases and extension fields are retained."
+        },
+        "sketch_png_base64": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "contentMediaType": "image/png",
+          "maxLength": 2796204,
+          "description": "Optional PNG, long side 768; decoded size at most 2 MiB and 4,000,000 pixels."
         }
       },
       "additionalProperties": true

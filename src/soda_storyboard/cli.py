@@ -466,6 +466,19 @@ def command_compile(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_export_bundle(args: argparse.Namespace) -> int:
+    from .bundle import export_bundle  # noqa: PLC0415 -- portable file exchange needs no server state
+
+    result = export_bundle(args.page, output=args.output, no_sketch=args.no_sketch)
+    for warning in result["warnings"]:
+        print(warning, file=sys.stderr)
+    if args.json:
+        _json_print(result)
+    else:
+        print(f"已导出分镜包：{result['path']}")
+    return 0
+
+
 def command_translate(args: argparse.Namespace) -> int:
     path = Path(args.page)
     raw = read_json(path)
@@ -622,6 +635,14 @@ def build_parser() -> argparse.ArgumentParser:
     compile_parser.add_argument("--slant-mode", choices=("cut", "hint", "rect"), default="cut")
     compile_parser.add_argument("--json", action="store_true")
     compile_parser.set_defaults(func=command_compile)
+    bundle_export = subparsers.add_parser(
+        "export-bundle", help="导出单文件分镜包，供 ComfyUI 导入分镜节点读取"
+    )
+    bundle_export.add_argument("page")
+    bundle_export.add_argument("--output")
+    bundle_export.add_argument("--no-sketch", action="store_true", help="不嵌入草稿 PNG")
+    bundle_export.add_argument("--json", action="store_true")
+    bundle_export.set_defaults(func=command_export_bundle)
     translate = subparsers.add_parser("translate", help="导出待翻译提示词或写回 AI 译文，不调用翻译服务")
     translate.add_argument("page")
     mode = translate.add_mutually_exclusive_group(required=True)

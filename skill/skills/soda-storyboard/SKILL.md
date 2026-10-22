@@ -132,6 +132,14 @@ soda-storyboard validate my-story/pages/station-turn.json --json
 soda-storyboard compile my-story/pages/station-turn.json --output my-story/output/station-turn.moss.json --slant-mode cut --json
 ```
 
+翻译和编译完成后，询问用户是否要导出单文件分镜包给 ComfyUI。已经明确要求导出时直接执行，不重复询问：
+
+```shell
+soda-storyboard export-bundle my-story/pages/station-turn.json --json
+```
+
+默认保存为项目 `exports/station-turn.storyboard.json`；需要纯 JSON 可加 `--no-sketch`。导出只在本地校验并封装当前页、出场角色卡、项目设置和长边 768 的草稿 PNG，不读取或附带参考图片、LoRA 文件，不提交生成任务。英文译文缺失或过期时先告知 `translate --todo` 提醒；不要把导出成功当成英文译文已经完成。输出后给用户绝对文件路径，并说明“拖进 ComfyUI 的导入分镜节点”。
+
 交付页文件、线框和 MOSS JSON 的绝对路径。手动使用时，把 JSON 粘进 Soda-MOSS v2 的“JSON直通”框，画布尺寸与页面一致；斜切页的 `station-turn.moss.cut.json` 保存 quad 裁剪几何。也可按第 7 节直接驱动本机 ComfyUI。moss 模式 overlays 由 MOSS 画跨格人物；layer 模式在 cutout 后叠加透明人物。
 
 preview 默认给带火柴人草稿；仅要旧纯框线版时用 `--style boxes`。尺寸核对只出现在 --json 命令报告或 --with-ids 的 map，不写进 --output 的 MOSS JSON，交付应使用输出文件。
