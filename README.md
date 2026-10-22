@@ -91,21 +91,44 @@ CLI 输出 UTF-8，也支持 `python -m soda_storyboard`。文件接口与网页
 
 每个 bbox 的顺序是 `[y_min, x_min, y_max, x_max]`。输入使用左上角原点；编译时减去画布中心 `(W/2, H/2)`，因此非方形画布也能保持正确的 x/y 顺序。
 
-编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。object caption 默认从中文 `description` 拼接景别、角度、角色外观、服装及姿势，角色外观优先用 `appearance_zh`，缺失时保留已有英文外观。每个人物另编译为 `label: "character"` 条目。有人物 `editor` 数据时，bbox 直接取草稿所用骨架的外接框，包含关节、位置、大小、镜像和出框设置；旧人物继续使用原 `bbox` / `position` 估算规则。局部换人的遮罩共用该几何，输出仍裁在所属格子内。
+编译器将坐标四舍五入为整数，并限制在 `±W/2`、`±H/2` 内。caption 按“景别和角度 → 人物外观、姿势、朝向 → 场景 → 道具和氛围”整理，移除格号前缀，去重名字、服装和触发词，统一标点。人物姿势和场景描述冲突时，校验与检查器给出提醒，不自动改剧情。每个人物另编译为 `label: "character"` 条目；有 `editor` 数据时，bbox 取草稿骨架的外接框，包含关节、位置、大小、镜像和出框设置，局部换人遮罩共用该几何。
 
-旧 `caption_en` 原文会保留，导入时默认不启用覆盖。只有格子设置 `use_custom_caption: true`，或页面设置 `legacy_caption_en: true`，非空的 `caption_en` 才替换该格的场景 caption。**这会改变已有项目的默认提示词**；需要保持原先英文覆盖习惯时，在页面检查器开启“保持旧版英文提示词覆盖行为”。独立人物条目仍来自编辑器，手写提示词应与人物姿态保持一致。每格检查器的“最终提示词预览”直接调用实际编译器，显示当前尚未保存的修改；覆盖生效时显示标记。
+中文编辑，默认英文出图：项目 `caption_language` 默认 `en`，也可选 `zh`。每格 `caption_auto_en` 保存 `text`、中文来源 `source_hash` 和 `translated_at`。新鲜译文用于场景 caption，人物使用英文姿势模板及已有 `appearance_en`；缺失或过期时该格退回整理后的中文并警告。文字条目的台词和旁白始终保留原文。编辑器预览显示实际语言、译文状态和冲突提醒，修改中文后立即标记过期。
 
-离线语言 A/B 只写两份 MOSS JSON，不连接 ComfyUI、不提交任务：
+翻译由使用插件的 AI 完成，核心库不调用服务。可配置项目 `glossary`（如 `{"猫胡子": "cat whiskers"}`）：
 
 ```powershell
-uv run python scripts/ab_caption_lang.py my-story/pages/page-01.json --output-dir my-story/ab
+soda-storyboard translate my-story/pages/page-01.json --todo --json
+# AI 根据清单、英文外观、姿势模板与术语表生成 translations.json
+soda-storyboard translate my-story/pages/page-01.json --apply translations.json --json
 ```
 
-输出 `page-01.zh.moss.json` 和 `page-01.en.moss.json`，两者均禁用手动覆盖以比较结构化模板，保留相同几何。英文分支使用英文模板、英文角色外观和可选的格子 `description_en`；缺少译文时保留原描述并提示。完整英文剧情对照可用 `--english-page <已翻译的页面副本>`，只读取其页面描述和按格子 id 对应的剧情描述，不改变原版布局。脚本不会调用翻译服务。
+译文文件格式为 `{"translations": [{"panel_id": "p1", "source_hash": "清单中的哈希", "text": "English visual description."}]}`；哈希不符的格子拒绝写入。旧文件无需升级，缺少缓存时仍可编译中文。旧 `caption_en` 保留，只有 `use_custom_caption: true` 或页面 `legacy_caption_en: true` 才启用，手动覆盖优先级最高。
+
+离线语言 A/B 只写两份相同几何的 MOSS JSON，禁用手动覆盖，使用整理后中文和缓存英文，不提交任务：
+
+```powershell
+uv run python scripts/ab_caption_lang.py my-story/pages/page-01.json --translations translations.json --output-dir my-story/ab
+```
+
+输出 `page-01.zh.moss.json` 和 `page-01.en.moss.json`。未提供新鲜译文的英文分支会警告并回退中文；兼容 `--english-page <翻译副本>`。
+
+### 外来分镜与自由画布
+
+```powershell
+soda-storyboard import external.json --project my-story --page-id imported --json
+soda-storyboard layout extract storyboard.webp --mode color --preview overlay.png --json
+```
+
+`import_moss` 返回分镜页和理解报告，报告列出尺寸推断、格子数、未知条目和猜测。支持 MOSS、frames / shots / panels、prompt / description、dialogue / lines、xyxy / xywh / yxyx、像素及 0–1 / 0–1000 坐标，还有 Markdown 表格或列表。坐标不明确时应核对理解报告。编辑器导入弹窗共用 Python 导入器。缺少尺寸的 MOSS 按坐标范围推断并吸附常用画布；character 仅保留人物框和描述，不编造关节或角色身份。
+
+`canvas_mode: "single"` 支持无格子的自由画布；`objects` 保存矩形 `rect`、`caption`、可空 `panel_id` 和 `label`（object / character）。物件框可新建、选择、移动、缩放和编辑描述。导入源条目及未知字段保存在 `moss_import`，未编辑条目按原顺序原样编译，只有编辑过的元素重新输出。
+
+参考图识别支持 `--mode auto`（默认）、`color` 和 `standard`。颜色模式将青框识别为格子、绿框识别为空文字框、红框区分主角大框与标题；不做 OCR，遮挡边界附置信度。插件 AI 看图填内容时以识别坐标为准，确认分镜单后再编译。给其他 AI 的可复制提示词和完整格式示例见 [分镜输出说明](docs/for-other-ai.md)。
 
 文字独立为 `texts`，每个 item 输出 `label: "text"`、英文样式/位置 `caption`、原文 `text`、`bbox`。原文可含换行。kind 支持 dialogue / narration / sfx / title / caption_tag，bubble 支持 speech / shout / thought / box / none，另有可空 panel_id、speaker_id、direction、bbox、style_hint。源页 bbox 是左上角像素矩形 x/y/w/h，省略时自动估算；竖排宽=列数×字宽×1.3，高=每列字数×字高×1.15，横排交换轴。页面 `text_font_size` 默认 42（按 1024 宽画布，随画布宽等比缩放），`text_max_chars` 默认 10，超过即换列/行。框形明显不符方向会 warning。旧 dialogue 和 sfx 继续编译，迁移原文到 texts 后应移除对应旧条目以免重复。
 
-项目和页面可加 `style_prompt`（英文画风段落）、`tags`（字符串数组）。页面有设置则覆盖项目；未给画风时，编译器提供按 color_mode 区分彩色/黑白的英文兜底。插件会先让用户选择画风并保存。summary 以画风段落开头，接页面说明、tags、阅读方向和留白要求，有文字时要求清晰中文，无文字或使用 lettering 时追加 `no text, no speech bubbles`。meta 为 comic、multi_panel，彩色再加 digital_painting；canvas 为 multi_panel。
+项目和页面可加 `style_prompt`（英文画风段落）、`tags`（字符串数组）。页面有设置则覆盖项目；未给画风时，编译器提供按 color_mode 区分彩色/黑白的英文兜底。插件会先让用户选择画风并保存。summary 以画风段落开头，接页面说明、tags、阅读方向和留白要求，有文字时要求清晰中文，无文字或使用 lettering 时追加 `no text, no speech bubbles`。meta 为 comic、multi_panel，彩色再加 digital_painting；分格页 canvas 为 multi_panel，自由画布为 single_canvas；导入页保留原 summary。
 
 默认画面 item 含 label、caption、bbox，文字额外含 text。`compile --with-ids` 保留调试 ID，并生成 `.map.json`，生产输出不推荐使用。项目和页面仍可设置 `text_direction`（默认 vertical）、`color_mode`（默认 monochrome）；旧 style_prefix 也保留。`--size-check` 的核对只出现在命令 `--json` 报告和 map 文件中，`--output` 文件只有 summary、items、bbox_coord_space、bbox_format 四个顶层字段。
 

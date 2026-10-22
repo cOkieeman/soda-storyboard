@@ -50,11 +50,12 @@ export default function ElementPalette({ onAdded }: ElementPaletteProps) {
         : null;
   const panel = sodaPage?.panels.find((item) => item.id === selectedPanelId)
     || [...(sodaPage?.panels || [])].sort((a, b) => a.order - b.order)[0];
-  const disabled = !panel;
+  const singleCanvas = sodaPage?.canvas_mode === "single";
+  const disabled = !panel && !singleCanvas;
 
   const addText = (preset: TextPresetId) => {
-    if (!panel) return;
-    useEditorStore.getState().addTextPreset(preset, panel.id);
+    if (!panel && !singleCanvas) return;
+    useEditorStore.getState().addTextPreset(preset, panel?.id);
     setExpanded(false);
     onAdded?.();
   };
@@ -67,8 +68,9 @@ export default function ElementPalette({ onAdded }: ElementPaletteProps) {
 
   return <section className={`element-palette${expanded ? " is-expanded" : " is-compact"}`} aria-label="添加分镜元素" data-expanded={expanded}>
     <div className="palette-compact-toolbar flex min-w-0 flex-wrap items-center gap-2">
-      <div className="palette-heading !m-0"><strong>添加元素</strong><span>{panel ? `第 ${panel.order} 格` : "先建立格子"}</span></div>
-      {!expanded && <><button type="button" className="palette-button" disabled={disabled} onClick={() => addText("speech_vertical")}>+ 竖排气泡</button><button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure()}>+ 火柴人</button></>}
+      <div className="palette-heading !m-0"><strong>添加元素</strong><span>{singleCanvas ? "单画布" : panel ? `第 ${panel.order} 格` : "先建立格子"}</span></div>
+      <button type="button" className="palette-button" disabled={!sodaPage} onClick={() => { useEditorStore.getState().addObjectBox(); onAdded?.(); }}>+ 物件框</button>
+      {!expanded && <><button type="button" className="palette-button" disabled={disabled} onClick={() => addText("speech_vertical")}>+ 竖排气泡</button><button type="button" className="palette-button" disabled={!panel} onClick={() => addFigure()}>+ 火柴人</button></>}
       <button type="button" className="palette-button" aria-expanded={expanded} aria-controls="element-palette-all" onClick={() => setExpanded(value => !value)}>{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{expanded ? "收起元素" : "更多元素"}</button>
     </div>
     {expanded && <div id="element-palette-all" className="mt-2 space-y-2"><div className="palette-group" role="group" aria-label="添加文字">
@@ -77,10 +79,10 @@ export default function ElementPalette({ onAdded }: ElementPaletteProps) {
     </div>
     <div className="palette-group" role="group" aria-label="添加人物">
       <span className="palette-group-label">人物</span>
-      <label className="palette-pose"><span className="sr-only">新人物姿势</span><select className="ui-input" aria-label="新人物姿势" value={pose} disabled={disabled} onChange={(event) => setPose(event.target.value as FigurePose)}>{POSE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-      <button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure()}>+ 火柴人</button>
-      <button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure("handshake")}>+ 握手双人</button>
-      <button type="button" className="palette-button" disabled={disabled} onClick={() => addFigure("hug")}>+ 拥抱双人</button>
+      <label className="palette-pose"><span className="sr-only">新人物姿势</span><select className="ui-input" aria-label="新人物姿势" value={pose} disabled={!panel} onChange={(event) => setPose(event.target.value as FigurePose)}>{POSE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <button type="button" className="palette-button" disabled={!panel} onClick={() => addFigure()}>+ 火柴人</button>
+      <button type="button" className="palette-button" disabled={!panel} onClick={() => addFigure("handshake")}>+ 握手双人</button>
+      <button type="button" className="palette-button" disabled={!panel} onClick={() => addFigure("hug")}>+ 拥抱双人</button>
     </div></div>}
   </section>;
 }

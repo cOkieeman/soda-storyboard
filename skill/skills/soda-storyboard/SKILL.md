@@ -35,7 +35,7 @@ soda-storyboard character set girl --project my-story --outfit "浅色校服" --
 - 清爽赛璐珞：`Clean 2D Japanese anime comic, crisp ink outlines, flat cel shading, bright restrained colors, clear silhouettes and expressive eyes.`
 - 黑白网点：`Black-and-white Japanese manga, crisp ink lines, delicate screentone shading, strong black shapes, expressive faces and clean white negative space.`
 
-只写 anime 容易偏 3D。编译器在未给 style_prompt 时有按 color_mode 区分的英文兜底段落，但这不是用户已经选定的画风。用户只说中文时，由 AI 翻译补全角色 `appearance_en`、`age`、每格 `caption_en`；每格 caption_en 都写全人物外观，不能只写“同上”。tags 放项目或页面。
+只写 anime 容易偏 3D。编译器在未给 style_prompt 时有按 color_mode 区分的英文兜底段落，但这不是用户已经选定的画风。用户用中文编辑 `description` 和 `appearance_zh`，AI 补全角色 `appearance_en`；出图前按下方译文流程写入 `caption_auto_en`。不要把自动译文塞进手动覆盖字段 `caption_en`，也不要擅自开启覆盖开关。tags 放项目或页面。
 
 ## 2. 提出 2～3 个拆格方案
 
@@ -107,6 +107,24 @@ soda-storyboard edit my-story --stop --json
 
 ## 6. 编译并交付
 
+编译、出图或导出分镜包前，先同步英文译文。项目 `caption_language` 默认 `en`，可选 `zh`；用户明确选择中文出图时保留该选择。
+
+```shell
+soda-storyboard translate my-story/pages/page-01.json --todo --json
+```
+
+清单非空时，由当前插件 AI 翻译每格 `caption_zh`，遵守项目 `glossary`（如“猫胡子”译为 `cat whiskers`），角色已有 `appearances_en` 直接使用。每格写成完整的 MOSS 英文画面描述，不加 `Panel N`、格号、标签或台词原文；使用清单中的 `pose_templates_en`，保持人物姿势与朝向，先人物后场景，不自行消除冲突或改写中文剧情。若清单显示描述与姿势冲突，先提醒用户确认。译文保存为：
+
+```json
+{"translations": [{"panel_id": "p1", "source_hash": "照抄 todo 中的哈希", "text": "Full shot, eye-level, a girl lying on one side facing left, reading by the window."}]}
+```
+
+```shell
+soda-storyboard translate my-story/pages/page-01.json --apply my-story/translations.json --json
+```
+
+哈希不符的格子会被拒绝，重跑 `--todo` 后重新翻译，不能覆盖检查或伪造新哈希。没有新鲜译文的格子会警告并回退中文，台词始终保留原文。核心库和网页不会调用翻译服务；网页只显示新鲜、过期或缺失状态。确认译文写回后，再执行编译、出图或导出；已授权步骤无需重复征求许可。
+
 确认后读 [MOSS 要点](references/moss-layout-tips.md)，再 validate 一次并编译：
 
 ```shell
@@ -162,6 +180,25 @@ soda-storyboard export my-story --format pdf --json
 最终交付成品图和导出文件绝对路径；说明仍未选择的重画或未处理的图层。export 按页序取 lettered、composed、选定底图中有效的最高阶段；换底图或换格子后需要重新 compose / letter，不将旧派生图当成新成品。
 
 完整对话见 [车站示例](../../examples/station-dialogue.md)。
+
+## 从分镜图或外来分镜导入
+
+用户给火柴人分镜图时先提取颜色框坐标：
+
+```shell
+soda-storyboard layout extract reference.webp --mode auto --preview my-story/import-overlay.png --json
+```
+
+可手动指定 `--mode color` 或 `--mode standard`。颜色模式只分类，不做 OCR：青框是格子，绿框是文字框，红色大框是主角区域，横向红框是标题。遮挡边界会标记低置信度，先用叠加图核对。**坐标以识别结果为准，AI 只负责填内容**：由插件 AI 看原图，读出每格画面、台词和标题，把内容填入对应格子及文字框；不要凭读图重新发明坐标。红色主角区域需要时写为独立 `objects` 的 `label: "character"`，不得编造关节。生成分镜单后展示预览，等待用户确认，再按译文流程编译或导出。用户已确认的内容沿用，不重复索要确认。
+
+MOSS JSON、其他 AI 的 JSON 或 Markdown 文字分镜可先只读导入：
+
+```shell
+soda-storyboard import external.json --json
+soda-storyboard import external.md --project my-story --page-id imported-page --json
+```
+
+给用户解释理解报告中的尺寸、格数、未知条目和猜测；自由画布不强行套格。保留 `moss_import`，它记录未知字段、条目顺序和原始 bbox，未编辑的条目可无损编译回去。给其他 AI 的格式说明见仓库 `docs/for-other-ai.md`。
 
 ## 从喜欢的漫画页提取分格
 

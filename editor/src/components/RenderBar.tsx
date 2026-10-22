@@ -63,7 +63,7 @@ export default function RenderBar({ mode = "draft", onViewArtwork }: { mode?: Ca
           <span>{mode === "draft" ? "已有出图" : "出图候选"}</span>
           <span className="tray-count">{renderList.length}</span>
         </button>
-        <span className="tray-hint">{mode === "draft" ? renderList.length ? "预览和比较已有结果" : "填写分镜后，点击右上角“生成出图”" : "点击仅预览；在预览中确认选用"}</span>
+        <span className="tray-hint">{mode === "draft" ? renderList.length ? "预览和比较已有结果" : "编辑完成后，点击右上角“生成出图”" : "点击仅预览；在预览中确认选用"}</span>
         {activeJob && (
           <div className={`tray-job job-${activeJob.status}`} role="status" title={jobMessage}>
             {jobIsActive && <LoaderCircle size={14} className="is-spinning" />}

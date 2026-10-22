@@ -195,6 +195,19 @@
         },
         "production": {
           "$ref": "#/$defs/production"
+        },
+        "caption_auto_en": {
+          "$ref": "#/$defs/caption_auto_en"
+        },
+        "use_custom_caption": {
+          "type": "boolean",
+          "default": false
+        },
+        "props": {
+          "type": "string"
+        },
+        "atmosphere": {
+          "type": "string"
         }
       },
       "additionalProperties": true
@@ -357,6 +370,86 @@
         },
         "production": {
           "$ref": "#/$defs/production"
+        },
+        "caption_language": {
+          "enum": [
+            "en",
+            "zh"
+          ]
+        },
+        "legacy_caption_en": {
+          "type": "boolean",
+          "default": false
+        },
+        "canvas_mode": {
+          "enum": [
+            "panels",
+            "single"
+          ]
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/object_box"
+          }
+        },
+        "moss_import": {
+          "type": "object",
+          "description": "Original MOSS summary, top-level fields and ordered item/entity snapshots for lossless import; preserve this metadata.",
+          "required": [
+            "entries",
+            "summary",
+            "top_level"
+          ],
+          "properties": {
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "item"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "panel",
+                      "text",
+                      "object",
+                      "passthrough"
+                    ]
+                  },
+                  "id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "item": {},
+                  "snapshot": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "summary": {
+              "type": "object"
+            },
+            "top_level": {
+              "type": "object"
+            },
+            "declared_fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": true
         }
       },
       "additionalProperties": true
@@ -425,6 +518,19 @@
         },
         "comfy": {
           "$ref": "#/$defs/comfy"
+        },
+        "caption_language": {
+          "enum": [
+            "en",
+            "zh"
+          ],
+          "default": "en"
+        },
+        "glossary": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": true
@@ -844,6 +950,64 @@
         },
         "split": {
           "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "caption_auto_en": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "source_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "translated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "source_hash",
+        "translated_at"
+      ],
+      "additionalProperties": true
+    },
+    "object_box": {
+      "type": "object",
+      "required": [
+        "id",
+        "rect",
+        "caption"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        },
+        "caption": {
+          "type": "string"
+        },
+        "label": {
+          "enum": [
+            "object",
+            "character"
+          ],
+          "default": "object"
+        },
+        "panel_id": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": true

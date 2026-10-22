@@ -1,5 +1,6 @@
 import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Konva from "konva";
+import EditableObjectBox from "./canvas/EditableObjectBoxes";
 import { Circle, Group, Layer, Line as KonvaLine, Rect, Stage, Text, Transformer } from "react-konva";
 import { X } from "lucide-react";
 import { Bubble, Panel, Selection } from "../types";
@@ -374,7 +375,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     if(!event.evt?.shiftKey) selectItem(null);
   };
 
-  const nodeFor = (item:Selection) => stageRef.current?.findOne(`#${item.kind==="panel"?"panel":item.kind==="figure"?`figure-${item.panelId}`:item.kind==="overlay"?"overlay":"bubble"}-${item.id}`);
+  const nodeFor = (item:Selection) => stageRef.current?.findOne(`#${item.kind==="panel"?"panel":item.kind==="figure"?`figure-${item.panelId}`:item.kind==="overlay"?"overlay":item.kind==="object"?"object":"bubble"}-${item.id}`);
   const beginObjectDrag = (event:Konva.KonvaEventObject<DragEvent>, item:Selection) => {
     const state=useEditorStore.getState();
     if(movementLocked(item)) { event.target.stopDrag(); return; }
@@ -408,7 +409,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   };
 
   const canvasPoint = (clientX:number,clientY:number) => { const paper=stageRef.current?.container().getBoundingClientRect(); return paper?{x:(clientX-paper.left)/zoom,y:(clientY-paper.top)/zoom}:null; };
-  const allCanvasItems=():Selection[] => [...activePage.panels.map(p=>({kind:"panel" as const,id:p.id})),...activePage.bubbles.map(b=>({kind:"text" as const,id:b.id})),...(sodaPage?.overlays||[]).map(o=>({kind:"overlay" as const,id:o.id})),...activePage.panels.flatMap(p=>resolvedFigures(p.sodaData,sodaPage?.reading_direction).map((f,i)=>({kind:"figure" as const,panelId:p.id,id:getFigureId(f,i)})))];
+  const allCanvasItems=():Selection[] => [...activePage.panels.map(p=>({kind:"panel" as const,id:p.id})),...activePage.bubbles.map(b=>({kind:"text" as const,id:b.id})),...(sodaPage?.overlays||[]).map(o=>({kind:"overlay" as const,id:o.id})),...(sodaPage?.objects||[]).map(o=>({kind:"object" as const,id:o.id})),...activePage.panels.flatMap(p=>resolvedFigures(p.sodaData,sodaPage?.reading_direction).map((f,i)=>({kind:"figure" as const,panelId:p.id,id:getFigureId(f,i)})))];
   const finishMarquee = () => {
     const area=marqueeRef.current; marqueeRef.current=null; setMarquee(null); if(!area) return;
     const x=Math.min(area.x,area.endX),y=Math.min(area.y,area.endY),width=Math.abs(area.endX-area.x),height=Math.abs(area.endY-area.y);
@@ -457,17 +458,17 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   return (
     <div className="canvas-editor relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--paper-wash)] select-none">
       <CanvasHeading width={canvasWidth} height={canvasHeight} mode={mode} onModeChange={onModeChange} />
-      <div className="workspace-instruction" aria-live="polite">{isArtwork ? "这里显示已选用的完整出图。点击下方候选图预览，在预览中确认选用；需要改内容，返回“编辑分镜”。" : activeTool === "text" ? "点击画布里的一个格子添加台词；双击文字，或点“编辑台词”输入内容。" : activeTool === "figure" ? "点击一个格子添加人物，在右侧选择角色和姿势。" : activeTool === "pan" ? "拖动空白处移动视野；点击“适应”回到整页。" : selectedBubble ? "双击修改文字；Shift 点选或空白处拖框多选，Alt 拖动复制；拖动时按 Shift 暂停吸附。" : "点击一格开始编辑，右侧填写画面、人物和台词。修改会自动保存。"}</div>
+      <div className="workspace-instruction" aria-live="polite">{isArtwork ? "这里显示已选用的完整出图。点击下方候选图预览，在预览中确认选用；需要改内容，返回“编辑分镜”。" : sodaPage?.canvas_mode === "single" ? "单画布：直接选择、移动和缩放元素，在右侧编辑描述。" : activeTool === "text" ? "点击画布里的一个格子添加台词；双击文字，或点“编辑台词”输入内容。" : activeTool === "figure" ? "点击一个格子添加人物，在右侧选择角色和姿势。" : activeTool === "pan" ? "拖动空白处移动视野；点击“适应”回到整页。" : selectedBubble ? "双击修改文字；Shift 点选或空白处拖框多选，Alt 拖动复制；拖动时按 Shift 暂停吸附。" : "点击一格开始编辑，右侧填写画面、人物和台词。修改会自动保存。"}</div>
       {!isArtwork && selection && <div className="canvas-selection-shelf" aria-label="选中对象操作">
         <span className="text-sm text-[var(--muted)]">{selections.length>1?`已选 ${selections.length} 个对象`:isLocked(selection)?"对象已锁定":"当前选择"}</span>
         {selections.length===1&&!isLocked(selection)&&selectedPanel&&(canSelectObjects||activeTool==="panel")&&<CanvasSelectionToolbar panel={selectedPanel} canvasWidth={canvasWidth} zoom={zoom}/>}
         {selections.length===1&&!isLocked(selection)&&selectedBubble&&canSelectObjects&&!editingBubble&&<CanvasTextSelectionToolbar bubble={selectedBubble} canvasWidth={canvasWidth} zoom={zoom} onEdit={()=>openBubbleEditor(selectedBubble)}/>}
-        <button type="button" className="ui-btn ui-btn-sm" onClick={fitSelection}>适合选中 · 2</button><button type="button" className="ui-btn ui-btn-sm" onClick={focusPanel}>聚焦当前格 · F</button>
+        <button type="button" className="ui-btn ui-btn-sm" onClick={fitSelection}>适合选中 · 2</button>{sodaPage?.canvas_mode !== "single" && <button type="button" className="ui-btn ui-btn-sm" onClick={focusPanel}>聚焦当前格 · F</button>}
       </div>}
       <FigureAccessibleList panels={activePage.panels} sketchGeometry={sketchGeometry} selection={selection} editable={canSelectObjects && !isPanTool} zoom={zoom} readingDirection={sodaPage?.reading_direction}
         onSelect={(panelId, id) => { selectItem({ kind: "figure", panelId, id }); onInspect?.(); }} />
       {isArtwork && !selectedRenderUrl && <div className="artwork-empty"><h3>这一页还没有出图</h3><p>先在“编辑分镜”中填写画面和台词，再生成候选图。</p><button className="ui-btn" onClick={() => useEditorStore.getState().openGenerateModal()}>设置出图</button></div>}
-      {!isArtwork && !activePage.panels.length && <div className="artwork-empty draft-empty"><h3>从第一个画面开始</h3><p>先建立一格，写下发生了什么。之后可以上下或左右分格，继续安排故事。</p><button className="ui-btn" onClick={() => { const state = useEditorStore.getState(); if (state.sodaPage) state.startFirstPanel(); else void state.createPage(); onInspect?.(); }}>{sodaPage ? "建立第一个格子" : "新建分镜页"}</button></div>}
+      {!isArtwork && !activePage.panels.length && sodaPage?.canvas_mode !== "single" && <div className="artwork-empty draft-empty"><h3>从第一个画面开始</h3><p>先建立一格，写下发生了什么。之后可以上下或左右分格，继续安排故事。</p><button className="ui-btn" onClick={() => { const state = useEditorStore.getState(); if (state.sodaPage) state.startFirstPanel(); else void state.createPage(); onInspect?.(); }}>{sodaPage ? "建立第一个格子" : "新建分镜页"}</button></div>}
       {/* Canvas Workspace with Pan & Smooth Wheel Zoom */}
       <div
         ref={workspaceRef}
@@ -883,6 +884,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 canvasHeight={canvasHeight}
               />
 
+              {sodaPage?.objects?.map(box => <EditableObjectBox key={box.id} box={box} enabled={canSelectObjects && !isPanTool} onDragStart={beginObjectDrag} onDragMove={previewObjectDrag} onDragEnd={finishObjectDrag} />)}
               {/* Layer 4: Overlays (跨格人物框) */}
               {(sodaPage?.overlays || []).map((overlay) => {
                 const selected = isSelected({kind:"overlay",id:overlay.id});

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
+from soda_storyboard.captions import source_hash, structured_caption
 from soda_storyboard.cli import main
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.figures import draw_figure, figure_framing, panel_figures
@@ -301,15 +302,21 @@ def test_caption_language_and_explicit_custom_override() -> None:
     panel = Panel("p", 1, RectShape(600, 20, 400, 500), character_ids=["girl"])
     page = Page(panels=[panel])
     chinese = compile_page(page, {"girl": character})["items"][0]["caption"]
-    assert chinese.startswith("第1格，中景，平视")  # noqa: RUF001 -- compiled Chinese punctuation
+    assert chinese.startswith("中景，平视")  # noqa: RUF001 -- compiled Chinese punctuation
     assert "黑发" in chinese
     assert "20-year-old" in chinese
     assert "short black hair" not in chinese
+    panel.caption_auto_en = {
+        "text": structured_caption(panel, page, {"girl": character}, "en"),
+        "source_hash": source_hash(panel, page, {"girl": character}),
+        "translated_at": "test",
+    }
     caption = compile_page(page, {"girl": character}, caption_language="en")["items"][0]["caption"]
     assert "short black hair" in caption
     assert "20-year-old" in caption
-    assert "Top-right panel" in caption
+    assert "Panel 1" not in caption
     assert "黑发" not in caption
+    panel.caption_auto_en = None
     panel.caption_en = "The older sister enters the kitchen."
     assert compile_page(page, {"girl": character})["items"][0]["caption"] == chinese
     panel.use_custom_caption = True

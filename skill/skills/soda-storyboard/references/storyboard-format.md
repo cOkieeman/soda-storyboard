@@ -24,7 +24,7 @@ Panel 的 id 稳定不变，order 从 1 连续编号，按 order 找“第几格
 
 - shot：extreme_long、long、full、medium、close_up、extreme_close_up。
 - angle：eye、high、low、bird、worm、dutch。没有 back、over_shoulder、POV 枚举；这些观察方向写进 description，并选一个合法 angle。
-- character_ids：角色 id 数组。description：这一格的可见画面、姿势、朝向、重点。可空 caption_en 优先成为 object caption，应包含格子位置、景别角度、每个人完整英文外观和动作。
+- character_ids：角色 id 数组。description：这一格的可见画面、姿势、朝向、重点。自动英文写入 caption_auto_en（text / source_hash / translated_at），先用 translate --todo 获取中文来源与哈希，再由 AI 翻译并 --apply。caption_en 仅在 use_custom_caption 或页面 legacy_caption_en 显式启用时覆盖。提示词不写格号。
 - dialogue：对象数组，包含 speaker_id、text、bubble（speech / shout / thought / narration），可选 position。不说话就空数组。
 - sfx：需要画出的拟声词字符串数组，不把速度线等画法当作文字。
 - importance：1 / 2 / 3。status：draft / approved / needs_redraw。

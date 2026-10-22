@@ -21,7 +21,8 @@ export default function Toolbar({ toolLabel, onToggleSidebar, onToggleInspector,
   const canRedo = useEditorStore(s => s.canRedo);
   const undoLabel = useEditorStore(s => s.undoLabel);
   const redoLabel = useEditorStore(s => s.redoLabel);
-  const hasPanels = useEditorStore(s => Boolean(s.sodaPage?.panels.length));
+  const singleCanvas = useEditorStore(s => s.sodaPage?.canvas_mode === "single");
+  const hasPanels = useEditorStore(s => Boolean(s.sodaPage?.panels.length || s.sodaPage?.canvas_mode === "single"));
   const undo = useEditorStore(s => s.undo);
   const redo = useEditorStore(s => s.redo);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -80,7 +81,7 @@ export default function Toolbar({ toolLabel, onToggleSidebar, onToggleInspector,
             <button role="menuitem" onClick={() => run(() => useEditorStore.getState().saveCurrentPage(true))}><Save />保存<kbd>Ctrl S</kbd></button>
             <div className="menu-rule" />
             <button role="menuitem" onClick={() => run(useEditorStore.getState().openImportModal)}><FileUp />导入 JSON</button>
-            <button role="menuitem" onClick={() => run(useEditorStore.getState().openLayoutModal)}><LayoutTemplate />版式候选</button>
+            {!singleCanvas && <button role="menuitem" onClick={() => run(useEditorStore.getState().openLayoutModal)}><LayoutTemplate />版式候选</button>}
             <button role="menuitem" onClick={() => run(useEditorStore.getState().openPreviewModal)}><Image />草稿预览</button>
             <div className="menu-rule" />
             <button role="menuitem" onClick={() => run(useEditorStore.getState().downloadSourceJson)}><FileJson />下载源分镜 JSON<span className="text-xs text-[var(--muted)]">可再次导入</span></button>

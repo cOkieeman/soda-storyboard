@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FileUp } from "lucide-react";
 import ModalShell from "./ModalShell";
 import NumberInput from "../ui/NumberInput";
-import { ApiError } from "../../lib/api";
+import { ApiError, importExternalStoryboard } from "../../lib/api";
 import { resolvedFigures } from "../../lib/figures";
 import { collectImportedCharacterIds, mapImportedCharacters, parseImportedPage, type ImportedPageDraft } from "../../lib/importPage";
 import { useEditorStore } from "../../lib/store";
@@ -19,6 +19,7 @@ function LayoutPreview({ page }: { page: SodaPage }) {
       {panel.shape.type === "quad" ? <polygon points={panel.shape.points.map(point => point.join(",")).join(" ")} /> : <rect x={panel.shape.x} y={panel.shape.y} width={panel.shape.w} height={panel.shape.h} />}
     </g>)}
     {page.overlays?.map(overlay => <rect key={overlay.id} x={overlay.rect.x} y={overlay.rect.y} width={overlay.rect.w} height={overlay.rect.h} fill="#d0a654" fillOpacity={0.12} stroke="#a17c32" strokeWidth={stroke} strokeDasharray={`${stroke * 3} ${stroke * 2}`} />)}
+    {page.objects?.map(object => <rect key={object.id} x={object.rect.x} y={object.rect.y} width={object.rect.w} height={object.rect.h} fill={object.label === "character" ? "#d0a654" : "#777067"} fillOpacity={0.1} stroke={object.label === "character" ? "#a17c32" : "#777067"} strokeWidth={stroke} />)}
     {page.texts.map(text => text.bbox && <g key={text.id}>
       <rect x={text.bbox.x} y={text.bbox.y} width={text.bbox.w} height={text.bbox.h} rx={text.bubble === "speech" ? stroke * 4 : 0} fill="#e7f1f3" stroke="#3288a2" strokeWidth={stroke} />
     </g>)}
@@ -69,7 +70,7 @@ function ImportDialog() {
     } catch { if (request === fileSequence.current) setError("无法读取文件，请重新选择，或粘贴 JSON 内容。"); }
     finally { if (request === fileSequence.current) setReading(false); }
   };
-  const parse = () => {
+  const parse = async () => {
     setError(null); setErrorOffset(null);
     try {
       if (new TextEncoder().encode(source).length > MAX_SOURCE_BYTES) throw new Error("内容超过 2 MB。请拆分为单页 JSON 后导入。");
@@ -77,18 +78,29 @@ function ImportDialog() {
       const trimmed = source.trim();
       const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```$/i.exec(trimmed);
       const json = fenced ? fenced[1].trim() : trimmed;
-      try { JSON.parse(json); } catch (syntax) {
+      let parsed: any;
+      try { parsed = JSON.parse(json); } catch (syntax) {
+        if (/^\s*(?:\||\d+[.)、]|[-*+]\s)/m.test(json)) parsed = null;
+        else {
         const message = (syntax as Error).message;
         const match = /position (\d+)/i.exec(message);
         const offset = source.indexOf(json) + (match ? Number(match[1]) : json.length);
         const prefix = source.slice(0, offset); const line = prefix.split("\n").length; const column = prefix.length - prefix.lastIndexOf("\n");
         setErrorOffset(offset);
         throw new Error(`JSON 语法错误：第 ${line} 行，第 ${column} 列。${message}`);
+        }
       }
-      setDraft(parseImportedPage(source, { canvasWidth: Number(width), canvasHeight: Number(height) }));
+      if (parsed && !parsed.items && Array.isArray((parsed.page || parsed).panels) && (parsed.page || parsed).canvas_width) {
+        setDraft(parseImportedPage(source, { canvasWidth: Number(width), canvasHeight: Number(height) }));
+      } else {
+        setReading(true);
+        const result = await importExternalStoryboard(source);
+        setDraft({ page: result.page, format: parsed?.items ? "moss" : "soda", warnings: [...result.report.guesses, ...result.report.warnings, ...result.report.unrecognized_items.map(item => `条目 ${item.index + 1}：${item.reason}，原样保留。`)], needsCanvasSize: false });
+      }
       setRoleMapping({}); setDimensionsConfirmed(false);
       if (window.innerWidth < 768) requestAnimationFrame(() => resultRef.current?.scrollIntoView({ block: "start" }));
     } catch (failure) { setDraft(null); setError((failure as Error).message); }
+    finally { setReading(false); }
   };
   const importPage = async () => {
     if (!draft || busyRef.current || missingRoles.some(id => !roleChoice(roleMapping, id)) || (draft.needsCanvasSize && !dimensionsConfirmed)) return;
@@ -116,14 +128,14 @@ function ImportDialog() {
           <label className="ui-label" htmlFor="import-json-source">或粘贴 JSON 内容</label>
           <textarea id="import-json-source" ref={sourceRef} value={source} disabled={busy || reading} spellCheck={false} placeholder={'{\n  "panels": [...],\n  "texts": [...]\n}'} onChange={event => { fileSequence.current += 1; setSource(event.target.value); setFilename(""); invalidatePreview(); }} />
           <div className="import-canvas-size"><label>原画布宽度<NumberInput aria-label="原画布宽度" min={1} max={8192} integer value={Number(width)} disabled={busy} onValidityChange={setWidthValid} onCommit={value => { setWidth(String(value)); invalidatePreview(); }} /></label><span>×</span><label>原画布高度<NumberInput aria-label="原画布高度" min={1} max={8192} integer value={Number(height)} disabled={busy} onValidityChange={setHeightValid} onCommit={value => { setHeight(String(value)); invalidatePreview(); }} /></label></div>
-          <p className="import-help">MOSS 缺少画布尺寸时使用上方数值；分镜单使用文件自带尺寸。每次导入一页，最大 2 MB。</p>
+          <p className="import-help">支持 MOSS、分镜 JSON 和 Markdown 表格或列表。MOSS 缺少尺寸时按坐标推断，猜测会列在理解提醒中。每次导入一页，最大 2 MB。</p>
           <button className="ui-btn" type="button" onClick={parse} disabled={busy || reading || !source.trim()}>解析并预览</button>
         </section>
         <section className="import-result" aria-label="导入预览" ref={resultRef}>
           {draft ? <>
             <div className="import-preview-heading"><strong>{draft.format === "soda" ? "分镜单 JSON" : "MOSS 布局 JSON"}</strong><span>{draft.page.canvas_width} × {draft.page.canvas_height}</span></div>
             {previewPage && <LayoutPreview page={previewPage} />}
-            <p className="import-counts" aria-live="polite">{previewPage?.panels.length} 格 · {previewPage?.texts.length} 个文字框 · {figureCount} 个人物{previewPage?.overlays?.length ? ` · ${previewPage.overlays.length} 个人物图层` : ""}</p>
+            <p className="import-counts" aria-live="polite">{previewPage?.canvas_mode === "single" ? "单画布" : `${previewPage?.panels.length} 格`} · {previewPage?.texts.length} 个文字框 · {figureCount} 个人物 · {previewPage?.objects?.length || 0} 个物件/人物框{previewPage?.overlays?.length ? ` · ${previewPage.overlays.length} 个人物图层` : ""}</p>
             {draft.needsCanvasSize && <label className="import-size-confirm"><input type="checkbox" checked={dimensionsConfirmed} disabled={busy} onChange={event => setDimensionsConfirmed(event.target.checked)} /><span>文件未记录尺寸，我确认原画布为 {draft.page.canvas_width} × {draft.page.canvas_height}。</span></label>}
             {missingRoles.length > 0 && <div className="import-roles"><h3>关联本项目角色</h3><p className="import-help">文件中的以下角色不在当前项目内，请选择对应关系。</p>{missingRoles.map(id => <label className="import-role" key={id}><span title={id}>{id}</span><select aria-label={`关联角色 ${id}`} value={roleChoice(roleMapping, id)} disabled={busy} onChange={event => setRoleMapping(current => ({ ...current, [id]: event.target.value }))}><option value="">请选择…</option>{characters.map(character => <option key={character.id} value={`id:${character.id}`}>{character.display_name}</option>)}<option value="skip">只保留画面和台词</option></select></label>)}<p className="import-help">“只保留画面和台词”会跳过该角色的火柴人和人物图层，并清除说话人关联。原始数据保留在导入记录中。</p></div>}
             {draft.warnings.length > 0 && <details className="import-warnings" open><summary>{draft.warnings.length} 条导入提醒</summary><ul>{draft.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details>}

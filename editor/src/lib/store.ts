@@ -206,6 +206,8 @@ type EditorState = {
   updateBubble: (id: string, patch: Partial<Bubble>) => void;
   updateSodaText: (id: string, patch: Partial<SodaText>) => void;
   updateSodaOverlay: (id: string, patch: Partial<SodaOverlay>) => void;
+  updateObjectBox: (id: string, patch: Partial<import("../types").SodaObject>) => void;
+  addObjectBox: () => void;
   addFigureToPanel: (panelId: string, figure: Figure) => void;
   removeFigureFromPanel: (panelId: string, figureIndex: number) => void;
   updateFigureInPanel: (panelId: string, figureIndex: number, patch: Partial<Figure>) => void;
@@ -857,6 +859,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const nextSodaPage = state.sodaPage ? projectPageToSodaPage(nextActivePage, {
       ...state.sodaPage,
+      ...(state.sodaPage.objects ? { objects: state.sodaPage.objects.map(object => object.panel_id === id && (dx || dy)
+        ? { ...object, rect: { ...object.rect, x: object.rect.x + dx, y: object.rect.y + dy } } : object) } : {}),
       ...(state.sodaPage.overlays ? { overlays: state.sodaPage.overlays.map(overlay => overlay.panel_id === id && (dx || dy)
         ? { ...overlay, rect: { ...overlay.rect, x: overlay.rect.x + dx, y: overlay.rect.y + dy } } : overlay) } : {})
     }, state.dirtyPanelIds, state.dirtyBubbleIds) : null;
@@ -1062,6 +1066,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     get().triggerAutoSave();
   },
 
+  addObjectBox: () => {
+    const state = get();
+    if (!state.sodaPage) return;
+    get().recordEdit("object:new", "添加物件框");
+    const id = `object_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const box = { id, caption: "", label: "object" as const, rect: { type: "rect" as const, x: state.sodaPage.canvas_width * 0.25, y: state.sodaPage.canvas_height * 0.25, w: state.sodaPage.canvas_width * 0.3, h: state.sodaPage.canvas_height * 0.2 }, panel_id: null };
+    set({ sodaPage: { ...state.sodaPage, objects: [...(state.sodaPage.objects || []), box] }, selection: { kind: "object", id }, selections: [{ kind: "object", id }] });
+    get().triggerAutoSave();
+  },
+  updateObjectBox: (id, patch) => {
+    if (locked(get(), { kind: "object", id })) return;
+    const state = get();
+    if (!state.sodaPage) return;
+    get().recordEdit(`object:${id}`, "编辑物件框");
+    set({ sodaPage: { ...state.sodaPage, objects: (state.sodaPage.objects || []).map(item => item.id === id ? { ...item, ...patch } : item) } });
+    get().triggerAutoSave();
+  },
   // Update overlay
   updateSodaOverlay: (id: string, patch: Partial<SodaOverlay>) => {
     if (locked(get(), { kind: "overlay", id })) return;
@@ -1371,7 +1392,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!activePage || !state.sodaPage) return;
     const targetId = insertionPanelId(state, panelId);
     if (targetId && locked(state, { kind: "panel", id: targetId })) return;
-    const panel = activePage.panels.find((p) => p.id === targetId);
+    const panel = activePage.panels.find((p) => p.id === targetId) || (state.sodaPage.canvas_mode === "single" ? { id: "", x: 0, y: 0, width: state.sodaPage.canvas_width, height: state.sodaPage.canvas_height } : undefined);
     if (!panel) return;
     const preset = TEXT_PRESETS[presetId];
     const width = Math.min(preset.width, Math.max(30, panel.width - 16));
@@ -1402,7 +1423,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         id: newTextId,
         text: preset.text,
         kind: preset.kind,
-        panel_id: panel.id,
+        panel_id: panel.id || null,
         speaker_id: null,
         direction: preset.direction,
         bubble: preset.bubble,

@@ -1,4 +1,5 @@
 import { Hand, MessageSquare, MousePointer2, PanelTop, UserRound } from "lucide-react";
+import { useEditorStore } from "../lib/store";
 import type { CanvasTool } from "./CanvasEditor";
 
 export const EDITOR_TOOLS = [
@@ -10,5 +11,6 @@ export const EDITOR_TOOLS = [
 ] as const;
 
 export default function ToolRail({ tool, onChange }: { tool: CanvasTool; onChange: (tool: CanvasTool) => void }) {
-  return <nav className="tool-rail" aria-label="画布工具">{EDITOR_TOOLS.map(({ id, label, shortcut, icon: Icon, hint }) => <button key={id} className={tool === id ? "tool-button is-active" : "tool-button"} title={hint + " · " + shortcut} aria-label={label} aria-pressed={tool === id} onClick={() => onChange(id)}><Icon /><span className="tool-label">{label}</span></button>)}<span className="rail-rule" /><span className="rail-caption">工具</span></nav>;
+  const singleCanvas = useEditorStore(state => state.sodaPage?.canvas_mode === "single");
+  return <nav className="tool-rail" aria-label="画布工具">{EDITOR_TOOLS.filter(item => !singleCanvas || item.id === "select" || item.id === "pan").map(({ id, label, shortcut, icon: Icon, hint }) => <button key={id} className={tool === id ? "tool-button is-active" : "tool-button"} title={hint + " · " + shortcut} aria-label={label} aria-pressed={tool === id} onClick={() => onChange(id)}><Icon /><span className="tool-label">{label}</span></button>)}<span className="rail-rule" /><span className="rail-caption">工具</span></nav>;
 }

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from soda_storyboard.captions import source_hash, structured_caption
 from soda_storyboard.cli import main
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.figures import panel_figures
@@ -31,10 +32,8 @@ def test_default_layouts_cover_four_candidates_and_keep_reading_order() -> None:
 def test_compile_uses_proven_caption_contract() -> None:
     page = Page(panels=[Panel("p1", 1, {"x": 0, "y": 0, "w": 512, "h": 300})])
     compiled = compile_page(page)
-    assert compiled["items"][0]["caption"] == "第1格，中景，平视，漫画场景"
-    assert compile_page(page, caption_language="en")["items"][0]["caption"].startswith(
-        "Panel 1, medium shot, eye-level:"
-    )
+    assert compiled["items"][0]["caption"] == "中景，平视。"
+    assert compile_page(page, caption_language="en")["items"][0]["caption"] == compiled["items"][0]["caption"]
     assert "no text, no speech bubbles" in compiled["summary"]["caption"]
     assert set(compiled["items"][0]) == {"label", "caption", "bbox"}
     assert all(type(value) is int for value in compiled["items"][0]["bbox"])
@@ -127,8 +126,14 @@ def test_four_equal_bands_and_stagger_have_real_geometry() -> None:
 @pytest.mark.parametrize("angle", CAMERA_ANGLES)
 def test_shots_and_angles_are_natural_english(shot: str, angle: str) -> None:
     page = Page(panels=[Panel("p", 1, {"x": 0, "y": 0, "w": 500, "h": 400}, shot=shot, angle=angle)])
+    page.panels[0].caption_auto_en = {
+        "text": structured_caption(page.panels[0], page, {}, "en"),
+        "source_hash": source_hash(page.panels[0], page, {}),
+        "translated_at": "test",
+    }
     caption = compile_page(page, caption_language="en")["items"][0]["caption"]
-    assert caption.startswith("Panel 1, ")
+    assert "Panel 1" not in caption
+    assert caption.endswith(".")
     assert "_" not in caption
     assert "景别" not in caption
     assert "角度" not in caption

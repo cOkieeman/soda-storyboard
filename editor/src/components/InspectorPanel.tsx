@@ -198,11 +198,12 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const selectedFigure = selection?.kind === "figure" && figurePanel ? resolvedFigures(figurePanel, sodaPage.reading_direction).find((figure, index) => getFigureId(figure, index) === selection.id) : undefined;
   const selectedText = selection?.kind === "text" || selection?.kind === "bubble" ? sodaPage.texts.find((text) => text.id === selection.id) : undefined;
   const selectedOverlay = selection?.kind === "overlay" ? sodaPage.overlays?.find((overlay) => overlay.id === selection.id) : undefined;
-  const hasSelection = Boolean(selectedPanel || selectedFigure || selectedText || selectedOverlay);
+  const selectedObject = selection?.kind === "object" ? sodaPage.objects?.find(object => object.id === selection.id) : undefined;
+  const hasSelection = Boolean(selectedPanel || selectedFigure || selectedText || selectedOverlay || selectedObject);
   const figureName = selectedFigure ? characters.find(character => character.id === selectedFigure.character_id)?.display_name || characterDetails[selectedFigure.character_id]?.display_name || "未指定角色" : "";
-  const title = selections.length > 1 ? "批量属性" : selectedFigure ? `${figureName} · 第 ${figurePanel!.order} 格` : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
-  const objectId = selectedFigure ? "人物与姿势" : selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
-  const deleteLabel = `删除${selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
+  const title = selections.length > 1 ? "批量属性" : selectedObject ? selectedObject.label === "character" ? "人物框" : "物件框" : selectedFigure ? `${figureName} · 第 ${figurePanel!.order} 格` : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
+  const objectId = selectedFigure ? "人物与姿势" : selectedObject?.id || selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
+  const deleteLabel = `删除${selectedObject ? "物件框" : selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
   const errorCount = notices.filter((notice) => notice.severity === "error").length;
   const warningCount = notices.length - errorCount;
   const firstPanel = [...sodaPage.panels].sort((a, b) => a.order - b.order)[0];
@@ -337,6 +338,11 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
             </InspectorSection>
             {selectedText.bbox && <InspectorSection title="几何信息"><dl className="space-y-2 text-[12px]"><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">位置</dt><dd className="font-mono">{selectedText.bbox.x}, {selectedText.bbox.y}</dd></div><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">尺寸</dt><dd className="font-mono">{selectedText.bbox.w} × {selectedText.bbox.h}</dd></div></dl></InspectorSection>}
           </div>
+        ) : selectedObject ? (
+          <div key={selectedObject.id}>
+            <InspectorSection title="物件描述"><textarea aria-label="物件框描述" className="ui-textarea" rows={5} value={selectedObject.caption} onChange={event => useEditorStore.getState().updateObjectBox(selectedObject.id, { caption: event.target.value })} /></InspectorSection>
+            <InspectorSection title="位置与大小"><div className="grid grid-cols-2 gap-3">{(["x", "y", "w", "h"] as const).map(key => <label key={key}><span className="ui-label">{{ x: "水平位置", y: "垂直位置", w: "宽度", h: "高度" }[key]}</span><NumberInput aria-label={`物件框 ${key}`} value={selectedObject.rect[key]} min={key === "w" || key === "h" ? 1 : 0} onCommit={value => useEditorStore.getState().updateObjectBox(selectedObject.id, { rect: { ...selectedObject.rect, [key]: value } })} /></label>)}</div></InspectorSection>
+          </div>
         ) : selectedOverlay ? (
           <div key={selectedOverlay.id}>
             <InspectorSection title="人物角色"><label className="block"><span className="ui-label">角色</span><InspectorSelect label="角色" value={selectedOverlay.character_id} options={characters.map((character) => ({ value: character.id, label: character.display_name }))} onChange={(value) => updateSodaOverlay(selectedOverlay.id, { character_id: value })} /></label></InspectorSection>
@@ -344,11 +350,12 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
           </div>
         ) : (
           <div key="page">
-            <section className="inspection-start">
+            {sodaPage.canvas_mode === "single" ? <section className="inspection-start"><h3>单画布</h3><p>选择文字、人物框或物件框直接编辑，也可以从“添加元素”新建。</p></section> : <section className="inspection-start">
               <h3 className="text-[14px] font-semibold">{firstPanel ? "从这一格开始" : "开始你的分镜页"}</h3>
               <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-light)]">{firstPanel ? "选中一个格子，填写画面描述，安排人物，再添加台词。也可以直接点击画布上的格子。" : "先建立第一个格子，再安排版式和画面内容。"}</p>
               {firstPanel ? <button type="button" className="ui-btn mt-3" onClick={() => selectObject({ kind: "panel", id: firstPanel.id })}>编辑第 {firstPanel.order} 格<ArrowUpRight size={14} aria-hidden="true" /></button> : onStartPage && <button type="button" className="ui-btn mt-3" onClick={onStartPage}><Plus size={14} aria-hidden="true" />建立第一个格子</button>}
-            </section>
+            </section>}
+            {Boolean(sodaPage.objects?.length) && <InspectorSection title="物件与人物框">{sodaPage.objects?.map(box => <button type="button" className="ui-btn ui-btn-sm mb-2 w-full truncate" key={box.id} onClick={() => selectObject({ kind: "object", id: box.id })}>{box.label === "character" ? "人物框" : "物件框"} · {box.caption.slice(0, 24) || box.id}</button>)}</InspectorSection>}
             <InspectorSection title="页面信息" open={false}>
               <dl className="space-y-3 text-[13px]">
                 <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">画布尺寸</dt><dd className="font-mono">{sodaPage.canvas_width} × {sodaPage.canvas_height}</dd></div>
@@ -359,7 +366,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
             </InspectorSection>
             <InspectorSection title="提示词兼容">
               <label className="figure-option flex cursor-pointer items-center gap-2 text-[13px]"><input type="checkbox" checked={Boolean(sodaPage.legacy_caption_en)} onChange={(event) => setLegacyCaptionMode(event.target.checked)} />保持旧版英文提示词覆盖行为</label>
-              <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">默认使用中文画面描述。旧项目如需保持原有出图提示词，可开启本页兼容模式：所有非空的自定义提示词自动覆盖。</p>
+              <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">中文编辑，默认使用新鲜英文译文；缺失或过期时用中文。旧项目兼容模式会启用原有手动提示词。</p>
             </InspectorSection>
             {sodaPage.style_prompt && <InspectorSection title="画面风格提示词" open={false}><p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--ink-light)]">{sodaPage.style_prompt}</p></InspectorSection>}
           </div>

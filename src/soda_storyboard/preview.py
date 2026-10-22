@@ -55,6 +55,19 @@ def _draw_overlay(
     )
 
 
+def _draw_objects(
+    draw: ImageDraw.ImageDraw, page: Page, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, scale: float
+) -> None:
+    for item in page.objects:
+        rect = item.rect
+        x, y, right, bottom = [
+            round(value * scale) for value in (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h)
+        ]
+        color = "#dc302a" if item.label == "character" else "#777067"
+        draw.rectangle((x, y, right, bottom), outline=color, width=max(2, round(3 * scale)))
+        draw.text((x + 4, y + 4), item.caption[:28] or item.id, font=font, fill=color)
+
+
 def find_font(font: str | Path | None = None) -> Path | None:
     candidates = [
         Path(font) if font else None,
@@ -182,6 +195,7 @@ def render_preview(  # noqa: PLR0912, PLR0913 -- retain existing keyword API and
         _draw_dialogue(draw, panel, (left, top), small_font, scale)
     for overlay in sorted(page.overlays, key=lambda overlay: overlay.z_index):
         _draw_overlay(draw, overlay, label_font, scale)
+    _draw_objects(draw, page, label_font, scale)
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image.save(output_path)
@@ -379,6 +393,7 @@ def _render_sketch(  # noqa: PLR0912 -- labels, figures, overlays and lettering 
             )
         else:
             _draw_overlay(ImageDraw.Draw(image), overlay, label_font, scale)
+    _draw_objects(ImageDraw.Draw(image), page, label_font, scale)
     for text in layout_texts(page):
         _draw_text_box(image, text, page, font_path, scale)
     draw = ImageDraw.Draw(image)

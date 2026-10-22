@@ -77,6 +77,8 @@ export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebar
   const [objectSearch, setObjectSearch] = useState("");
   const [copyingPage, setCopyingPage] = useState<string | null>(null);
   const panels = [...(sodaPage?.panels || [])].sort((a, b) => a.order - b.order);
+  const singleCanvas = sodaPage?.canvas_mode === "single";
+  const objects = sodaPage?.objects || [];
   const texts = sodaPage?.texts || [];
   const overlays = sodaPage?.overlays || [];
   const query = objectSearch.trim().toLocaleLowerCase();
@@ -151,15 +153,15 @@ export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebar
           {visiblePages.length === 0 && <p className="px-4 py-3 text-sm text-[var(--muted)]">没有匹配的页面</p>}
         </div>
         <section className="page-outline" aria-labelledby="page-outline-heading">
-          <div className="outline-heading"><h2 id="page-outline-heading">本页分镜</h2><span>{panels.length} 格</span></div>
-          {panels.length > 0 && <label className="mx-3 mb-2 flex items-center gap-2"><Search size={14} className="shrink-0 text-[var(--muted)]" /><input className="ui-input" aria-label="搜索本页对象" placeholder="查找分镜、角色或台词" value={objectSearch} onChange={event => setObjectSearch(event.target.value)} /></label>}
+          <div className="outline-heading"><h2 id="page-outline-heading">本页分镜</h2><span>{singleCanvas ? "单画布" : `${panels.length} 格`}</span></div>
+          {(panels.length > 0 || singleCanvas) && <label className="mx-3 mb-2 flex items-center gap-2"><Search size={14} className="shrink-0 text-[var(--muted)]" /><input className="ui-input" aria-label="搜索本页对象" placeholder="查找分镜、角色或台词" value={objectSearch} onChange={event => setObjectSearch(event.target.value)} /></label>}
           {!activeId ? <div className="outline-empty">
             <p>{pages.length ? "先选择一页，开始安排分镜。" : "从一页空白分镜开始你的故事。"}</p>
             <button className="outline-panel-button" onClick={() => {
               if (pages.length) void useEditorStore.getState().selectPage(pages[0].id);
               else void useEditorStore.getState().createPage();
             }}>{pages.length ? "打开第 1 页" : "新建分镜页"}</button>
-          </div> : !sodaPage || sodaPage.id !== activeId ? <p className="outline-empty" role="status">正在载入本页分镜…</p> : !panels.length ? <div className="outline-empty">
+          </div> : !sodaPage || sodaPage.id !== activeId ? <p className="outline-empty" role="status">正在载入本页分镜…</p> : singleCanvas ? <p className="sidebar-footnote">选择文字、人物框或物件框直接编辑。</p> : !panels.length ? <div className="outline-empty">
             <p>这一页还没有格子。</p>
             <p>建立第一格，写下故事的第一个画面。</p>
             <button className="outline-panel-button" onClick={() => {
@@ -204,6 +206,7 @@ export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebar
             </ol>
             {visiblePanels.length === 0 && visibleUnassignedTexts.length === 0 && visibleUnassignedOverlays.length === 0 && <p className="px-4 py-3 text-sm text-[var(--muted)]">没有匹配的对象，试试角色名或台词内容。</p>}
           </>}
+          {objects.length > 0 && <div className="outline-page-texts"><h3 className="outline-heading">物件与人物框</h3><div className="outline-text-list">{objects.filter(object => matches(`${object.id} ${object.caption}`)).map(object => <div key={object.id} className="object-tree-row relative"><button type="button" className={"outline-text-button" + (isSelected({ kind: "object", id: object.id }) ? " is-selected" : "")} style={{ paddingRight: 64 }} aria-pressed={isSelected({ kind: "object", id: object.id })} onClick={event => selectObject({ kind: "object", id: object.id }, event.shiftKey || event.ctrlKey || event.metaKey)}><span className="outline-panel-meta">{object.label === "character" ? "人物框" : "物件框"}</span><span>{shortText(object.caption) || "未填写描述"}</span></button><ObjectControls selection={{ kind: "object", id: object.id }} label={`物件框 ${object.id}`} /></div>)}</div></div>}
           {visibleUnassignedTexts.length > 0 && <div className="outline-page-texts"><h3 className="outline-heading">页上文字</h3><div className="outline-text-list">{visibleUnassignedTexts.map(renderText)}</div></div>}
           {visibleUnassignedOverlays.length > 0 && <div className="outline-page-texts"><h3 className="outline-heading">跨格对象</h3><div className="outline-text-list">{visibleUnassignedOverlays.map(renderOverlay)}</div></div>}
           <p className="px-4 py-2 text-xs text-[var(--muted)]">锁定防止误移动；眼睛控制本次编辑中的显示。</p>

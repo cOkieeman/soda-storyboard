@@ -8,7 +8,8 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from soda_storyboard.compiler import compile_geometry_map, compile_page, custom_caption_enabled
+from soda_storyboard.captions import panel_caption_info
+from soda_storyboard.compiler import compile_geometry_map, compile_page
 from soda_storyboard.figures import sketch_geometry
 from soda_storyboard.geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
 from soda_storyboard.io import load_character, load_project, read_json, save_page, write_json
@@ -246,7 +247,7 @@ class Store:
             raw, _ = snapshot(self.page_path(page_id))
         page = Page.from_dict(raw)
         project = load_project(self.path("project.json"))
-        for key in ("text_direction", "color_mode", "tags"):
+        for key in ("text_direction", "color_mode", "tags", "caption_language"):
             if key not in raw:
                 setattr(page, key, getattr(project, key))
         if not raw.get("style_prompt"):
@@ -284,17 +285,11 @@ class Store:
             page = self.render_page(page_id, raw=raw)
             if page.page_id != page_id:
                 raise APIError(400, "预览页面 id 与请求路径不一致")
-            compiled = compile_page(page, self.character_map(), with_ids=True)
-            panels = {panel.id: panel for panel in page.panels}
+            characters = self.character_map()
             return {
                 "panels": [
-                    {
-                        "panel_id": item["panel_id"],
-                        "caption": item["caption"],
-                        "custom_override": custom_caption_enabled(panels[item["panel_id"]], page),
-                    }
-                    for item in compiled["items"]
-                    if item["label"] == "object"
+                    panel_caption_info(panel, page, characters)
+                    for panel in sorted(page.panels, key=lambda item: item.order)
                 ]
             }
 

@@ -78,6 +78,18 @@ def _boolean(value: Any, name: str) -> bool:
     return value
 
 
+def _caption_language(value: Any) -> str:
+    if value not in ("en", "zh"):
+        raise ValueError("caption_language must be en or zh")
+    return value
+
+
+def _glossary(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        raise TypeError("glossary must be an object mapping Chinese to English")
+    return {_text(key, "glossary key"): _text(item, "glossary value") for key, item in value.items()}
+
+
 def _strings(value: Any, name: str) -> list[str]:
     if value is None:
         return []
@@ -468,6 +480,7 @@ class Panel:
     caption_en: str | None = None
     figures: list[Figure] = field(default_factory=list)
     use_custom_caption: bool = False
+    caption_auto_en: JsonObject | None = None
 
     def __post_init__(self) -> None:
         self.shape = shape_to_dict(self.shape)
@@ -520,6 +533,7 @@ class Panel:
             "status",
             "caption_en",
             "use_custom_caption",
+            "caption_auto_en",
             "figures",
         }
         shape = value.get("shape")
@@ -544,6 +558,9 @@ class Panel:
             else _text(value["caption_en"], "panel.caption_en"),
             figures=[Figure.from_dict(item) for item in value.get("figures", [])],
             use_custom_caption=_boolean(value.get("use_custom_caption", False), "panel.use_custom_caption"),
+            caption_auto_en=dict(value["caption_auto_en"])
+            if isinstance(value.get("caption_auto_en"), Mapping)
+            else None,
             extra=_copy_extra(value, known),
         )
 
@@ -566,6 +583,8 @@ class Panel:
             result["caption_en"] = self.caption_en
         if self.use_custom_caption:
             result["use_custom_caption"] = True
+        if self.caption_auto_en is not None:
+            result["caption_auto_en"] = dict(self.caption_auto_en)
         if self.figures:
             result["figures"] = [item.to_dict() for item in self.figures]
         return result
@@ -634,6 +653,43 @@ class Overlay:
 
 
 @dataclass(slots=True)
+class ObjectBox:
+    """An independently editable object or imported character without a rig."""
+
+    id: str
+    rect: RectShape
+    caption: str = ""
+    panel_id: str | None = None
+    label: str = "object"
+    extra: JsonObject = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.rect, RectShape):
+            self.rect = RectShape.from_dict(self.rect)
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> ObjectBox:
+        return cls(
+            id=_text(value.get("id", ""), "object.id"),
+            rect=RectShape.from_dict(value.get("rect", value.get("bbox", {}))),
+            caption=_text(value.get("caption", value.get("description", "")), "object.caption"),
+            panel_id=value.get("panel_id"),
+            label=_text(value.get("label", "object"), "object.label"),
+            extra=_copy_extra(value, {"id", "rect", "bbox", "caption", "description", "panel_id", "label"}),
+        )
+
+    def to_dict(self) -> JsonObject:
+        return {
+            **self.extra,
+            "id": self.id,
+            "rect": self.rect.to_dict(),
+            "caption": self.caption,
+            "panel_id": self.panel_id,
+            "label": self.label,
+        }
+
+
+@dataclass(slots=True)
 class Page:
     """A complete storyboard page."""
 
@@ -657,6 +713,8 @@ class Page:
     text_font_size: float = 42
     text_max_chars: int = 10
     legacy_caption_en: bool = False
+    caption_language: str | None = None
+    objects: list[ObjectBox] = field(default_factory=list)
 
     @property
     def id(self) -> str:
@@ -684,6 +742,9 @@ class Page:
             item if isinstance(item, Overlay) else Overlay.from_dict(item) for item in self.overlays
         ]
         self.texts = [item if isinstance(item, Text) else Text.from_dict(item) for item in self.texts]
+        self.objects = [
+            item if isinstance(item, ObjectBox) else ObjectBox.from_dict(item) for item in self.objects
+        ]
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> Page:
@@ -719,6 +780,8 @@ class Page:
             "text_font_size",
             "text_max_chars",
             "legacy_caption_en",
+            "caption_language",
+            "objects",
         }
         canvas = value.get("canvas", value.get("canvas_size", {}))
         if not isinstance(canvas, Mapping):
@@ -750,6 +813,10 @@ class Page:
             text_font_size=_number(value.get("text_font_size", 42), "page.text_font_size"),
             text_max_chars=int(value.get("text_max_chars", 10)),
             legacy_caption_en=_boolean(value.get("legacy_caption_en", False), "page.legacy_caption_en"),
+            caption_language=None
+            if value.get("caption_language") is None
+            else _caption_language(value["caption_language"]),
+            objects=[ObjectBox.from_dict(item) for item in value.get("objects", [])],
             extra=_copy_extra(value, known),
             format=_text(value.get("format", PAGE_FORMAT), "page.format"),
         )
@@ -777,6 +844,10 @@ class Page:
         result.update(self.extra)
         if self.legacy_caption_en:
             result["legacy_caption_en"] = True
+        if self.caption_language is not None:
+            result["caption_language"] = self.caption_language
+        if self.objects:
+            result["objects"] = [item.to_dict() for item in self.objects]
         if self.overlays:
             result["overlays"] = [overlay.to_dict() for overlay in self.overlays]
         return result
@@ -798,6 +869,8 @@ class Project:
     format: str = PROJECT_FORMAT
     style_prompt: str | None = None
     tags: list[str] = field(default_factory=list)
+    caption_language: str = "en"
+    glossary: dict[str, str] = field(default_factory=dict)
 
     @property
     def title(self) -> str:
@@ -839,6 +912,8 @@ class Project:
             "color_mode",
             "style_prompt",
             "tags",
+            "caption_language",
+            "glossary",
         }
         canvas = value.get("default_canvas", value.get("canvas", {}))
         if not isinstance(canvas, Mapping):
@@ -875,6 +950,8 @@ class Project:
             if value.get("style_prompt") is None
             else _text(value["style_prompt"], "project.style_prompt"),
             tags=_strings(value.get("tags", []), "project.tags"),
+            caption_language=_caption_language(value.get("caption_language", "en")),
+            glossary=_glossary(value.get("glossary", {})),
         )
 
     def to_dict(self) -> JsonObject:
@@ -890,6 +967,8 @@ class Project:
             "color_mode": self.color_mode,
             "style_prompt": self.style_prompt,
             "tags": list(self.tags),
+            "caption_language": self.caption_language,
+            "glossary": dict(self.glossary),
         }
         result.update(self.extra)
         return result

@@ -5,6 +5,7 @@ import type { CanvasMode } from "../CanvasEditor";
 
 export function CanvasHeading({ width, height, mode, onModeChange }: { width: number; height: number; mode: CanvasMode; onModeChange?: (mode: CanvasMode) => void }) {
   const hasPanels = useEditorStore(state => Boolean(state.sodaPage?.panels.length));
+  const singleCanvas = useEditorStore(state => state.sodaPage?.canvas_mode === "single");
   return (
     <div className="canvas-heading workspace-heading">
       <div className="workspace-modes" role="group" aria-label="工作模式">
@@ -13,8 +14,8 @@ export function CanvasHeading({ width, height, mode, onModeChange }: { width: nu
       </div>
       <span className="workspace-dimensions numeric">{width} × {height}</span>
       <div className="workspace-actions">
-        <button type="button" disabled={!hasPanels} title={hasPanels ? "为当前格数选择版式" : "先建立第一个格子"} onClick={() => void useEditorStore.getState().openLayoutModal()}><LayoutTemplate />调整版式</button>
-        <button type="button" disabled={!hasPanels} onClick={() => useEditorStore.getState().openPreviewModal()}><Eye />检查草稿</button>
+        {!singleCanvas && <button type="button" disabled={!hasPanels} title={hasPanels ? "为当前格数选择版式" : "先建立第一个格子"} onClick={() => void useEditorStore.getState().openLayoutModal()}><LayoutTemplate />调整版式</button>}
+        <button type="button" disabled={!hasPanels && !singleCanvas} onClick={() => useEditorStore.getState().openPreviewModal()}><Eye />检查草稿</button>
       </div>
     </div>
   );

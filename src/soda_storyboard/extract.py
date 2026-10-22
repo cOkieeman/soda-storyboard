@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps, UnidentifiedImageError
 
+from .color_extract import extract_colors
 from .geometry import convex_polygon, polygon_area, shape_bbox, shape_polygon
 from .io import write_json
 
@@ -639,7 +640,7 @@ def _scale_shape(shape: dict[str, Any], sx: float, sy: float) -> dict[str, Any]:
 
 
 def extract_image(
-    image: Image.Image, *, direction: str = "rtl", source_name: str = "reference.png"
+    image: Image.Image, *, direction: str = "rtl", source_name: str = "reference.png", mode: str = "auto"
 ) -> dict[str, Any]:
     if image.format not in {None, "PNG", "JPEG", "WEBP"}:
         msg = "Only PNG, JPG and WebP images are supported"
@@ -649,6 +650,38 @@ def extract_image(
         raise ValueError(msg)
     image = ImageOps.exif_transpose(image)
     width, height = image.size
+    if mode not in {"auto", "color", "standard"}:
+        msg = "mode must be auto, color or standard"
+        raise ValueError(msg)
+    if mode != "standard":
+        colored = extract_colors(image, lambda panels: reading_order(panels, direction))
+        if colored is not None:
+            return {
+                **colored,
+                "source_image": Path(source_name.replace("\\", "/")).name,
+                "canvas": [width, height],
+                "direction": direction,
+                "panel_count": len(colored["panels"]),
+                "threshold": None,
+                "reliable": all(panel["confidence"] >= 0.7 for panel in colored["panels"]),
+                "warnings": [
+                    (
+                        "按颜色分类；未做 OCR。红色窄框暂作角色说明，遮挡边界带置信度，"
+                        "内容请由 AI 看图后填写并核对。"
+                    )
+                ],
+            }
+        if mode == "color":
+            return {
+                "mode": "color",
+                "canvas": [width, height],
+                "panels": [],
+                "texts": [],
+                "titles": [],
+                "panel_count": 0,
+                "reliable": False,
+                "warnings": ["未找到可确认的青色格框，请核对颜色模式。"],
+            }
     gray = image.convert("RGBA")
     background = Image.new("RGBA", gray.size, "white")
     background.alpha_composite(gray)
@@ -708,10 +741,10 @@ def _contains(outer: dict[str, Any], inner: dict[str, Any]) -> bool:
     )
 
 
-def extract_layout(path: str | Path, *, direction: str = "rtl") -> dict[str, Any]:
+def extract_layout(path: str | Path, *, direction: str = "rtl", mode: str = "auto") -> dict[str, Any]:
     try:
         with Image.open(path) as image:
-            return extract_image(image, direction=direction, source_name=Path(path).name)
+            return extract_image(image, direction=direction, source_name=Path(path).name, mode=mode)
     except (UnidentifiedImageError, Image.DecompressionBombError) as exc:
         msg = "Invalid or oversized reference image"
         raise ValueError(msg) from exc
@@ -722,6 +755,13 @@ def draw_extraction_preview(image: Image.Image, result: dict[str, Any], output: 
     draw = ImageDraw.Draw(preview)
     stroke = max(2, round(min(preview.size) / 250))
     font = ImageFont.load_default(size=max(16, stroke * 7))
+    for item in [*result.get("texts", []), *result.get("titles", [])]:
+        x, y, right, bottom = shape_bbox(item["bbox"])
+        draw.rectangle(
+            (x, y, right, bottom),
+            outline="#168b45" if item.get("color") == "green" else "#cc3424",
+            width=stroke,
+        )
     for panel in result["panels"]:
         polygon = shape_polygon(panel["shape"])
         color = "#0b916b" if panel["confidence"] >= 0.7 else "#d96614"

@@ -16,6 +16,10 @@ import { normalizeCharacterColor } from "./characterColors";
 
 export const API_BASE = "";
 
+export async function importExternalStoryboard(source: string): Promise<{ page: SodaPage; report: { guesses: string[]; warnings: string[]; unrecognized_items: { index: number; reason: string }[] } }> {
+  return (await request<{ page: SodaPage; report: { guesses: string[]; warnings: string[]; unrecognized_items: { index: number; reason: string }[] } }>("/api/import", { method: "POST", body: JSON.stringify({ source }) })).data;
+}
+
 function getOrCreateClientId(): string {
   try {
     if (typeof window !== "undefined" && window.sessionStorage) {
@@ -158,7 +162,7 @@ export async function getPage(id: string): Promise<{ page: SodaPage; version: st
   return { page: data.page, version };
 }
 
-export type PanelCaptionPreview = { panel_id: string; caption: string; custom_override: boolean };
+export type PanelCaptionPreview = { panel_id: string; caption: string; custom_override: boolean; language?: "en" | "zh" | "custom"; translation_status?: "fresh" | "stale" | "missing" | "preserved"; warnings?: { code: string; message: string }[] };
 
 /** Compile the current draft for inspection without saving files or creating a generation job. */
 export async function previewPanelCaptions(id: string, page: SodaPage, signal?: AbortSignal): Promise<PanelCaptionPreview[]> {

@@ -27,8 +27,16 @@ export default function PanelCaptionPreview({ page, panel }: { page: SodaPage; p
 
   const current = preview?.source === page && preview.panelId === panel.id ? preview : null;
   const overridden = current?.result?.custom_override ?? usesCustomCaption(panel, page);
+  const priorPanel = preview?.source.panels.find(item => item.id === panel.id);
+  const captionSource = (item: SodaPanel) => JSON.stringify([item.description, item.shot, item.angle, item.figures, item.character_ids, item.props, item.atmosphere]);
+  const editedChinese = priorPanel && captionSource(priorPanel) !== captionSource(panel);
+  const translation = current?.result?.translation_status ?? (panel.caption_auto_en?.text ? editedChinese ? "stale" : "checking" : "missing");
+  const statusLabel = { fresh: "新鲜", stale: "过期", missing: "缺失", checking: "核对中", preserved: "导入原文保留" }[translation];
+  const language = current?.result?.language === "en" ? "英文" : overridden ? "手动覆盖" : "中文";
   return <div className="caption-preview" aria-busy={!current}>
+    <p className="text-[12px] leading-relaxed" role="status">当前出图语言：{language} · 英文译文：{statusLabel}</p>
     {overridden && <p className="caption-override-badge" role="status">自定义提示词覆盖生效</p>}
+    {current?.result?.warnings?.map(warning => <p key={warning.code + warning.message} className="caption-override-badge" role="alert">{warning.message}</p>)}
     <textarea className="ui-textarea caption-preview-text" aria-label="最终提示词预览" readOnly rows={6} value={current?.result?.caption ?? ""} placeholder={current?.error || "正在编译当前修改…"} />
     <p className="text-[12px] leading-relaxed text-[var(--ink-light)]" role={current?.error ? "alert" : undefined}>{current?.error || (overridden ? "覆盖本格场景提示词；人物位置与姿势仍按编辑器编译，手写内容应与人物保持一致。" : "由当前画面描述、镜头和人物信息编译，修改后自动更新。")}</p>
   </div>;

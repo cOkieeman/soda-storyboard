@@ -11,13 +11,16 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
+from .captions import caption_notices
 from .compiler import compile_geometry_map, compile_page, size_check_report
 from .geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
+from .importers import import_storyboard
 from .io import load_characters, load_page, load_project, read_json, write_json
 from .models import Character, Lora, Page, Panel, Project
 from .preview import render_preview
 from .server.common import APIError
 from .templates import builtin_templates, suggest_layouts
+from .translations import apply_translations, translation_todo
 from .validation import validate_page
 
 
@@ -357,7 +360,7 @@ def command_layout_extract(args: argparse.Namespace) -> int:
     from .extract import draw_extraction_preview, extract_layout, save_template  # noqa: PLC0415
 
     source = Path(args.image)
-    result = extract_layout(source, direction=args.direction)
+    result = extract_layout(source, direction=args.direction, mode=args.mode)
     output = Path(args.preview) if args.preview else source.with_name(f"{source.stem}.layout-preview.png")
     if output.resolve() == source.resolve():
         raise ValueError("预览输出不能覆盖参考原图")
@@ -426,6 +429,7 @@ def _page_for(path: Path) -> Page:
     if not payload.get("style_prompt"):
         payload["style_prompt"] = project.style_prompt
     payload.setdefault("tags", project.tags)
+    payload.setdefault("caption_language", project.caption_language)
     return Page.from_dict(payload)
 
 
@@ -440,6 +444,9 @@ def command_compile(args: argparse.Namespace) -> int:
         with_ids=args.with_ids,
         slant_mode=args.slant_mode,
     )
+    for panel in page.panels:
+        for notice in caption_notices(panel, page, _characters_near(path)):
+            print(notice["message"], file=sys.stderr)
     if args.output:
         write_json(args.output, compiled)
     target = Path(args.output) if args.output else path
@@ -456,6 +463,42 @@ def command_compile(args: argparse.Namespace) -> int:
         )
     report = {**compiled, **({"size_check": size_check_report(page, target_size)} if target_size else {})}
     _emit(report, args.json)
+    return 0
+
+
+def command_translate(args: argparse.Namespace) -> int:
+    path = Path(args.page)
+    raw = read_json(path)
+    page = _page_for(path)
+    characters = _characters_near(path)
+    if args.todo:
+        _json_print(translation_todo(page, characters, _project_for(path).glossary))
+        return 0
+    result = apply_translations(
+        page, characters, json.loads(Path(args.apply).read_text(encoding="utf-8-sig"))
+    )
+    by_id = {panel.id: panel for panel in page.panels}
+    if result["applied"]:
+        for panel in raw["panels"]:
+            if panel["id"] in result["applied"]:
+                panel["caption_auto_en"] = by_id[panel["id"]].caption_auto_en
+        write_json(path, raw)
+    _json_print(result)
+    return 1 if result["rejected"] else 0
+
+
+def command_import(args: argparse.Namespace) -> int:
+    page, report = import_storyboard(Path(args.file).read_text(encoding="utf-8-sig"), page_id=args.page_id)
+    result = {"page": page.to_dict(), "report": report}
+    if args.project:
+        from .server.common import identifier  # noqa: PLC0415 -- reuse path-safe ids at the write boundary
+
+        target = Path(args.project) / "pages" / f"{identifier(page.id)}.json"
+        if target.exists():
+            raise ValueError("目标页面已存在；请用 --page-id 指定新 id")
+        write_json(target, page)
+        result["path"] = str(target)
+    _json_print(result)
     return 0
 
 
@@ -530,6 +573,7 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument("--preview")
     extract.add_argument("--json", action="store_true")
     extract.set_defaults(func=command_layout_extract)
+    extract.add_argument("--mode", choices=("auto", "color", "standard"), default="auto")
     suggest = layout_sub.add_parser("suggest")
     suggest.add_argument("--panels", type=int)
     suggest.add_argument("--page")
@@ -572,6 +616,19 @@ def build_parser() -> argparse.ArgumentParser:
     compile_parser.add_argument("--slant-mode", choices=("cut", "hint", "rect"), default="cut")
     compile_parser.add_argument("--json", action="store_true")
     compile_parser.set_defaults(func=command_compile)
+    translate = subparsers.add_parser("translate", help="导出待翻译提示词或写回 AI 译文，不调用翻译服务")
+    translate.add_argument("page")
+    mode = translate.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--todo", action="store_true")
+    mode.add_argument("--apply")
+    translate.add_argument("--json", action="store_true")
+    translate.set_defaults(func=command_translate)
+    importer = subparsers.add_parser("import", help="导入 MOSS、外来 JSON 或 Markdown 文字分镜")
+    importer.add_argument("file")
+    importer.add_argument("--project")
+    importer.add_argument("--page-id")
+    importer.add_argument("--json", action="store_true")
+    importer.set_defaults(func=command_import)
     from .production.cli import register_commands  # noqa: PLC0415 -- optional command registration
 
     register_commands(subparsers)

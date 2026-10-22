@@ -7,14 +7,24 @@ from itertools import combinations
 from math import ceil, floor
 from typing import TYPE_CHECKING, Any
 
-from .figure_semantics import figure_description, figure_page_box
+from .captions import (
+    character_caption,
+    custom_caption_enabled,
+    panel_caption,
+    translation_state,
+)
+from .captions import (
+    figure_caption as _figure_caption,
+)
+from .figure_semantics import figure_page_box
 from .figures import panel_figures
 from .geometry import inscribed_rect, midline_rect, panel_to_moss_bbox, shape_bbox
 from .lettering import layout_texts
 from .models import shape_to_dict
+from .moss_roundtrip import imported_result
 
 if TYPE_CHECKING:
-    from .models import Character, Figure, Overlay, Page, Panel, Shape, Text
+    from .models import Character, Overlay, Page, Panel, Shape, Text
 
 TOP_ROW_LIMIT = 0.34
 BOTTOM_ROW_START = 0.72
@@ -61,29 +71,6 @@ def _character_map(characters: Mapping[str, Character] | Iterable[Character] | N
     return {character.id: character for character in characters}
 
 
-def character_caption(identifier: str, characters: Mapping[str, Character], language: str = "zh") -> str:
-    character = characters.get(identifier)
-    if character is None:
-        return identifier
-    detail = (
-        character.appearance_zh or character.appearance_en or character.display_name
-        if language == "zh"
-        else character.appearance_en or character.appearance_zh or character.display_name
-    )
-    separator = "，" if language == "zh" else ", "
-    return separator.join(
-        part
-        for part in (
-            character.display_name,
-            character.age,
-            detail,
-            *character.clothing,
-            *character.trigger_words,
-        )
-        if part
-    )
-
-
 def panel_location(panel: Panel, page: Page) -> str:
     x, y, x2, y2 = shape_bbox(panel.shape)
     cy = (y + y2) / 2 / page.canvas_height
@@ -93,51 +80,6 @@ def panel_location(panel: Panel, page: Page) -> str:
     side = "right" if (x + x2) / 2 > page.canvas_width / 2 else "left"
     size = " small vertical" if y2 - y > (x2 - x) * 1.5 else ""
     return f"{row}-{side}{size} panel"
-
-
-def custom_caption_enabled(panel: Panel, page: Page) -> bool:
-    """Old caption strings remain data until a user explicitly enables them."""
-    return bool(
-        panel.caption_en and panel.caption_en.strip() and (panel.use_custom_caption or page.legacy_caption_en)
-    )
-
-
-def _figure_caption(figure: Figure, characters: Mapping[str, Character], language: str) -> str:
-    separator = "，" if language == "zh" else ", "
-    return separator.join(
-        part
-        for part in (
-            character_caption(figure.character_id, characters, language),
-            figure_description(figure, language),
-        )
-        if part
-    )
-
-
-def panel_caption(panel: Panel, page: Page, characters: Mapping[str, Character], language: str = "zh") -> str:
-    if custom_caption_enabled(panel, page):
-        return panel.caption_en
-    figures = panel_figures(panel, page)
-    identifiers = {figure.character_id for figure in figures}
-    captions = [_figure_caption(figure, characters, language) for figure in figures]
-    captions.extend(
-        character_caption(identifier, characters, language)
-        for identifier in dict.fromkeys(panel.character_ids)
-        if identifier not in identifiers
-    )
-    details = ("；" if language == "zh" else "; ").join(captions)
-    if language == "zh":
-        shot = SHOT_PHRASES_ZH.get(panel.shot, panel.shot)
-        angle = ANGLE_PHRASES_ZH.get(panel.angle, panel.angle)
-        return "，".join(
-            part
-            for part in (f"第{panel.order}格", shot, angle, panel.description or "漫画场景", details)
-            if part
-        )
-    shot = SHOT_PHRASES.get(panel.shot, panel.shot.replace("_", "-"))
-    angle = ANGLE_PHRASES.get(panel.angle, panel.angle.replace("_", "-"))
-    description = panel.extra.get("description_en") or panel.description or "a manga scene"
-    return f"Panel {panel.order}, {shot}, {angle}: {panel_location(panel, page)}, {details}, {description}"
 
 
 def _integer_bbox(shape: Shape, page: Page, *, inward: bool = False) -> list[int]:
@@ -290,6 +232,16 @@ def _figure_items(
     return items
 
 
+def _object_items(page: Page, *, with_ids: bool) -> list[dict]:
+    result = []
+    for box in page.objects:
+        item = {"label": box.label, "caption": box.caption, "bbox": _integer_bbox(box.rect, page)}
+        if with_ids:
+            item.update(object_id=box.id, panel_id=box.panel_id)
+        result.append(item)
+    return result
+
+
 def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compilation settings
     page: Page,
     characters: Mapping[str, Character] | Iterable[Character] | None = None,
@@ -297,10 +249,14 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
     size_check: tuple[int, int] | None = None,
     with_ids: bool = False,
     slant_mode: str = "cut",
-    caption_language: str = "zh",
+    caption_language: str | None = None,
 ) -> dict[str, Any]:
     """Return only the MOSS contract. Size diagnostics belong to CLI/maps."""
     _validate_slant_mode(slant_mode)
+    requested_ids = with_ids
+    if page.extra.get("moss_import"):
+        with_ids = True
+    caption_language = caption_language or page.caption_language or "en"
     if caption_language not in {"zh", "en"}:
         message = "caption_language must be zh or en"
         raise ValueError(message)
@@ -321,6 +277,7 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
         f"High-taste {color} comic page, crisp clean line art, {shading}, "
         "expressive faces, gentle lighting, zero rough sketch lines."
     )
+    single_canvas = page.extra.get("canvas_mode") == "single"
     direction = "left to right" if page.reading_direction == "ltr" else "right to left"
     texts = layout_texts(page) if page.dialogue_mode == "moss_text" else []
     caption = "; ".join(
@@ -330,7 +287,9 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
             page.style_prefix,
             page.description,
             ", ".join(page.tags),
-            f"Japanese manga layout read {direction}, clean white gutters",
+            "Single canvas composition"
+            if single_canvas
+            else f"Japanese manga layout read {direction}, clean white gutters",
             "crisp Chinese comic text in clean speech bubbles and narration boxes"
             if texts
             else "no text, no speech bubbles",
@@ -341,8 +300,9 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
         caption += "; panels separated by slanted dividing lines"
     result: dict[str, Any] = {
         "summary": {
-            "meta": ["comic", "multi_panel"] + (["digital_painting"] if page.color_mode == "color" else []),
-            "canvas": "multi_panel",
+            "meta": ["comic", "single_canvas" if single_canvas else "multi_panel"]
+            + (["digital_painting"] if page.color_mode == "color" else []),
+            "canvas": "single_canvas" if single_canvas else "multi_panel",
             "caption": caption,
         },
         "items": [],
@@ -365,7 +325,16 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
         if with_ids:
             item["panel_id"] = panel.id
         items.append(item)
-        items.extend(_figure_items(panel, page, character_map, caption_language, with_ids=with_ids))
+        figure_language = (
+            "en"
+            if caption_language == "en"
+            and (
+                custom_caption_enabled(panel, page)
+                or translation_state(panel, page, character_map) == "fresh"
+            )
+            else "zh"
+        )
+        items.extend(_figure_items(panel, page, character_map, figure_language, with_ids=with_ids))
         for overlay in overlays:
             if overlay.panel_id == panel.id:
                 items.append(
@@ -377,6 +346,7 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
                 _overlay_item(overlay, page, character_map, with_ids=with_ids, language=caption_language)
             )
     _validate_cut_regions(page, slant_mode, [item["bbox"] for item in items if item["label"] == "object"])
+    items.extend(_object_items(page, with_ids=with_ids))
     for text in texts:
         item = {
             "label": "text",
@@ -387,7 +357,7 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
         if with_ids:
             item.update(text_id=text.id, panel_id=text.panel_id, speaker_id=text.speaker_id)
         items.append(item)
-    return result
+    return imported_result(page, result, with_ids=requested_ids)
 
 
 def _overlay_item(

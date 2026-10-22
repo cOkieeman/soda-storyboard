@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from soda_storyboard.importers import import_storyboard
 from soda_storyboard.io import load_page
 from soda_storyboard.validation import validate_page
 
@@ -244,6 +245,9 @@ class Handler(BaseHTTPRequestHandler):
                     "instance_id": self.server.instance_id,
                 },
             )
+        elif path == "/api/import" and method == "POST":
+            page, report = import_storyboard(body.get("source", ""), page_id=body.get("page_id"))
+            self.send(200, {"page": page.to_dict(), "report": report})
         elif path == "/api/project" and method == "GET":
             self.send(200, store.project())
         elif path == "/api/project" and method == "PATCH":

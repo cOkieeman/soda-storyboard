@@ -266,7 +266,7 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
       background: t.bubble === "none" ? "rgba(255,255,255,0)" : "#ffffff",
       borderColor: t.bubble === "none" ? "transparent" : "#171815",
       borderWidth: t.bubble === "none" ? 0 : 2,
-      tailTip: t.tail_tip ?? null,
+      tailTip: t.tail_tip,
       sodaData: t
     };
   });

@@ -13,7 +13,9 @@ from dataclasses import field as dc_field
 from math import isfinite
 from typing import Any
 
+from .captions import caption_notices
 from .geometry import convex_polygon, polygons_overlap, shape_distance
+from .models import Character, Page
 
 
 def _get(value: Any, key: str, default: Any = None) -> Any:
@@ -412,6 +414,23 @@ def validate_page(
         report.add("error", "invalid_canvas", "画布宽高必须为正数", field_name="canvas")
 
     char_map = _character_map(characters)
+    if isinstance(page, Page):
+        caption_page = page
+    else:
+        try:
+            caption_page = Page.from_dict(_as_dict(page))
+        except (ValueError, TypeError, KeyError):
+            caption_page = None
+    if caption_page is not None:
+        caption_characters = {
+            key: value if isinstance(value, Character) else Character.from_dict(_as_dict(value))
+            for key, value in char_map.items()
+        }
+        for panel in caption_page.panels:
+            for notice in caption_notices(panel, caption_page, caption_characters):
+                report.add(
+                    "warning", notice["code"], notice["message"], panel_id=panel.id, field_name="description"
+                )
     boxes: list[tuple[float, float, float, float]] = []
     orders: list[float] = []
     for index, panel in enumerate(panels):
@@ -480,6 +499,30 @@ def validate_page(
     configured_gap = max(0.0, _number(configured_gap))
     _validate_polygons(panels, boxes, configured_gap, report, tolerance)
     _validate_overlays(page, panels, char_map, report, tolerance)
+    object_ids = set()
+    panel_ids = {_get(panel, "id") for panel in panels}
+    for item in _get(page, "objects", []):
+        identifier = _get(item, "id")
+        if identifier in object_ids:
+            report.add("error", "duplicate_object_id", "物件框 id 不能重复", field_name="objects")
+        object_ids.add(identifier)
+        parent = _get(item, "panel_id")
+        if parent is not None and parent not in panel_ids:
+            report.add("error", "unknown_object_panel", "物件框引用了不存在的格子", field_name="objects")
+        x, y, w, h = panel_bbox({"shape": _get(item, "rect", {})})
+        if not _get(item, "id") or _get(item, "label", "object") not in {"object", "character"}:
+            report.add(
+                "error", "invalid_object", "物件框需要 id 和 object / character 类型", field_name="objects"
+            )
+        if (
+            w <= 0
+            or h <= 0
+            or x < -tolerance
+            or y < -tolerance
+            or x + w > width + tolerance
+            or y + h > height + tolerance
+        ):
+            report.add("error", "object_out_of_bounds", "物件框必须在画布内且宽高为正", field_name="objects")
 
     if _reading_mismatch(page, panels, boxes):
         direction = str(_get(page, "reading_direction", "rtl") or "rtl").lower()
@@ -555,6 +598,11 @@ def validate_page(
             )
 
     _validate_storytelling(page, char_map, report, max_dialogue_chars=max_dialogue_chars, tolerance=tolerance)
+    if _get(page, "extra", {}).get("moss_import") or _get(page, "moss_import"):
+        for issue in report.issues:
+            if issue.code == "panel_overlap":
+                issue.severity = "warning"
+                issue.message = "导入的 MOSS 格子存在重叠，原布局已保留，请核对"
     return report
 
 

@@ -4,7 +4,7 @@
 
 ## 编译器负责什么
 
-- object caption 优先用每格 caption_en；没有时拼英文景别、角度、格子位置和角色 appearance_en + age，再接 description。每格要独立写全外观，中文用户输入由 AI 翻译补全。
+- object caption 默认用新鲜 caption_auto_en；缺失或过期退回整理后的中文并警告。先运行 translate --todo，AI 遵守 glossary、appearance_en 和英文姿势模板翻译，再 --apply。caption_en 只在显式启用手动覆盖时优先。每格独立写全外观，不加格号。
 - 每个 text 条目必须有 text 原文；caption 只写英文样式、方向、气泡和位置。官方要求“生成文字时需用 text 指定内容”。竖排框必须竖长，默认超过 10 字换列；文本原有换行保留。
 - summary 以英文 style_prompt 开头，没给时用按 color_mode 区分的兜底画风，随后接页面说明、tags、日漫阅读方向与白色留白；meta 为 comic、multi_panel（彩色再加 digital_painting），canvas 为 multi_panel。AI 应先给用户 2～3 段画风让其选择并保存，不能把编译器兜底当作用户已选画风。
 - bbox 为中心原点的整数 `[y_min,x_min,y_max,x_max]`；源页仍用左上角 x/y/w/h。没有文字或使用 lettering 时 summary 追加 no text, no speech bubbles。

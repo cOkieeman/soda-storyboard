@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from soda_storyboard.captions import source_hash, structured_caption
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.figure_rig import ensure_figure_editor
 from soda_storyboard.geometry import from_moss_bbox
@@ -115,6 +116,11 @@ def test_caption_switches_require_real_booleans(field: str) -> None:
 def test_offline_ab_script_preserves_sources_and_uses_both_templates(tmp_path: Path) -> None:
     page, characters = sample()
     page.panels[0].extra["description_en"] = "A girl looks out of the window"
+    page.panels[0].caption_auto_en = {
+        "text": structured_caption(page.panels[0], page, characters, "en"),
+        "source_hash": source_hash(page.panels[0], page, characters),
+        "translated_at": "test",
+    }
     page.panels[0].caption_en = "MANUAL OVERRIDE"
     page.panels[0].use_custom_caption = True
     source = write_json(tmp_path / "pages/p.json", page)
@@ -143,7 +149,7 @@ def test_ab_reports_missing_translation_and_uses_only_translated_text(
     entry = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/ab_caption_lang.py"))
     output = tmp_path / "ab"
     entry["main"]([str(source), "--output-dir", str(output)])
-    assert "untranslated source descriptions for panels: p" in capsys.readouterr().err
+    assert "English translations missing or stale; Chinese fallback for panels: p" in capsys.readouterr().err
     translation = copy.deepcopy(page.to_dict())
     translation["panels"][0]["description"] = "A girl looks out of the window"
     translation["panels"][0]["shape"]["x"] = 999

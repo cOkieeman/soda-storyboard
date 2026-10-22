@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 import pytest
 from PIL import Image, ImageDraw
 
+from soda_storyboard.captions import source_hash
 from soda_storyboard.compiler import compile_page
 from soda_storyboard.io import read_json, write_json
 from soda_storyboard.models import Page
@@ -190,7 +191,8 @@ def test_caption_preview_compiles_unsaved_changes_without_writing(client: Client
         with_ids=True,
     )
     assert first["caption"] == compiled["items"][0]["caption"]
-    assert "妹妹把布丁藏在身后" in first["caption"]
+    assert "把布丁藏在身后" in first["caption"]
+    assert first["caption"].count("妹妹") == 1
     assert first["custom_override"] is False
     raw["panels"][0]["use_custom_caption"] = True
     overridden = client.call("POST", endpoint, {"page": raw})[2]["panels"][0]
@@ -756,3 +758,71 @@ def test_candidate_previews_default_to_sketch(client: Client) -> None:
     assert candidate_image("") == candidate_image("?style=sketch")
     assert candidate_image("?style=sketch") != candidate_image("?style=boxes")
     assert client.call("POST", PAGE_URL + "/layout-suggest?style=invalid", {"candidates": 1})[0] == 400
+
+
+@pytest.mark.parametrize("panels", [True, False])
+def test_shared_external_import_save_and_compile_are_lossless(client: Client, *, panels: bool) -> None:
+    source = {
+        "summary": {"caption": "External", "future": True},
+        "bbox_format": "yxyx",
+        "bbox_coord_space": "abs_centralized",
+        "vendor": {"retain": 7},
+        "items": [
+            {
+                "label": "object",
+                "caption": "Upper panel" if panels else "Cup",
+                "bbox": [-700, -480, -20, 480],
+            },
+            {
+                "label": "text",
+                "text": "你好",
+                "caption": "Vertical narration",
+                "bbox": [-600, -400, -400, -300],
+            },
+            {"label": "character", "caption": "Girl", "bbox": [100, -100, 600, 100]},
+            {"label": "future", "bbox": [0, 0, 20, 20], "unknown": True},
+        ],
+    }
+    status, _, imported = client.call("POST", "/api/import", {"source": source, "page_id": "external"})
+    assert status == 200
+    assert imported["report"]["panel_count"] == (1 if panels else 0)
+    assert not (client.root / "pages/external.json").exists()
+    status, _, saved = client.call("POST", "/api/pages", imported["page"])
+    assert status == 201
+    assert saved["page"]["moss_import"]
+    status, _, result = client.call("POST", "/api/pages/external/compile", {})
+    assert status == 200
+    assert result["moss"]["items"] == source["items"]
+    assert result["moss"]["vendor"] == source["vendor"]
+    assert result["moss"]["summary"]["future"] is True
+    if panels:
+        info = client.call("POST", "/api/pages/external/caption-preview", {})[2]["panels"][0]
+        assert info["caption"] == "Upper panel"
+        assert info["translation_status"] == "preserved"
+        assert not info["warnings"]
+
+
+def test_caption_preview_reports_fresh_stale_missing_and_pose_conflict(client: Client) -> None:
+    raw, _ = client.page()
+    page = client.server.store.render_page("pudding", raw=raw)
+    characters = client.server.store.character_map()
+    first = raw["panels"][0]
+    first["caption_auto_en"] = {
+        "text": "A girl reads a book.",
+        "source_hash": source_hash(page.panels[0], page, characters),
+        "translated_at": "test",
+    }
+    endpoint = PAGE_URL + "/caption-preview"
+    info = client.call("POST", endpoint, {"page": raw})[2]["panels"][0]
+    assert (info["language"], info["translation_status"]) == ("en", "fresh")
+    first["description"] = "女孩坐在椅子上"
+    first["figures"] = [{"character_id": "younger", "pose": "lie", "position": "center"}]
+    info = client.call("POST", endpoint, {"page": raw})[2]["panels"][0]
+    assert (info["language"], info["translation_status"]) == ("zh", "stale")
+    assert {notice["code"] for notice in info["warnings"]} >= {
+        "pose_description_conflict",
+        "caption_translation_stale",
+    }
+    first.pop("caption_auto_en")
+    info = client.call("POST", endpoint, {"page": raw})[2]["panels"][0]
+    assert info["translation_status"] == "missing"

@@ -42,7 +42,7 @@ def upload(handler: Handler) -> None:
     fields = {}
     for part in message.iter_parts():
         name = part.get_param("name", header="content-disposition")
-        if name not in {"image", "direction"} or name in fields or part.defects:
+        if name not in {"image", "direction", "mode"} or name in fields or part.defects:
             raise APIError(400, "Only one image and optional direction are allowed")
         fields[name] = part
     if "image" not in fields:
@@ -51,13 +51,14 @@ def upload(handler: Handler) -> None:
         fields["direction"].get_payload(decode=True).decode("utf-8") if "direction" in fields else "rtl"
     )
     data = fields["image"].get_payload(decode=True)
+    mode = fields["mode"].get_payload(decode=True).decode("utf-8") if "mode" in fields else "auto"
     source = fields["image"].get_filename() or "reference.png"
     store = handler.server.store
     extraction_id = uuid.uuid4().hex
     relative = f".server/extractions/{extraction_id}.png"
     try:
         with Image.open(io.BytesIO(data)) as image:
-            result = extract_image(image, direction=direction, source_name=source)
+            result = extract_image(image, direction=direction, source_name=source, mode=mode)
             with store.lock:
                 draw_extraction_preview(image, result, store.path(relative))
     except (UnidentifiedImageError, Image.DecompressionBombError) as exc:

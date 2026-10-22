@@ -16,12 +16,14 @@ export function selectionParent(page: SodaPage, item: Selection): string | null 
   if (item.kind === "figure") return item.panelId;
   if (item.kind === "text" || item.kind === "bubble") return page.texts.find(text => text.id === item.id)?.panel_id || null;
   if (item.kind === "overlay") return page.overlays?.find(overlay => overlay.id === item.id)?.panel_id || null;
+  if (item.kind === "object") return page.objects?.find(object => object.id === item.id)?.panel_id || null;
   return null;
 }
 export function selectionExists(page: SodaPage, item: Selection): boolean {
   if (item.kind === "panel") return page.panels.some(panel => panel.id === item.id);
   if (item.kind === "text" || item.kind === "bubble") return page.texts.some(text => text.id === item.id);
   if (item.kind === "overlay") return !!page.overlays?.some(overlay => overlay.id === item.id);
+  if (item.kind === "object") return !!page.objects?.some(object => object.id === item.id);
   const panel = page.panels.find(panel => panel.id === item.panelId);
   return !!panel && resolvedFigures(panel, page.reading_direction).some((figure, index) => getFigureId(figure, index) === item.id);
 }
@@ -42,6 +44,7 @@ export function panelHasLockedChildren(page: SodaPage, flags: Record<string, Obj
   const panel = page.panels.find(panel => panel.id === id);
   return page.texts.some(text => text.panel_id === id && isSelectionLocked(page, flags, { kind: "text", id: text.id }))
     || !!page.overlays?.some(overlay => overlay.panel_id === id && isSelectionLocked(page, flags, { kind: "overlay", id: overlay.id }))
+    || !!page.objects?.some(object => object.panel_id === id && isSelectionLocked(page, flags, { kind: "object", id: object.id }))
     || !!panel && resolvedFigures(panel, page.reading_direction).some((figure, index) => isSelectionLocked(page, flags, { kind: "figure", panelId: id, id: getFigureId(figure, index) }));
 }
 
@@ -55,8 +58,8 @@ export function selectionBounds(projectPage: ProjectPage, page: SodaPage | null,
     return panel ? boundsOf(getPanelLocalPoints(panel).map(point => getPanelCanvasPoint(panel, point))) : null;
   }
   if (item.kind === "text" || item.kind === "bubble") return projectPage.bubbles.find(bubble => bubble.id === item.id) || null;
-  if (item.kind === "overlay") {
-    const rect = page?.overlays?.find(overlay => overlay.id === item.id)?.rect;
+  if (item.kind === "overlay" || item.kind === "object") {
+    const rect = (item.kind === "object" ? page?.objects : page?.overlays)?.find(overlay => overlay.id === item.id)?.rect;
     return rect ? { x: rect.x, y: rect.y, width: rect.w, height: rect.h } : null;
   }
   const panel = projectPage.panels.find(panel => panel.id === item.panelId);
@@ -83,11 +86,12 @@ function moveOne(page: SodaPage, item: Selection, dx: number, dy: number, geomet
     offsetShape(panel, dx, dy);
     page.texts.forEach(text => { if (text.panel_id === item.id && text.bbox) text.bbox = { ...text.bbox, x: text.bbox.x + dx, y: text.bbox.y + dy }; });
     page.overlays?.forEach(overlay => { if (overlay.panel_id === item.id) overlay.rect = { ...overlay.rect, x: overlay.rect.x + dx, y: overlay.rect.y + dy }; });
+    page.objects?.forEach(object => { if (object.panel_id === item.id) object.rect = { ...object.rect, x: object.rect.x + dx, y: object.rect.y + dy }; });
   } else if (item.kind === "text" || item.kind === "bubble") {
     const text = page.texts.find(text => text.id === item.id);
     if (text?.bbox) text.bbox = { ...text.bbox, x: text.bbox.x + dx, y: text.bbox.y + dy };
-  } else if (item.kind === "overlay") {
-    const overlay = page.overlays?.find(overlay => overlay.id === item.id);
+  } else if (item.kind === "overlay" || item.kind === "object") {
+    const overlay = (item.kind === "object" ? page.objects : page.overlays)?.find(overlay => overlay.id === item.id);
     if (overlay) overlay.rect = { ...overlay.rect, x: overlay.rect.x + dx, y: overlay.rect.y + dy };
   } else {
     const projectPanel = (projectPage || sodaPageToProjectPage(page)).panels.find(panel => panel.id === item.panelId);
@@ -175,6 +179,7 @@ export function deletePageSelections(source: SodaPage, items: Selection[]): Soda
   const panels = new Set(selection.filter(item => item.kind === "panel").map(item => item.id));
   const texts = new Set(selection.filter(item => item.kind === "text" || item.kind === "bubble").map(item => item.id));
   const overlays = new Set(selection.filter(item => item.kind === "overlay").map(item => item.id));
+  const objects = new Set(selection.filter(item => item.kind === "object").map(item => item.id));
   page.panels = page.panels.filter(panel => !panels.has(panel.id)).map(panel => {
     const removed = new Set(selection.filter(item => item.kind === "figure" && item.panelId === panel.id).map(item => item.id));
     if (!removed.size) return panel;
@@ -183,6 +188,7 @@ export function deletePageSelections(source: SodaPage, items: Selection[]): Soda
   });
   page.texts = page.texts.filter(text => !texts.has(text.id) && !panels.has(text.panel_id || ""));
   if (page.overlays) page.overlays = page.overlays.filter(overlay => !overlays.has(overlay.id) && !panels.has(overlay.panel_id || ""));
+  if (page.objects) page.objects = page.objects.filter(object => !objects.has(object.id) && !panels.has(object.panel_id || ""));
   return page;
 }
 
@@ -190,6 +196,7 @@ export type SelectionClipboard = {
   format: "soda-editor-elements-v1"; projectIdentity: string;
   panels: SodaPanel[]; texts: SodaPage["texts"]; overlays: NonNullable<SodaPage["overlays"]>;
   figures: Array<{ panelId: string; figure: Figure }>;
+  objects?: SodaPage["objects"];
 };
 export function copyPageSelections(source: SodaPage, items: Selection[], projectIdentity = "", sketchGeometry?: SketchGeometry | null): SelectionClipboard {
   const selection = normalizeSelections(source, items), panels = new Set(selection.filter(item => item.kind === "panel").map(item => item.id));
@@ -206,7 +213,8 @@ export function copyPageSelections(source: SodaPage, items: Selection[], project
   });
   return clone({ format: "soda-editor-elements-v1", projectIdentity, panels: source.panels.filter(panel => panels.has(panel.id)),
     texts: source.texts.filter(text => panels.has(text.panel_id || "") || textIds.has(text.id)),
-    overlays: (source.overlays || []).filter(overlay => panels.has(overlay.panel_id || "") || overlayIds.has(overlay.id)), figures });
+    overlays: (source.overlays || []).filter(overlay => panels.has(overlay.panel_id || "") || overlayIds.has(overlay.id)), figures,
+    objects: (source.objects || []).filter(object => panels.has(object.panel_id || "") || selection.some(item => item.kind === "object" && item.id === object.id)) });
 }
 export function pastePageSelections(source: SodaPage, clipboard: SelectionClipboard, dx = 24, dy = 24, targetPanelId?: string, projectPage?: ProjectPage): { page: SodaPage; selections: Selection[] } {
   const page = clone(source), selections: Selection[] = [], panelIds = new Map<string, string>();
@@ -239,6 +247,12 @@ export function pastePageSelections(source: SodaPage, clipboard: SelectionClipbo
     panel.figures = [...resolvedFigures(panel, page.reading_direction).map((figure, index) => ({ ...figure, id: getFigureId(figure, index) })), figure];
     panel.character_ids = [...new Set(panel.figures.map(figure => figure.character_id).filter(Boolean))];
     selections.push({ kind: "figure", panelId: panel.id, id: figure.id });
+  });
+  clipboard.objects?.forEach(original => {
+    const object = clone(original), parent = panelIds.get(original.panel_id || "");
+    object.id = freshId("object"); object.panel_id = parent || target || original.panel_id || null;
+    object.rect = { ...object.rect, x: object.rect.x + dx, y: object.rect.y + dy };
+    (page.objects ||= []).push(object); if (!parent) selections.push({ kind: "object", id: object.id });
   });
   return { page, selections };
 }

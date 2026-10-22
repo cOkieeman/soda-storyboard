@@ -93,7 +93,7 @@ class PageState:
         self.raw = read_json(self.path)
         project = read_json(self.root / "project.json")
         payload = dict(self.raw)
-        for key in ("text_direction", "color_mode", "tags", "style_prompt"):
+        for key in ("text_direction", "color_mode", "tags", "style_prompt", "caption_language"):
             if (key not in payload or (key == "style_prompt" and not payload[key])) and key in project:
                 payload[key] = project[key]
         payload.setdefault("dialogue_mode", project.get("default_dialogue_mode", "moss_text"))

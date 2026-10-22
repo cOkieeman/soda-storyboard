@@ -96,6 +96,7 @@ export type Selection =
   | { kind: "figure"; id: string; panelId: string }
   | { kind: "text"; id: string }
   | { kind: "overlay"; id: string }
+  | { kind: "object"; id: string }
   | { kind: "bubble"; id: string };
 
 export type ObjectFlags = { locked: boolean; hidden: boolean };
@@ -213,6 +214,7 @@ export type SodaPanel = {
   description: string;
   caption_en: string;
   use_custom_caption?: boolean;
+  caption_auto_en?: { text: string; source_hash: string; translated_at: string } | null;
   figures: Figure[];
   dialogue?: any[];
   sfx?: string[];
@@ -267,6 +269,7 @@ export type SodaPage = {
   description: string;
   style_prefix?: string;
   legacy_caption_en?: boolean;
+  caption_language?: "en" | "zh";
   style_prompt?: string | null;
   tags?: string[];
   text_font_size?: number;
@@ -274,6 +277,17 @@ export type SodaPage = {
   panels: SodaPanel[];
   texts: SodaText[];
   overlays?: SodaOverlay[];
+  objects?: SodaObject[];
+  canvas_mode?: "single" | "panels";
+  [key: string]: any;
+};
+
+export type SodaObject = {
+  id: string;
+  rect: RectShape;
+  caption: string;
+  label?: "object" | "character";
+  panel_id?: string | null;
   [key: string]: any;
 };
 
@@ -327,6 +341,8 @@ export type SodaProject = {
   color_mode: ColorMode;
   style_prompt?: string;
   tags?: string[];
+  caption_language?: "en" | "zh";
+  glossary?: Record<string, string>;
   [key: string]: any;
 };
 
