@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from soda_storyboard.io import load_character, load_page
+from soda_storyboard.io import load_page
 from soda_storyboard.validation import validate_page
 
 from .common import APIError, identifier, inside, json_default, snapshot
@@ -259,18 +259,16 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/api/characters/") and len(path.split("/")) == 4:
             character_id = identifier(path.split("/")[3])
             if method == "GET":
-                self.send(
-                    200,
-                    {"character": load_character(store.path(f"characters/{character_id}.json")).to_dict()},
-                )
+                character, file_version = snapshot(store.path(f"characters/{character_id}.json"))
+                self.json_response({"character": character, "version": file_version})
             elif method == "PUT":
                 client_id = self.editor_client_id()
                 relative = f"characters/{character_id}.json"
                 with self.server.events.lock:
-                    result = store.save_character(body, character_id)
+                    result = store.save_character(body, character_id, self.headers.get("If-Match"))
                     _, file_version = snapshot(store.path(relative))
                     self.server.events.editor_changed(relative, file_version, client_id)
-                self.send(200, result)
+                self.json_response(result)
             else:
                 raise APIError(405, "角色接口只支持 GET、PUT")
         elif path == "/api/templates" and method == "GET":

@@ -1,183 +1,68 @@
-import React, { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Command, Ellipsis, FileJson, FileUp, Image, LayoutTemplate, Moon, PanelLeftClose, PanelRight, Redo2, Save, Sun, Undo2, WandSparkles } from "lucide-react";
 import { useEditorStore } from "../lib/store";
+import type { Theme } from "../lib/theme";
 
-export default function Toolbar() {
-  const sodaProject = useEditorStore((state) => state.sodaProject);
-  const activePageId = useEditorStore((state) => state.activePageId);
-  const isSaving = useEditorStore((state) => state.isSaving);
-  const hasUnsavedChanges = useEditorStore((state) => state.hasUnsavedChanges);
-  const lastSavedTime = useEditorStore((state) => state.lastSavedTime);
-  const sseConnected = useEditorStore((state) => state.sseConnected);
-  const sketchGeometryUnavailable = useEditorStore((state) => state.sketchGeometryUnavailable);
+type Props = { toolLabel: string; onToggleSidebar: () => void; onToggleInspector: () => void; sidebarOpen: boolean; inspectorOpen: boolean; theme: Theme; onToggleTheme: () => void };
 
-  const canUndo = useEditorStore((state) => state.canUndo);
-  const canRedo = useEditorStore((state) => state.canRedo);
-  const undo = useEditorStore((state) => state.undo);
-  const redo = useEditorStore((state) => state.redo);
-
-  const saveCurrentPage = useEditorStore((state) => state.saveCurrentPage);
-  const openLayoutModal = useEditorStore((state) => state.openLayoutModal);
-  const openPreviewModal = useEditorStore((state) => state.openPreviewModal);
-  const openCompileModal = useEditorStore((state) => state.openCompileModal);
-  const openGenerateModal = useEditorStore((state) => state.openGenerateModal);
-  const openCommandPalette = useEditorStore((state) => state.openCommandPalette);
-
-  // Global keyboard shortcuts (Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y, Ctrl+S)
+export default function Toolbar({ toolLabel, onToggleSidebar, onToggleInspector, sidebarOpen, inspectorOpen, theme, onToggleTheme }: Props) {
+  const sodaProject = useEditorStore(s => s.sodaProject);
+  const activePageId = useEditorStore(s => s.activePageId);
+  const pageIndex = useEditorStore(s => s.pages.findIndex(page => page.id === s.activePageId));
+  const isSaving = useEditorStore(s => s.isSaving);
+  const dirty = useEditorStore(s => s.hasUnsavedChanges);
+  const savedTime = useEditorStore(s => s.lastSavedTime);
+  const connected = useEditorStore(s => s.sseConnected);
+  const canUndo = useEditorStore(s => s.canUndo);
+  const canRedo = useEditorStore(s => s.canRedo);
+  const hasPanels = useEditorStore(s => Boolean(s.sodaPage?.panels.length));
+  const undo = useEditorStore(s => s.undo);
+  const redo = useEditorStore(s => s.redo);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isInput =
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target as HTMLElement)?.isContentEditable;
-
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        if (!isInput) {
-          e.preventDefault();
-          if (e.shiftKey) {
-            redo();
-          } else {
-            undo();
-          }
-        }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-        if (!isInput) {
-          e.preventDefault();
-          redo();
-        }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        saveCurrentPage(true);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo, saveCurrentPage]);
-
+    if (!menuOpen) return;
+    const close = (event: PointerEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", escape);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", escape); };
+  }, [menuOpen]);
+  const run = (action: () => unknown) => { setMenuOpen(false); void action(); };
   return (
-    <header className="flex h-13 w-full items-center justify-between border-b border-[var(--line)] bg-[var(--paper-surface)] px-4 select-none">
-      {/* Brand & Project Info */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5 border border-[var(--ink)] bg-[var(--ink)] px-2.5 py-1 text-[var(--paper-lift)] shadow-sm">
-          <span className="font-mono text-sm font-black tracking-widest text-[#fbf6ec]">SODA</span>
-          <span className="bg-[var(--acid)] px-1 font-mono text-xs font-bold text-[var(--ink)]">
-            EDITOR
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 font-mono text-[13px]">
-          <span className="font-bold text-[var(--ink)]">{sodaProject?.name || "分镜项目"}</span>
-          <span className="text-[var(--rule)]">/</span>
-          <span className="font-semibold text-[var(--signal)]">{activePageId || "page"}</span>
-        </div>
-
-        {sketchGeometryUnavailable && (
-          <span
-            className="rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-xs text-amber-900 font-medium"
-            title="后端尚未提供 GET /api/pages/{id}/sketch-geometry 接口，采用标准矢量模式渲染"
-          >
-            草稿几何接口不可用
-          </span>
-        )}
+    <header className="editor-topbar">
+      <div className="topbar-identity">
+        <span className="brand-mark" aria-label="Soda Storyboard">soda<span>.</span></span>
+        <button className="icon-button panel-toggle sidebar-toggle" aria-label="切换页面面板" aria-expanded={sidebarOpen} onClick={onToggleSidebar} title="页面与角色面板"><PanelLeftClose /><span>页面</span></button>
+        <nav className="project-breadcrumb" aria-label="当前项目与页面">
+          <span title={sodaProject?.name}>{sodaProject?.name || "分镜项目"}</span><span className="breadcrumb-slash">/</span><span className="page-crumb" title={activePageId}>{pageIndex >= 0 ? `第 ${pageIndex + 1} 页` : "载入中"}</span>
+        </nav>
       </div>
-
-      {/* Main Operations & Undo/Redo (P4c Item 5) */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center border border-[var(--line)] rounded overflow-hidden mr-2 bg-[var(--paper)]">
-          <button
-            type="button"
-            onClick={undo}
-            disabled={!canUndo}
-            className="px-3 py-1.5 text-[13px] font-medium transition-colors hover:bg-[var(--paper-wash)] disabled:opacity-35 disabled:cursor-not-allowed border-r border-[var(--line)] text-[var(--ink)]"
-            title="撤销 (Ctrl+Z)"
-          >
-            ↩ 撤销
-          </button>
-          <button
-            type="button"
-            onClick={redo}
-            disabled={!canRedo}
-            className="px-3 py-1.5 text-[13px] font-medium transition-colors hover:bg-[var(--paper-wash)] disabled:opacity-35 disabled:cursor-not-allowed text-[var(--ink)]"
-            title="重做 (Ctrl+Shift+Z)"
-          >
-            ↪ 重做
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={openCommandPalette}
-          className="ui-btn text-[13px] font-medium"
-          title="打开全局命令面板 (Ctrl+K)"
-        >
-          <span className="text-[var(--signal)] font-mono font-bold">⌘K</span> 命令
-        </button>
-
-        <button
-          type="button"
-          onClick={openLayoutModal}
-          className="ui-btn text-[13px] font-medium"
-          title="生成多种分镜版式候选并直接替换"
-        >
-          <span className="text-[var(--signal)]">⊞</span> 版式候选
-        </button>
-
-        <button
-          type="button"
-          onClick={openPreviewModal}
-          className="ui-btn text-[13px] font-medium"
-          title="查看后端渲染的火柴人与分镜草稿大图"
-        >
-          <span>👁</span> 草稿预览
-        </button>
-
-        <button
-          type="button"
-          onClick={openCompileModal}
-          className="ui-btn text-[13px] font-medium"
-          title="调用编译接口生成 MOSS JSON"
-        >
-          <span>⤓</span> 导出 JSON
-        </button>
-
-        <button
-          type="button"
-          onClick={openGenerateModal}
-          className="ui-btn ui-btn-primary text-[13px] font-bold"
-          title="调用 P3 出图接口"
-        >
-          <span>⚡</span> 生成出图
-        </button>
+      <div className="topbar-tools">
+        <button className="icon-button" onClick={undo} disabled={!canUndo} title="撤销 · Ctrl+Z" aria-label="撤销"><Undo2 /></button>
+        <button className="icon-button" onClick={redo} disabled={!canRedo} title="重做 · Ctrl+Shift+Z" aria-label="重做"><Redo2 /></button>
+        <span className="current-tool">{toolLabel}</span>
       </div>
-
-      {/* Save Status & Action */}
-      <div className="flex items-center gap-3">
-        <span
-          role="status"
-          className="font-mono text-xs text-[var(--ink-light)]"
-          title={sseConnected ? "SSE 已连接，文件修改会自动同步" : "SSE 断开，正在重连"}
-        >
-          {sseConnected ? "● 与 AI 同步中" : "○ 断开重连中"}
-        </span>
-        <div className="font-mono text-xs font-medium">
-          {isSaving ? (
-            <span className="text-[var(--signal)] animate-pulse">正在保存...</span>
-          ) : hasUnsavedChanges ? (
-            <span className="font-bold text-[var(--signal)]">● 未保存修改 (1s 自动保存)</span>
-          ) : (
-            <span className="text-[var(--ink-light)]">已保存 {lastSavedTime ? `(${lastSavedTime})` : ""}</span>
-          )}
+      <div className="topbar-actions">
+        <span className={connected ? "sync-indicator is-connected" : "sync-indicator"} title={connected ? "外部修改自动同步已连接" : "外部修改同步正在重连"} aria-label={connected ? "同步已连接" : "同步重连中"} />
+        <button className="save-status" onClick={() => void useEditorStore.getState().saveCurrentPage(true)} disabled={isSaving} title="保存 · Ctrl+S" aria-live="polite">{isSaving ? "保存中…" : dirty ? "待保存" : "已保存" + (savedTime ? " · " + savedTime : "")}</button>
+        <button type="button" className="icon-button theme-toggle" onClick={onToggleTheme} aria-pressed={theme === "dark"} aria-label={theme === "dark" ? "切换浅色模式" : "切换暗色模式"} title={theme === "dark" ? "切换浅色模式" : "切换暗色模式"}>{theme === "dark" ? <Sun /> : <Moon />}</button>
+        <button className="icon-button panel-toggle inspector-toggle" onClick={onToggleInspector} aria-label="切换检查器" aria-expanded={inspectorOpen} title="选中对象的编辑属性"><PanelRight /><span>属性</span></button>
+        <div className="toolbar-menu" ref={menuRef}>
+          <button className="icon-button" onClick={() => setMenuOpen(v => !v)} aria-label="更多操作" aria-expanded={menuOpen} title="更多操作"><Ellipsis /></button>
+          {menuOpen && <div className="editor-popover action-menu" role="menu" aria-label="更多操作">
+            <button className="compact-history-action" role="menuitem" disabled={!canUndo} onClick={() => run(undo)}><Undo2 />撤销<kbd>Ctrl Z</kbd></button>
+            <button className="compact-history-action" role="menuitem" disabled={!canRedo} onClick={() => run(redo)}><Redo2 />重做<kbd>Ctrl Shift Z</kbd></button>
+            <button role="menuitem" onClick={() => run(useEditorStore.getState().openCommandPalette)}><Command />命令面板<kbd>Ctrl K</kbd></button>
+            <button role="menuitem" onClick={() => run(() => useEditorStore.getState().saveCurrentPage(true))}><Save />保存<kbd>Ctrl S</kbd></button>
+            <div className="menu-rule" />
+            <button role="menuitem" onClick={() => run(useEditorStore.getState().openImportModal)}><FileUp />导入 JSON</button>
+            <button role="menuitem" onClick={() => run(useEditorStore.getState().openLayoutModal)}><LayoutTemplate />版式候选</button>
+            <button role="menuitem" onClick={() => run(useEditorStore.getState().openPreviewModal)}><Image />草稿预览</button>
+            <button role="menuitem" onClick={() => run(useEditorStore.getState().openCompileModal)}><FileJson />导出 MOSS JSON</button>
+          </div>}
         </div>
-
-        <button
-          type="button"
-          onClick={() => saveCurrentPage(true)}
-          disabled={isSaving || !hasUnsavedChanges}
-          className="ui-btn ui-btn-ink text-[13px] font-semibold"
-          title="手动保存 (Ctrl+S)"
-        >
-          保存 (Ctrl+S)
-        </button>
+        <button className="ui-btn ui-btn-primary generate-button" disabled={!hasPanels} title={hasPanels ? "生成这一页的候选图" : "先建立分镜格子，再生成出图"} onClick={() => useEditorStore.getState().openGenerateModal()}><WandSparkles /><span>生成出图</span></button>
       </div>
     </header>
   );

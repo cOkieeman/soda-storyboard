@@ -4,6 +4,25 @@ import test from "node:test";
 // Import modules under test
 import { projectPageToSodaPage, sodaPageToProjectPage } from "../src/lib/project.ts";
 import { translateVerticalForms, verticalColumns, tokenizeLine } from "../src/lib/lettering.ts";
+import { parseJsonWithStringSeeds } from "../src/lib/api.ts";
+import { useEditorStore } from "../src/lib/store.ts";
+import { cloneFigurePose, ensureFigureEditor, getFigureId } from "../src/lib/figureRig.ts";
+import { generatePageSketchGeometry } from "../src/lib/sketchGeometry.ts";
+
+test("Render seeds retain every integer digit at the JSON boundary", () => {
+  const raw = '{"renders":[{"seed":3896687444318080379},{"seed":0},{"seed":"8925744111054236951"}],"count":3}';
+  const value = parseJsonWithStringSeeds(raw);
+  assert.deepEqual(value.renders.map((item) => item.seed), ["3896687444318080379", "0", "8925744111054236951"]);
+  assert.equal(value.count, 3);
+});
+
+test("Seed protection preserves ordinary JSON strings and nested page metadata", () => {
+  const value = parseJsonWithStringSeeds('{"production":{"renders":[{"seed":8925744111054236951}]},"description":"say \\"seed\\": 123","seed":null,"weight":0.8}');
+  assert.equal(value.production.renders[0].seed, "8925744111054236951");
+  assert.equal(value.description, 'say "seed": 123');
+  assert.equal(value.seed, null);
+  assert.equal(value.weight, 0.8);
+});
 
 test("1. Page conversion preserves exact float precision and unknown fields (B1 verification)", () => {
   const originalSodaPage = {
@@ -265,5 +284,398 @@ test("4. Speech bubble tail tip position survives roundtrip between SodaText and
   // Roundtrip back
   const reloaded = sodaPageToProjectPage(savedSodaPage);
   assert.deepEqual(reloaded.bubbles[0].tailTip, [380.0, 450.0]);
+});
+
+function withHistoryFixture(run) {
+  const originalState = useEditorStore.getState();
+  const sodaPage = {
+    id: "history_page",
+    canvas_width: 1024,
+    canvas_height: 1536,
+    reading_direction: "rtl",
+    panel_gap: 20,
+    panels: [{
+      id: "panel_1", order: 1, shot: "medium", angle: "eye",
+      character_ids: [], figures: [], description: "原始画面", caption_en: "",
+      shape: { type: "rect", x: 40.123456, y: 50.987654, w: 400.333333, h: 600.444444 }
+    }],
+    texts: [{
+      id: "text_1", panel_id: "panel_1", kind: "dialogue", speaker_id: null,
+      direction: "vertical", bubble: "speech", text: "原台词",
+      bbox: { type: "rect", x: 120.125, y: 140.25, w: 90, h: 180 }
+    }],
+    overlays: []
+  };
+  useEditorStore.setState({
+    activePageId: sodaPage.id,
+    sodaPage,
+    project: { id: sodaPage.id, name: sodaPage.id, activePageId: sodaPage.id, pages: [sodaPageToProjectPage(sodaPage)] },
+    characters: [], selection: null, historyPast: [], historyFuture: [],
+    historyGroup: null, canUndo: false, canRedo: false,
+    dirtyPanelIds: new Set(), dirtyBubbleIds: new Set(), hasUnsavedChanges: false,
+    autoSaveTimer: null,
+    triggerAutoSave: () => useEditorStore.setState({ hasUnsavedChanges: true })
+  });
+  const savePayload = () => {
+    const state = useEditorStore.getState();
+    return projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds);
+  };
+  try {
+    run({ originalPage: sodaPage, savePayload, getState: useEditorStore.getState });
+  } finally {
+    useEditorStore.setState(originalState, true);
+  }
+}
+
+test("Adding and editing figures preserves untouched panel geometry at its original precision", () => {
+  withHistoryFixture(({ originalPage, savePayload, getState }) => {
+    getState().addFigurePreset("stand", undefined, "panel_1");
+    const id = getState().selection.id;
+    const figure = getState().sodaPage.panels[0].figures[0];
+    getState().updateFigureById("panel_1", id, { editor: { ...figure.editor, x: 125.5, y: 280.75 } });
+    assert.deepEqual(savePayload().panels[0].shape, originalPage.panels[0].shape);
+    // A preceding panel drag still has to survive a subsequent figure edit.
+    getState().updatePanel("panel_1", { x: 222.25, y: 333.75 });
+    getState().updateFigureById("panel_1", id, { editor: { ...figure.editor, x: 150.5, y: 290.75 } });
+    assert.equal(savePayload().panels[0].shape.x, 222.25);
+    assert.equal(savePayload().panels[0].shape.y, 333.75);
+  });
+});
+
+test("Starting an empty page creates one selectable, saveable panel and can be undone", () => {
+  withHistoryFixture(({ savePayload, getState }) => {
+    const emptyPage = {
+      ...getState().sodaPage,
+      canvas_width: 1000,
+      canvas_height: 1000,
+      panels: [],
+      texts: []
+    };
+    useEditorStore.setState({
+      sodaPage: emptyPage,
+      project: { ...getState().project, pages: [sodaPageToProjectPage(emptyPage)] }
+    });
+
+    getState().startFirstPanel();
+    assert.equal(getState().sodaPage.panels.length, 1);
+    assert.equal(getState().project.pages[0].panels.length, 1);
+    const firstPanel = getState().sodaPage.panels[0];
+    assert.deepEqual(getState().selection, { kind: "panel", id: firstPanel.id },
+      "the first panel must be selected so its description can be edited immediately");
+    const shape = firstPanel.shape;
+    assert.equal(shape.type, "rect");
+    assert.ok([shape.x, shape.y, shape.w, shape.h].every(Number.isFinite));
+    assert.ok(shape.x >= 0 && shape.y >= 0 && shape.w > 0 && shape.h > 0);
+    assert.ok(shape.x + shape.w <= 1000 && shape.y + shape.h <= 1000,
+      "the first panel must fit inside the page canvas");
+    assert.equal(getState().hasUnsavedChanges, true);
+    assert.equal(getState().canUndo, true);
+    assert.equal(savePayload().panels.length, 1);
+    assert.equal(savePayload().panels[0].id, firstPanel.id);
+    assert.deepEqual(savePayload().panels[0].shape, shape);
+
+    const historyLength = getState().historyPast.length;
+    getState().selectItem(null);
+    getState().startFirstPanel();
+    assert.equal(getState().sodaPage.panels.length, 1,
+      "starting an existing page must select its panel without adding another");
+    assert.equal(getState().project.pages[0].panels.length, 1);
+    assert.deepEqual(getState().selection, { kind: "panel", id: firstPanel.id });
+    assert.equal(getState().historyPast.length, historyLength,
+      "selecting an existing panel must not add an undo step");
+
+    getState().undo();
+    assert.equal(getState().sodaPage.panels.length, 0);
+    assert.equal(getState().project.pages[0].panels.length, 0);
+    assert.equal(savePayload().panels.length, 0,
+      "saving after undo must restore the empty page");
+  });
+});
+
+test("Panel drag undo preserves original float geometry and redo keeps the moved save payload", () => {
+  withHistoryFixture(({ originalPage, savePayload, getState }) => {
+    getState().updatePanel("panel_1", { x: 180.25, y: 240.75 });
+    assert.equal(getState().canUndo, true, "a canvas move must create an undo step");
+    const movedShape = savePayload().panels[0].shape;
+    assert.equal(movedShape.x, 180.25);
+    assert.equal(movedShape.y, 240.75);
+
+    getState().undo();
+    assert.equal(getState().project.pages[0].panels[0].x, originalPage.panels[0].shape.x);
+    assert.deepEqual(savePayload().panels[0].shape, originalPage.panels[0].shape,
+      "saving after undo must retain all six original decimal places");
+    assert.equal(getState().dirtyPanelIds.size, 0);
+    assert.equal(getState().canRedo, true);
+
+    getState().redo();
+    assert.equal(getState().project.pages[0].panels[0].x, 180.25);
+    assert.deepEqual(savePayload().panels[0].shape, movedShape,
+      "redo must save the moved geometry even after undo cleared dirty IDs");
+    getState().undo();
+    assert.deepEqual(savePayload().panels[0].shape, originalPage.panels[0].shape);
+  });
+});
+
+test("Text typing coalesces until a pause and creating a new bubble can be undone independently", (t) => {
+  let now = 1000;
+  t.mock.method(Date, "now", () => now);
+  withHistoryFixture(({ savePayload, getState }) => {
+    getState().updateSodaText("text_1", { text: "修改" });
+    now += 500;
+    getState().updateSodaText("text_1", { text: "修改后的台词" });
+    assert.equal(getState().historyPast.length, 1, "continuous typing should be one undo step");
+
+    now += 751;
+    getState().updateSodaText("text_1", { text: "停顿后继续" });
+    assert.equal(getState().historyPast.length, 2, "typing after a pause needs a separate undo step");
+    getState().undo();
+    assert.equal(savePayload().texts[0].text, "修改后的台词");
+    getState().undo();
+    assert.equal(savePayload().texts[0].text, "原台词");
+    getState().redo();
+    assert.equal(savePayload().texts[0].text, "修改后的台词");
+    getState().redo();
+    assert.equal(savePayload().texts[0].text, "停顿后继续");
+
+    getState().addTextToPanel("panel_1");
+    const createdId = getState().selection.id;
+    assert.equal(savePayload().texts.length, 2);
+    assert.ok(savePayload().texts.some((text) => text.id === createdId));
+
+    getState().undo();
+    assert.equal(getState().project.pages[0].bubbles.length, 1);
+    assert.equal(savePayload().texts.length, 1);
+    assert.equal(savePayload().texts[0].text, "停顿后继续",
+      "undoing creation must keep the preceding text edit");
+    getState().undo();
+    assert.equal(savePayload().texts[0].text, "修改后的台词");
+  });
+});
+
+const expectedTextPresets = [
+  ["narration_vertical", "vertical", "box", "narration"],
+  ["speech_vertical", "vertical", "speech", "dialogue"],
+  ["speech_horizontal", "horizontal", "speech", "dialogue"],
+  ["thought", "horizontal", "thought", "dialogue"],
+  ["shout", "horizontal", "shout", "dialogue"],
+  ["transparent", "horizontal", "none", "narration"],
+  ["title", "horizontal", "box", "title"]
+];
+
+test("Every text preset creates the advertised editable object in its selected panel", () => {
+  for (const [preset, direction, bubble, kind] of expectedTextPresets) {
+    withHistoryFixture(({ savePayload, getState }) => {
+      getState().selectItem({ kind: "panel", id: "panel_1" });
+      getState().addTextPreset(preset);
+      const selection = getState().selection;
+      assert.equal(selection?.kind, "text", `${preset}: immediately select the new text`);
+      const text = savePayload().texts.find((item) => item.id === selection.id);
+      assert.ok(text, `${preset}: the new text must be in the save payload`);
+      assert.notEqual(text.id, "text_1");
+      assert.equal(text.panel_id, "panel_1");
+      assert.equal(text.direction, direction);
+      assert.equal(text.bubble, bubble);
+      assert.equal(text.kind, kind);
+      assert.ok(text.text.trim().length > 0, `${preset}: supply editable placeholder copy`);
+      assert.ok([text.bbox.x, text.bbox.y, text.bbox.w, text.bbox.h].every(Number.isFinite));
+      assert.ok(text.bbox.w > 0 && text.bbox.h > 0);
+      const canvasBubble = getState().project.pages[0].bubbles.find((item) => item.id === text.id);
+      assert.ok(canvasBubble, `${preset}: the canvas object must exist immediately`);
+      assert.equal(canvasBubble.direction, direction);
+      if (preset === "transparent") assert.ok(["transparent", "rgba(255,255,255,0)"].includes(canvasBubble.background), "transparent text must have no opaque fill");
+      getState().undo();
+      assert.equal(savePayload().texts.length, 1, `${preset}: creation is one undo step`);
+      getState().redo();
+      assert.ok(savePayload().texts.some((item) => item.id === text.id));
+    });
+  }
+});
+
+test("Adding elements follows a selected text or figure into its parent panel", () => {
+  withHistoryFixture(({ getState, savePayload }) => {
+    const secondPanel = { ...getState().sodaPage.panels[0], id: "panel_2", order: 2, shape: { type: "rect", x: 500, y: 100, w: 450, h: 650 } };
+    const page = { ...getState().sodaPage, panels: [...getState().sodaPage.panels, secondPanel] };
+    useEditorStore.setState({ sodaPage: page, project: { ...getState().project, pages: [sodaPageToProjectPage(page)] } });
+    getState().addTextPreset("speech_horizontal", "panel_2");
+    const selectedTextId = getState().selection.id;
+    assert.equal(savePayload().texts.find((item) => item.id === selectedTextId).panel_id, "panel_2");
+    getState().addFigurePreset("stand");
+    const selectedFigure = getState().selection;
+    assert.equal(selectedFigure.kind, "figure");
+    assert.equal(selectedFigure.panelId, "panel_2");
+    getState().addTextPreset("thought");
+    assert.equal(savePayload().texts.find((item) => item.id === getState().selection.id).panel_id, "panel_2");
+    assert.equal(savePayload().panels[0].figures.length, 0, "the first panel must stay untouched");
+  });
+});
+
+test("Text font size changes reach the canvas and survive saving and undo", () => {
+  withHistoryFixture(({ getState, savePayload }) => {
+    getState().addTextPreset("title", "panel_1");
+    const id = getState().selection.id;
+    assert.equal(getState().project.pages[0].bubbles.find((item) => item.id === id).fontSize, 32);
+    getState().updateSodaText(id, { font_size: 48 });
+    assert.equal(getState().project.pages[0].bubbles.find((item) => item.id === id).fontSize, 48);
+    const saved = savePayload();
+    assert.equal(saved.texts.find((item) => item.id === id).font_size, 48);
+    assert.equal(sodaPageToProjectPage(JSON.parse(JSON.stringify(saved))).bubbles.find((item) => item.id === id).fontSize, 48);
+    getState().undo();
+    assert.equal(savePayload().texts.find((item) => item.id === id).font_size, 32);
+  });
+});
+
+test("Bubble tails can be enabled and explicitly cleared through save, move, and reload", () => {
+  withHistoryFixture(({ getState, savePayload }) => {
+    const bubble = () => getState().project.pages[0].bubbles.find((item) => item.id === "text_1");
+    const text = () => getState().sodaPage.texts.find((item) => item.id === "text_1");
+    const reloadSaved = () => {
+      const saved = JSON.parse(JSON.stringify(savePayload()));
+      useEditorStore.setState({ sodaPage: saved, project: { ...getState().project, pages: [sodaPageToProjectPage(saved)] }, dirtyPanelIds: new Set(), dirtyBubbleIds: new Set() });
+      return saved.texts.find((item) => item.id === "text_1");
+    };
+
+    const tip = [45.25, 214.5];
+    getState().updateSodaText("text_1", { tail_tip: tip });
+    assert.deepEqual(bubble().tailTip, tip);
+    assert.deepEqual(reloadSaved().tail_tip, tip);
+    assert.deepEqual(bubble().tailTip, tip, "an enabled tail must reappear after reloading the page");
+
+    getState().updateSodaText("text_1", { tail_tip: null });
+    assert.equal(text().tail_tip, null);
+    assert.equal(bubble().tailTip, null, "clearing from the inspector must clear the visible canvas tail");
+    assert.equal(bubble().sodaData.tail_tip, null);
+    getState().updateBubble("text_1", { x: bubble().x + 20, y: bubble().y + 10 });
+    assert.equal(bubble().tailTip, null);
+    assert.equal(reloadSaved().tail_tip, null, "saving and moving a bubble must not revive a cleared tail");
+    assert.equal(text().tail_tip, null);
+    assert.equal(bubble().tailTip, null);
+
+    const newTip = [60, 240];
+    getState().updateBubble("text_1", { tailTip: newTip });
+    assert.deepEqual(text().tail_tip, newTip);
+    assert.deepEqual(reloadSaved().tail_tip, newTip);
+    getState().updateBubble("text_1", { tailTip: null });
+    assert.equal(text().tail_tip, null, "the reverse canvas-to-text path must also retain explicit null");
+    assert.equal(reloadSaved().tail_tip, null);
+    assert.equal(bubble().tailTip, null);
+  });
+});
+
+test("Switching transparent text to a speech bubble updates its fill and border immediately and on reload", () => {
+  withHistoryFixture(({ getState, savePayload }) => {
+    getState().addTextPreset("transparent", "panel_1");
+    const id = getState().selection.id;
+    const bubble = () => getState().project.pages[0].bubbles.find((item) => item.id === id);
+    assert.equal(bubble().borderWidth, 0);
+    getState().updateSodaText(id, { bubble: "speech" });
+    assert.equal(bubble().type, "rounded");
+    assert.equal(bubble().background, "#ffffff");
+    assert.equal(bubble().borderColor, "#171815");
+    assert.equal(bubble().borderWidth, 2);
+    const saved = JSON.parse(JSON.stringify(savePayload()));
+    const reloadedBubble = sodaPageToProjectPage(saved).bubbles.find((item) => item.id === id);
+    assert.equal(saved.texts.find((item) => item.id === id).bubble, "speech");
+    assert.equal(reloadedBubble.type, "rounded");
+    assert.equal(reloadedBubble.background, "#ffffff");
+    assert.equal(reloadedBubble.borderWidth, 2);
+
+    getState().updateSodaText(id, { bubble: "none" });
+    assert.equal(bubble().type, "rect");
+    assert.equal(bubble().borderWidth, 0);
+    assert.equal(bubble().borderColor, "transparent");
+    assert.ok(["transparent", "rgba(255,255,255,0)"].includes(bubble().background));
+    const transparentReload = sodaPageToProjectPage(JSON.parse(JSON.stringify(savePayload()))).bubbles.find((item) => item.id === id);
+    assert.equal(transparentReload.borderWidth, 0);
+    assert.ok(["transparent", "rgba(255,255,255,0)"].includes(transparentReload.background));
+  });
+});
+
+test("Handshake and hug presets create two independent figures with one undo step", () => {
+  for (const pair of ["handshake", "hug"]) {
+    withHistoryFixture(({ getState, savePayload }) => {
+      getState().addFigurePreset("stand", pair, "panel_1");
+      const figures = savePayload().panels[0].figures;
+      assert.equal(figures.length, 2, `${pair}: add both people together`);
+      assert.ok(figures.every((figure) => figure.id && figure.editor?.version === 1));
+      assert.notEqual(figures[0].id, figures[1].id);
+      assert.notEqual(figures[0].editor.x, figures[1].editor.x);
+      assert.notEqual(figures[0].editor.flip, figures[1].editor.flip, "partners must face each other");
+      assert.equal(getState().historyPast.length, 1, "the pair must be a single undo operation");
+      assert.equal(getState().selection.kind, "figure");
+      assert.ok(figures.some((figure) => figure.id === getState().selection.id));
+      getState().undo();
+      assert.equal(savePayload().panels[0].figures.length, 0);
+      getState().redo();
+      assert.deepEqual(savePayload().panels[0].figures.map((figure) => figure.id), figures.map((figure) => figure.id));
+      getState().removeFigureById("panel_1", figures[0].id);
+      assert.deepEqual(savePayload().panels[0].figures.map((figure) => figure.id), [figures[1].id], "each partner remains independently editable");
+    });
+  }
+});
+
+test("Independent figure edits retain two-dimensional pose data through JSON save and reload", () => {
+  withHistoryFixture(({ getState, savePayload }) => {
+    getState().addFigurePreset("wave", undefined, "panel_1");
+    const id = getState().selection.id;
+    const figure = getState().sodaPage.panels[0].figures.find((item) => item.id === id);
+    const joints = cloneFigurePose("wave");
+    joints.rHand = [43.75, -87.25];
+    const editor = { ...figure.editor, x: 123.5, y: 456.25, size: 278.75, flip: true, style: "rough", break_frame: true, joints };
+    getState().updateFigureById("panel_1", id, { editor });
+    const saved = savePayload();
+    assert.deepEqual(saved.panels[0].figures.find((item) => item.id === id).editor, editor);
+    const reloaded = JSON.parse(JSON.stringify(saved));
+    const roundtrip = projectPageToSodaPage(sodaPageToProjectPage(reloaded), reloaded, new Set(), new Set());
+    assert.deepEqual(roundtrip.panels[0].figures.find((item) => item.id === id).editor, editor);
+    assert.deepEqual(ensureFigureEditor(roundtrip.panels[0].figures[0], { width: 400, height: 600 }).joints.rHand, joints.rHand);
+    const historyBeforeDelete = getState().historyPast.length;
+    getState().selectItem({ kind: "figure", id, panelId: "panel_1" });
+    getState().deleteSelection();
+    assert.equal(savePayload().panels[0].figures.length, 0);
+    assert.equal(generatePageSketchGeometry(savePayload(), []).panels[0].figures.length, 0, "deleting the last figure must not revive a fallback figure");
+    assert.equal(getState().historyPast.length, historyBeforeDelete + 1);
+    getState().undo();
+    assert.deepEqual(savePayload().panels[0].figures.find((item) => item.id === id).editor, editor);
+  });
+});
+
+test("Editing a legacy figure assigns stable identity without losing its custom metadata", () => {
+  withHistoryFixture(({ getState, savePayload }) => {
+    const legacy = { character_id: "alice", pose: "stand", position: "center", facing: "front", framing: "full", custom_note: "keep me" };
+    const page = { ...getState().sodaPage, panels: [{ ...getState().sodaPage.panels[0], figures: [legacy], character_ids: ["alice"] }] };
+    useEditorStore.setState({ sodaPage: page, project: { ...getState().project, pages: [sodaPageToProjectPage(page)] } });
+    const editor = { ...ensureFigureEditor(legacy, { width: 400, height: 600 }), x: 75.25, y: 380.5 };
+    getState().updateFigureById("panel_1", getFigureId(legacy, 0), { editor });
+    const migrated = savePayload().panels[0].figures[0];
+    assert.ok(migrated.id, "the first edit must store a persistent figure identity");
+    assert.equal(migrated.custom_note, "keep me");
+    assert.equal(migrated.editor.x, 75.25);
+    assert.equal(migrated.editor.y, 380.5);
+    getState().removeFigureById("panel_1", migrated.id);
+    assert.equal(generatePageSketchGeometry(savePayload(), []).panels[0].figures.length, 0);
+  });
+});
+
+test("Character-only legacy pages materialize all visible people, then deletion never revives them", () => {
+  withHistoryFixture(({ getState, savePayload }) => {
+    const page = { ...getState().sodaPage, panels: [{ ...getState().sodaPage.panels[0], figures: [], character_ids: ["alice", "bob"] }] };
+    useEditorStore.setState({ sodaPage: page, project: { ...getState().project, pages: [sodaPageToProjectPage(page)] } });
+    const initialGeometry = generatePageSketchGeometry(page, []);
+    assert.equal(initialGeometry.panels[0].figures.length, 2);
+    const firstVisibleId = initialGeometry.panels[0].figures[0].figure_id;
+    const legacy = { character_id: "alice", pose: "stand", position: 0.75, facing: "front", framing: null };
+    const editor = { ...ensureFigureEditor(legacy, { width: 400, height: 600, shot: "medium" }), x: 96.5 };
+    getState().updateFigureById("panel_1", firstVisibleId, { editor });
+    const migrated = savePayload().panels[0].figures;
+    assert.equal(migrated.length, 2, "editing one fallback person must retain the other person");
+    assert.ok(migrated.every((figure) => figure.id));
+    assert.equal(migrated.find((figure) => figure.character_id === "alice").editor.x, 96.5);
+    getState().removeFigureById("panel_1", migrated.find((figure) => figure.character_id === "alice").id);
+    assert.deepEqual(generatePageSketchGeometry(savePayload(), []).panels[0].figures.map((figure) => figure.character_id), ["bob"]);
+    getState().removeFigureById("panel_1", savePayload().panels[0].figures[0].id);
+    const saved = savePayload();
+    assert.equal(saved.panels[0].figures.length, 0);
+    assert.equal(generatePageSketchGeometry(JSON.parse(JSON.stringify(saved)), []).panels[0].figures.length, 0);
+  });
 });
 

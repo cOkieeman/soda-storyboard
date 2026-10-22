@@ -1,17 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f0e6" />
+    <style>html{background:#e6e1d5}html[data-theme="dark"]{background:#191c18;color-scheme:dark}</style>
+    <script>
+      (() => {
+        let saved = null;
+        try { saved = localStorage.getItem("soda-editor-theme"); } catch {}
+        const theme = saved === "light" || saved === "dark" ? saved : typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "dark" ? "#222520" : "#f4f0e6");
+      })();
+    </script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23f4f0e6'/%3E%3Ctext x='7' y='24' font-family='Georgia,serif' font-size='28' font-weight='bold' fill='%23a34432'%3Es%3C/text%3E%3C/svg%3E" />
     <title>Soda Storyboard 分镜编辑器</title>
-    <script type="module" crossorigin src="./assets/index-FjLT2AGJ.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/react-vendor-B2D5vM5I.js">
-    <link rel="modulepreload" crossorigin href="./assets/vendor-exX3BnSh.js">
-    <link rel="modulepreload" crossorigin href="./assets/canvas-vendor-BQUImcEC.js">
-    <link rel="modulepreload" crossorigin href="./assets/editor-vendor-Zp4a-ljF.js">
-    <link rel="stylesheet" crossorigin href="./assets/index-DjLOcNpm.css">
+    <script type="module" crossorigin src="./assets/index-dHIOvJVR.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/react-vendor-CcdIGgYY.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-C6sevzcu.js">
+    <link rel="modulepreload" crossorigin href="./assets/canvas-vendor-JjkLF9M7.js">
+    <link rel="modulepreload" crossorigin href="./assets/editor-vendor-Ow_4axE5.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-D2qgbcaX.css">
   </head>
-  <body class="bg-slate-950">
-    <div id="root"></div>
+  <body>
+    <div id="root"></div>
   </body>
 </html>

@@ -12,6 +12,7 @@ import {
   ValidationIssue,
   ValidationResult
 } from "../types";
+import { normalizeCharacterColor } from "./characterColors";
 
 export const API_BASE = "";
 
@@ -44,6 +45,29 @@ export class ApiError extends Error {
   }
 }
 
+// Python emits 64-bit render seeds as JSON integers. Protect their source digits
+// before JSON.parse converts numbers to IEEE-754, including page metadata that
+// will later be saved back to the server. Match complete strings so text that
+// happens to contain an escaped `"seed": 123` is never treated as a property.
+export function parseJsonWithStringSeeds(json: string): any {
+  const replacements: Array<{ start: number; end: number; value: string }> = [];
+  for (const token of json.matchAll(/"(?:\\.|[^"\\])*"/g)) {
+    if (JSON.parse(token[0]) !== "seed") continue;
+    const keyEnd = token.index! + token[0].length;
+    const value = /^\s*:\s*(-?(?:0|[1-9]\d*))(?=\s*[,}])/.exec(json.slice(keyEnd));
+    if (!value) continue;
+    const start = keyEnd + value[0].length - value[1].length;
+    replacements.push({ start, end: start + value[1].length, value: JSON.stringify(value[1]) });
+  }
+  let cursor = 0;
+  let protectedJson = "";
+  for (const replacement of replacements) {
+    protectedJson += json.slice(cursor, replacement.start) + replacement.value;
+    cursor = replacement.end;
+  }
+  return JSON.parse(protectedJson + json.slice(cursor));
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -70,7 +94,7 @@ async function request<T>(
   let data: any = null;
   if (contentType.includes("application/json")) {
     try {
-      data = await res.json();
+      data = parseJsonWithStringSeeds(await res.text());
     } catch {
       data = null;
     }
@@ -235,6 +259,20 @@ export async function getCharacters(): Promise<{ characters: SodaCharacter[] }> 
 export async function getCharacter(id: string): Promise<{ character: SodaCharacter }> {
   const { data } = await request<{ character: SodaCharacter }>(`/api/characters/${encodeURIComponent(id)}`);
   return data;
+}
+
+/** Read the complete latest file before merging its color; conditional PUT never overwrites a concurrent edit. */
+export async function saveCharacterColor(id: string, color: string): Promise<SodaCharacter> {
+  const normalized = normalizeCharacterColor(color);
+  if (!normalized) throw new ApiError("请选择有效的十六进制颜色", 400, null);
+  const endpoint = `/api/characters/${encodeURIComponent(id)}`;
+  const { data, headers } = await request<{ character: SodaCharacter; version?: string }>(endpoint);
+  const version = data.version || headers.get("ETag");
+  if (!version) throw new ApiError("角色服务缺少版本信息，请重启编辑器服务后重试", 409, null);
+  const result = await request<{ character: SodaCharacter }>(endpoint, {
+    method: "PUT", headers: { "If-Match": version }, body: JSON.stringify({ ...data.character, sketch_color: normalized })
+  });
+  return result.data.character;
 }
 
 export async function validatePage(id: string): Promise<ValidationResult> {
@@ -402,7 +440,7 @@ export function connectEvents(
 
   eventSource.addEventListener("ready", (e) => {
     try {
-      const data = JSON.parse(e.data);
+      const data = parseJsonWithStringSeeds(e.data);
       onEvent({ type: "ready", data });
     } catch {
       onEvent({ type: "ready", data: { refresh: true } });
@@ -411,7 +449,7 @@ export function connectEvents(
 
   eventSource.addEventListener("resync", (e) => {
     try {
-      const data = JSON.parse(e.data);
+      const data = parseJsonWithStringSeeds(e.data);
       onEvent({ type: "resync", data });
     } catch {
       onEvent({ type: "resync", data: { message: "事件积压，请重新读取项目" } });
@@ -420,7 +458,7 @@ export function connectEvents(
 
   eventSource.addEventListener("file_changed", (e) => {
     try {
-      const data = JSON.parse(e.data);
+      const data = parseJsonWithStringSeeds(e.data);
       onEvent({ type: "file_changed", data });
     } catch (err) {
       console.error("Failed to parse file_changed event", err);
@@ -429,7 +467,7 @@ export function connectEvents(
 
   eventSource.addEventListener("job", (e) => {
     try {
-      const data = JSON.parse(e.data);
+      const data = parseJsonWithStringSeeds(e.data);
       onEvent({ type: "job", data });
     } catch (err) {
       console.error("Failed to parse job event", err);

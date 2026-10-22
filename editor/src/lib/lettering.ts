@@ -30,6 +30,38 @@ export const VERTICAL_FORMS_MAP: Record<string, string> = {
 
 export const BREAK_AFTER = new Set(["︐", "︒", "︕", "︖", "﹂", "﹄", "︶", "︓", "︔"]);
 
+export function resolveTextFontSize(explicit: unknown, pageSize: unknown, canvasWidth = 1024): number {
+  if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) return Math.max(1, Math.min(512, explicit));
+  const inherited = typeof pageSize === "number" && Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 42;
+  return Math.max(1, Math.min(512, inherited * canvasWidth / 1024));
+}
+
+export function layoutVerticalText(width: number, height: number, text: string, requestedSize: number) {
+  const availableWidth = Math.max(1, width - 20), availableHeight = Math.max(1, height - 24);
+  let fontSize = Math.max(1, Math.min(512, Math.floor(requestedSize || 20)));
+  let columns: string[][] = [];
+  for (; fontSize > 1; fontSize--) {
+    columns = verticalColumns(text, Math.max(1, Math.floor(availableHeight / (fontSize * 1.22))));
+    if (columns.length * fontSize * 1.2 <= availableWidth) break;
+  }
+  if (fontSize === 1) columns = verticalColumns(text, Math.max(1, Math.floor(availableHeight / 1.22)));
+  const columnWidth = fontSize * 1.2, cellHeight = fontSize * 1.22;
+  return { fontSize, columns, columnWidth, cellHeight, startX: width - 12 - columnWidth, startY: 12 };
+}
+
+export function fitHorizontalFontSize(width: number, height: number, text: string, requestedSize: number): number {
+  let size = Math.max(1, Math.min(512, Math.floor(requestedSize || 20)));
+  for (; size > 1; size--) {
+    const capacity = Math.max(0.1, width / size);
+    const rows = text.split("\n").reduce((count, line) => {
+      const units = Array.from(line).reduce((sum, glyph) => sum + (/^[\x20-\x7e]$/.test(glyph) ? 0.65 : 1), 0);
+      return count + Math.max(1, Math.ceil(units / capacity));
+    }, 0);
+    if (size <= width && rows * size * 1.25 <= height) break;
+  }
+  return size;
+}
+
 export function translateVerticalForms(text: string): string {
   let result = "";
   for (const char of text) {

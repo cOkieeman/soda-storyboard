@@ -45,6 +45,8 @@ POSES = (
     "hand_on_chin",
     "lie",
     "back_view",
+    "handshake",
+    "hug",
 )
 
 type JsonObject = dict[str, Any]

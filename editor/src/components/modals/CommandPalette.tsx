@@ -31,6 +31,7 @@ export default function CommandPalette() {
   const openPreviewModal = useEditorStore((state) => state.openPreviewModal);
   const openCompileModal = useEditorStore((state) => state.openCompileModal);
   const openGenerateModal = useEditorStore((state) => state.openGenerateModal);
+  const openImportModal = useEditorStore((state) => state.openImportModal);
 
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -38,6 +39,13 @@ export default function CommandPalette() {
 
   const commands: CommandItem[] = useMemo(() => {
     const list: CommandItem[] = [
+      {
+        id: "import_json",
+        category: "操作",
+        title: "导入 JSON 分镜",
+        description: "选择文件或粘贴分镜单、MOSS 布局，预览后导入为新页",
+        action: () => openImportModal()
+      },
       {
         id: "save",
         category: "操作",
@@ -153,6 +161,7 @@ export default function CommandPalette() {
     openPreviewModal,
     openCompileModal,
     openGenerateModal,
+    openImportModal,
     createPage,
     selection,
     splitPanelHorizontal,

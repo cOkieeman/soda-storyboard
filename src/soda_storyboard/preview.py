@@ -210,7 +210,8 @@ def _paste_panel_figures(  # noqa: PLR0913 -- explicit local drawing context
     layer = Image.new("RGBA", image.size)
     data = panel_figure_geometry(panel, page, characters, font=font, scale=scale)
     for geometry in data["figures"]:
-        draw_primitives(layer, geometry, font=font)
+        if not geometry.get("break_frame", False):
+            draw_primitives(layer, geometry, font=font)
     mask = Image.new("L", layer.size)
     md = ImageDraw.Draw(mask)
     points = [tuple(p) for p in data["clip"]]
@@ -222,14 +223,51 @@ def _paste_panel_figures(  # noqa: PLR0913 -- explicit local drawing context
 def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path | None, scale: float) -> None:
     from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
 
+    from .production.lettering import (  # noqa: PLC0415
+        draw_bubble,
+        draw_shout_text,
+        font_size_override,
+        shout_tail_tip,
+    )
+
     rect = text.bbox
     if rect is None:
         return
     width, height = max(1, round(rect.w * scale)), max(1, round(rect.h * scale))
-    layer = Image.new("RGB", (width, height), "white")
+    if text.bubble == "shout":
+        # Draw directly on the page so an explicit short tail is not clipped by the text bbox.
+        left, top = round(rect.x * scale), round(rect.y * scale)
+        box = (left, top, left + width - 1, top + height - 1)
+        draw = ImageDraw.Draw(image)
+        draw_bubble(
+            draw,
+            box,
+            "shout",
+            max(1, round(2 * scale)),
+            outline=TEXT_COLOR,
+            tail_tip=shout_tail_tip(text, scale),
+        )
+        draw_shout_text(
+            draw,
+            text,
+            box,
+            str(font_path) if font_path else None,
+            (font_size_override(text) or page.text_font_size * page.canvas_width / 1024) * scale,
+            direction=text.direction or page.text_direction,
+            color=TEXT_COLOR,
+            reading_direction=page.reading_direction,
+        )
+        return
+    layer = Image.new("RGBA", (width, height))
     draw = ImageDraw.Draw(layer)
     color = CHARACTER_COLOR if text.kind == "title" else TEXT_COLOR
-    draw.rectangle((0, 0, width - 1, height - 1), outline=color, width=max(2, round(3 * scale)))
+    draw_bubble(
+        draw,
+        (0, 0, width - 1, height - 1),
+        text.bubble,
+        max(2, round(3 * scale)),
+        outline=color,
+    )
     vertical = (text.direction or page.text_direction) == "vertical"
     lines = (
         vertical_columns(text.text, page.text_max_chars)
@@ -237,10 +275,18 @@ def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path |
         else text_lines(text.text, page.text_max_chars)
     )
     longest = max(1, *map(len, lines))
-    available_w, available_h = max(1, width - 8 * scale), max(1, height - 8 * scale)
+    pad_x, pad_y = (
+        (width * 0.17, height * 0.17)
+        if text.bubble in {"speech", "thought", "shout"}
+        else (4 * scale, 4 * scale)
+    )
+    available_w, available_h = max(1, width - pad_x * 2), max(1, height - pad_y * 2)
     cell_w = available_w / (len(lines) if vertical else longest)
     cell_h = available_h / (longest if vertical else len(lines))
     size = max(1, int(min(cell_w, cell_h) * 0.88))
+    explicit_size = font_size_override(text)
+    if explicit_size is not None:
+        size = max(1, min(size, round(explicit_size * scale)))
     font = ImageFont.truetype(str(font_path), size) if font_path else ImageFont.load_default(size=size)
     if vertical:
         ordered = list(reversed(lines)) if page.reading_direction == "rtl" else lines
@@ -255,7 +301,7 @@ def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path |
                     else ImageFont.load_default(size=glyph_size)
                 )
                 draw.text(
-                    (4 * scale + (column + 0.5) * cell_w, 4 * scale + (row + 0.5) * cell_h),
+                    (pad_x + (column + 0.5) * cell_w, pad_y + (row + 0.5) * cell_h),
                     glyph,
                     fill=color,
                     font=glyph_font,
@@ -263,8 +309,8 @@ def _draw_text_box(image: Image.Image, text: Text, page: Page, font_path: Path |
                 )
     else:
         for row, line in enumerate(lines):
-            draw.text((4 * scale, 4 * scale + (row + 0.5) * cell_h), line, fill=color, font=font, anchor="lm")
-    image.paste(layer, (round(rect.x * scale), round(rect.y * scale)))
+            draw.text((pad_x, pad_y + (row + 0.5) * cell_h), line, fill=color, font=font, anchor="lm")
+    image.paste(layer, (round(rect.x * scale), round(rect.y * scale)), layer)
 
 
 def _render_sketch(  # noqa: PLR0912 -- labels, figures, overlays and lettering passes
@@ -307,6 +353,12 @@ def _render_sketch(  # noqa: PLR0912 -- labels, figures, overlays and lettering 
             )
         else:
             draw.rectangle((x, y, x2, y2), outline=PANEL_COLOR, width=max(3, round(4 * scale)))
+    # Figures explicitly marked to cross a frame must sit above every panel border.
+    for panel in sorted(page.panels, key=lambda p: p.order):
+        data = panel_figure_geometry(panel, page, character_map, font=label_font, scale=scale)
+        for geometry in data["figures"]:
+            if geometry.get("break_frame", False):
+                draw_primitives(image, geometry, font=label_font)
     for overlay in sorted(page.overlays, key=lambda o: o.z_index):
         rect = overlay.rect
         x, y, x2, y2 = [round(v * scale) for v in (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h)]

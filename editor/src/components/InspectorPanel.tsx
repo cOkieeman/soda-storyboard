@@ -1,77 +1,127 @@
 import React, { useMemo } from "react";
+import { AlertCircle, AlertTriangle, ArrowUpRight, Check, ChevronDown, Columns2, Plus, Rows2, Trash2 } from "lucide-react";
 import { useEditorStore } from "../lib/store";
-import { Figure, ShotType, AngleType, FigurePose, TextKind, BubbleStyle, SodaCharacter } from "../types";
-import CustomSelect from "./ui/CustomSelect";
+import { Figure, ShotType, AngleType, FigurePose, TextKind, BubbleStyle, Selection } from "../types";
+import { getFigureId } from "../lib/figureRig";
+import { applyFigurePoseInPanel, editableFigureEditor, resolvedFigures } from "../lib/figures";
+import FigureInspector from "./FigureInspector";
+import { resolveTextFontSize } from "../lib/lettering";
 
 const SHOT_OPTIONS: { value: ShotType; label: string }[] = [
-  { value: "extreme_long", label: "大远景 (Extreme Long)" },
-  { value: "long", label: "远景 (Long)" },
-  { value: "full", label: "全景 (Full)" },
-  { value: "medium", label: "中景 (Medium)" },
-  { value: "close_up", label: "特写 (Close-up)" },
-  { value: "extreme_close_up", label: "大特写 (Extreme Close-up)" }
+  { value: "extreme_long", label: "大远景" },
+  { value: "long", label: "远景" },
+  { value: "full", label: "全景" },
+  { value: "medium", label: "中景" },
+  { value: "close_up", label: "特写" },
+  { value: "extreme_close_up", label: "大特写" }
 ];
-
 const ANGLE_OPTIONS: { value: AngleType; label: string }[] = [
-  { value: "eye", label: "平视 (Eye level)" },
-  { value: "high", label: "俯视 (High angle)" },
-  { value: "low", label: "仰视 (Low angle)" },
-  { value: "bird", label: "鸟瞰 (Bird's eye)" },
-  { value: "worm", label: "虫视 (Worm's eye)" },
-  { value: "dutch", label: "荷兰角倾斜 (Dutch tilt)" }
+  { value: "eye", label: "平视" },
+  { value: "high", label: "俯视" },
+  { value: "low", label: "仰视" },
+  { value: "bird", label: "鸟瞰" },
+  { value: "worm", label: "虫视" },
+  { value: "dutch", label: "倾斜" }
 ];
-
 const POSE_OPTIONS: { value: FigurePose; label: string }[] = [
-  { value: "stand", label: "站立 (stand)" },
-  { value: "walk", label: "行走 (walk)" },
-  { value: "run", label: "奔跑 (run)" },
-  { value: "sit", label: "坐下 (sit)" },
-  { value: "crouch", label: "蹲下 (crouch)" },
-  { value: "wave", label: "挥手 (wave)" },
-  { value: "point", label: "指向 (point)" },
-  { value: "arms_up", label: "举手 (arms_up)" },
-  { value: "hands_clasped", label: "双手合十 (hands_clasped)" },
-  { value: "hand_on_chin", label: "托下巴/推眼镜 (hand_on_chin)" },
-  { value: "lie", label: "躺下 (lie)" },
-  { value: "back_view", label: "背影 (back_view)" }
+  { value: "stand", label: "站立" },
+  { value: "walk", label: "行走" },
+  { value: "run", label: "奔跑" },
+  { value: "sit", label: "坐下" },
+  { value: "crouch", label: "蹲下" },
+  { value: "wave", label: "挥手" },
+  { value: "point", label: "指向" },
+  { value: "arms_up", label: "举手" },
+  { value: "hands_clasped", label: "双手合十" },
+  { value: "hand_on_chin", label: "托下巴 / 推眼镜" },
+  { value: "lie", label: "侧视躺卧" },
+  { value: "back_view", label: "背影" },
+  { value: "handshake", label: "握手" },
+  { value: "hug", label: "拥抱" }
 ];
-
 const FACING_OPTIONS = [
-  { value: "front", label: "正 (front)" },
-  { value: "left", label: "左 (left)" },
-  { value: "right", label: "右 (right)" },
-  { value: "back", label: "背 (back)" }
+  { value: "front", label: "正面" },
+  { value: "left", label: "向左" },
+  { value: "right", label: "向右" },
+  { value: "back", label: "背面" }
 ];
-
 const FRAMING_OPTIONS = [
-  { value: "", label: "默认 (null)" },
-  { value: "full", label: "全身 (full)" },
-  { value: "waist", label: "半身 (waist)" },
-  { value: "bust", label: "胸部 (bust)" },
-  { value: "face", label: "面部 (face)" }
+  { value: "", label: "默认" },
+  { value: "full", label: "全身" },
+  { value: "waist", label: "半身" },
+  { value: "bust", label: "胸部" },
+  { value: "face", label: "面部" }
 ];
-
 const KIND_OPTIONS: { value: TextKind; label: string }[] = [
-  { value: "dialogue", label: "台词 (Dialogue)" },
-  { value: "narration", label: "旁白 (Narration)" },
-  { value: "sfx", label: "拟声词 (SFX)" },
-  { value: "title", label: "标题 (Title)" }
+  { value: "dialogue", label: "台词" },
+  { value: "narration", label: "旁白" },
+  { value: "sfx", label: "拟声词" },
+  { value: "title", label: "标题" },
+  { value: "caption_tag", label: "说明标签" }
 ];
-
 const DIRECTION_OPTIONS = [
-  { value: "vertical", label: "竖排 (Vertical)" },
-  { value: "horizontal", label: "横排 (Horizontal)" }
+  { value: "vertical", label: "竖排" },
+  { value: "horizontal", label: "横排" }
 ];
-
 const BUBBLE_OPTIONS: { value: BubbleStyle; label: string }[] = [
-  { value: "speech", label: "对话气泡 (Speech)" },
-  { value: "shout", label: "喊叫气泡 (Shout)" },
-  { value: "thought", label: "思考气泡 (Thought)" },
-  { value: "box", label: "方框 (Box)" },
-  { value: "none", label: "无气泡 (None)" }
+  { value: "speech", label: "对话气泡" },
+  { value: "shout", label: "喊叫气泡" },
+  { value: "thought", label: "思考气泡" },
+  { value: "box", label: "方框" },
+  { value: "none", label: "无气泡" }
 ];
 
-export default function InspectorPanel() {
+type InspectorNotice = {
+  id: string;
+  severity: "error" | "warning";
+  message: string;
+  code: string;
+  targetKind?: "panel" | "text" | "overlay";
+  targetId?: string;
+};
+
+function mentionsIdentifier(message: string, identifier: string) {
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return Boolean(identifier) && new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}(?=$|[^\\p{L}\\p{N}_-])`, "u").test(message);
+}
+
+function InspectorSection({ title, children, open = true }: {
+  title: string;
+  children: React.ReactNode;
+  open?: boolean;
+}) {
+  return (
+    <details className="inspector-section group" open={open}>
+      <summary className="flex cursor-pointer select-none items-center justify-between gap-2 text-[13px] font-semibold">
+        {title}
+        <ChevronDown size={14} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="inspector-section-content space-y-3">{children}</div>
+    </details>
+  );
+}
+
+function InspectorSelect<T extends string>({ value, options, onChange }: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <span className="relative block min-w-0">
+      <select value={value} onChange={(event) => onChange(event.target.value as T)} className="ui-input w-full appearance-none pr-7">
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+      <ChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[var(--ink-light)]" aria-hidden="true" />
+    </span>
+  );
+}
+
+type InspectorPanelProps = {
+  onSelectObject?: (selection: Selection) => void;
+  onStartPage?: () => void;
+};
+
+export default function InspectorPanel({ onSelectObject, onStartPage }: InspectorPanelProps) {
   const sodaPage = useEditorStore((state) => state.sodaPage);
   const characters = useEditorStore((state) => state.characters);
   const characterDetails = useEditorStore((state) => state.characterDetails);
@@ -79,685 +129,229 @@ export default function InspectorPanel() {
   const selectItem = useEditorStore((state) => state.selectItem);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
   const validationIssues = useEditorStore((state) => state.validationIssues);
-
   const updateSodaPanel = useEditorStore((state) => state.updateSodaPanel);
   const updateSodaText = useEditorStore((state) => state.updateSodaText);
   const updateSodaOverlay = useEditorStore((state) => state.updateSodaOverlay);
-  const addFigureToPanel = useEditorStore((state) => state.addFigureToPanel);
   const removeFigureFromPanel = useEditorStore((state) => state.removeFigureFromPanel);
   const updateFigureInPanel = useEditorStore((state) => state.updateFigureInPanel);
+  const addTextToPanel = useEditorStore((state) => state.addTextToPanel);
+  const selectObject = (nextSelection: Selection) => {
+    selectItem(nextSelection);
+    onSelectObject?.(nextSelection);
+  };
 
-  // Compute Page Checklist (P4c Item 8)
-  const checklist = useMemo(() => {
+  // Server validation and the local checklist share one list. Prefer server
+  // messages when both sources describe the same problem on the same object.
+  const notices = useMemo(() => {
     if (!sodaPage) return [];
-    const items: Array<{
-      id: string;
-      title: string;
-      type: "empty_desc" | "no_character" | "long_text" | "multi_lora";
-      targetKind: "panel" | "text";
-      targetId: string;
-    }> = [];
-
-    // Empty description
-    sodaPage.panels.forEach((p) => {
-      if (!p.description || p.description.trim() === "") {
-        items.push({
-          id: `desc-${p.id}`,
-          title: `格 #${p.order} (${p.id}): 未填写画面描述`,
-          type: "empty_desc",
-          targetKind: "panel",
-          targetId: p.id
-        });
+    const items: InspectorNotice[] = [];
+    const seen = new Set<string>();
+    validationIssues.forEach((issue, index) => {
+      const key = `${issue.severity}:${issue.code}:${issue.panel_id || ""}:${issue.message}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const text = issue.field?.startsWith("texts") ? sodaPage.texts.find((item) => mentionsIdentifier(issue.message, item.id)) : undefined;
+      const overlay = issue.field?.startsWith("overlays") ? sodaPage.overlays?.find((item) => mentionsIdentifier(issue.message, item.id)) : undefined;
+      items.push({
+        id: `validation-${index}`,
+        severity: issue.severity,
+        message: issue.message,
+        code: issue.code,
+        targetKind: issue.panel_id ? "panel" : text ? "text" : overlay ? "overlay" : undefined,
+        targetId: issue.panel_id || text?.id || overlay?.id
+      });
+    });
+    sodaPage.panels.forEach((panel) => {
+      if (!panel.description?.trim()) {
+        items.push({ id: `desc-${panel.id}`, severity: "warning", code: "empty_desc", message: `格子 ${panel.order} 未填写画面描述`, targetKind: "panel", targetId: panel.id });
+      }
+      if (!panel.character_ids?.length) {
+        items.push({ id: `char-${panel.id}`, severity: "warning", code: "no_character", message: `格子 ${panel.order} 未指定登场角色`, targetKind: "panel", targetId: panel.id });
+      }
+      const loras = new Set((panel.character_ids || []).map((id) => characterDetails[id]?.lora?.path).filter(Boolean));
+      const hasServerLoraWarning = items.some((item) => item.code === "multiple_lora_characters_panel" && item.targetId === panel.id);
+      if (loras.size > 1 && !hasServerLoraWarning) {
+        items.push({ id: `lora-${panel.id}`, severity: "warning", code: "multi_lora", message: `格子 ${panel.order} 使用 ${loras.size} 个不同 LoRA，可能互相影响`, targetKind: "panel", targetId: panel.id });
       }
     });
-
-    // Unassigned characters
-    sodaPage.panels.forEach((p) => {
-      if (!p.character_ids || p.character_ids.length === 0) {
-        items.push({
-          id: `char-${p.id}`,
-          title: `格 #${p.order} (${p.id}): 未指定登场角色`,
-          type: "no_character",
-          targetKind: "panel",
-          targetId: p.id
-        });
+    sodaPage.texts.forEach((text) => {
+      const hasServerTextWarning = items.some((item) => item.code === "dialogue_too_long" && (item.targetId === text.id || item.targetId === text.panel_id));
+      if (text.text?.length > 20 && !hasServerTextWarning) {
+        items.push({ id: `text-${text.id}`, severity: "warning", code: "long_text", message: `台词 ${text.id} 有 ${text.text.length} 字，建议拆分或精简`, targetKind: "text", targetId: text.id });
       }
     });
-
-    // Long dialogue (>20 characters)
-    sodaPage.texts.forEach((t, idx) => {
-      if (t.text && t.text.length > 20) {
-        items.push({
-          id: `text-${t.id || idx}`,
-          title: `台词框 (${t.id}): 台词过长 (${t.text.length}字，建议拆分或精简)`,
-          type: "long_text",
-          targetKind: "text",
-          targetId: t.id
-        });
-      }
-    });
-
-    // Multi-LoRA conflict risk
-    sodaPage.panels.forEach((p) => {
-      if (p.character_ids && p.character_ids.length > 1) {
-        const loras = new Set<string>();
-        p.character_ids.forEach((cid) => {
-          const char = characterDetails[cid];
-          if (char?.lora?.path) loras.add(char.lora.path);
-        });
-        if (loras.size > 1) {
-          items.push({
-            id: `lora-${p.id}`,
-            title: `格 #${p.order} (${p.id}): 多 LoRA 冲突风险 (${loras.size}个不同LoRA)`,
-            type: "multi_lora",
-            targetKind: "panel",
-            targetId: p.id
-          });
-        }
-      }
-    });
-
-    return items;
-  }, [sodaPage, characterDetails]);
+    return items.sort((a, b) => Number(b.severity === "error") - Number(a.severity === "error"));
+  }, [sodaPage, characterDetails, validationIssues]);
 
   if (!sodaPage) {
-    return (
-      <aside className="flex h-full items-center justify-center border-l border-[var(--line)] bg-[var(--paper-surface)] p-4 text-sm text-[var(--ink)]">
-        请选择分镜页
-      </aside>
-    );
+    return <aside className="inspector-panel flex items-center justify-center p-4 text-[13px] text-[var(--ink-light)]">请选择分镜页</aside>;
   }
 
-  // Selected panel
-  const selectedPanel =
-    selection?.kind === "panel"
-      ? sodaPage.panels.find((p) => p.id === selection.id)
-      : null;
-
-  // Selected text
-  const selectedText =
-    selection?.kind === "text" || selection?.kind === "bubble"
-      ? sodaPage.texts.find((t) => t.id === selection.id)
-      : null;
-
-  // Selected overlay
-  const selectedOverlay =
-    selection?.kind === "overlay"
-      ? (sodaPage.overlays || []).find((o) => o.id === selection.id)
-      : null;
+  const selectedPanel = selection?.kind === "panel" ? sodaPage.panels.find((panel) => panel.id === selection.id) : undefined;
+  const figurePanel = selection?.kind === "figure" ? sodaPage.panels.find((panel) => panel.id === selection.panelId) : undefined;
+  const selectedFigure = selection?.kind === "figure" && figurePanel ? resolvedFigures(figurePanel, sodaPage.reading_direction).find((figure, index) => getFigureId(figure, index) === selection.id) : undefined;
+  const selectedText = selection?.kind === "text" || selection?.kind === "bubble" ? sodaPage.texts.find((text) => text.id === selection.id) : undefined;
+  const selectedOverlay = selection?.kind === "overlay" ? sodaPage.overlays?.find((overlay) => overlay.id === selection.id) : undefined;
+  const hasSelection = Boolean(selectedPanel || selectedFigure || selectedText || selectedOverlay);
+  const title = selectedFigure ? "人物" : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
+  const objectId = selectedFigure && selection?.kind === "figure" ? selection.id : selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
+  const deleteLabel = `删除${selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
+  const errorCount = notices.filter((notice) => notice.severity === "error").length;
+  const warningCount = notices.length - errorCount;
+  const firstPanel = [...sodaPage.panels].sort((a, b) => a.order - b.order)[0];
+  const panelTexts = selectedPanel ? sodaPage.texts.filter((text) => text.panel_id === selectedPanel.id) : [];
+  const textPanel = selectedText ? sodaPage.panels.find((panel) => panel.id === selectedText.panel_id) : undefined;
 
   return (
-    <aside className="flex h-full flex-col border-l border-[var(--line)] bg-[var(--paper-surface)] select-none">
-      {/* Header */}
-      <div className="border-b border-[var(--line)] bg-[var(--paper)] px-4 py-3">
-        <span className="font-mono text-[13px] font-bold tracking-wider text-[var(--ink)]">
-          属性面板 / INSPECTOR
-        </span>
+    <aside className="inspector-panel flex h-full min-h-0 flex-col" aria-label="属性检查器">
+      <div className="inspector-heading flex shrink-0 items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-semibold leading-tight">{title}</h2>
+          <p className="mt-0.5 truncate numeric text-[12px] leading-tight text-[var(--ink-light)]" title={objectId}>{objectId}</p>
+        </div>
+        {hasSelection && <button type="button" className="ui-icon-btn text-[var(--error)]" onClick={deleteSelection} title={deleteLabel} aria-label={deleteLabel}><Trash2 size={16} aria-hidden="true" /></button>}
       </div>
 
-      {/* Top Banner: VALIDATION ISSUES (422 ERRORS / WARNINGS) (P4c Item 6) */}
-      {validationIssues.length > 0 && (
-        <div className="border-b-2 border-[#d93829] bg-[#fdf2f1] p-3.5">
-          <div className="flex items-center justify-between font-bold text-[14px] text-[#9a321f]">
-            <span>⚠ 校验失败: 发现 {validationIssues.length} 个问题</span>
-            <span className="font-mono text-xs uppercase bg-[#d93829] text-white px-1.5 py-0.5 rounded font-bold">
-              HTTP 422
-            </span>
-          </div>
-          <div className="mt-2.5 space-y-2">
-            {validationIssues.map((issue, idx) => {
-              const isError = issue.severity === "error";
-              return (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    if (issue.panel_id) {
-                      selectItem({ kind: "panel", id: issue.panel_id });
-                    } else if (issue.field === "texts") {
-                      if (sodaPage.texts.length > 0) {
-                        selectItem({ kind: "text", id: sodaPage.texts[0].id });
-                      }
-                    }
-                  }}
-                  className={`cursor-pointer border-l-4 p-2.5 text-[13px] transition shadow-sm ${
-                    isError
-                      ? "border-[#d93829] bg-white text-[#171815] hover:bg-[#fff7f6]"
-                      : "border-amber-500 bg-white text-[#171815] hover:bg-amber-50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold">
-                    <span className={isError ? "text-[#d93829]" : "text-amber-800"}>
-                      {isError ? "✖ 错误 (Error)" : "▲ 警告 (Warning)"}
-                    </span>
-                    {issue.panel_id && (
-                      <span className="underline text-[#9a321f] text-xs font-semibold">
-                        点击定位 {issue.panel_id}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm leading-snug font-medium text-[#171815]">
-                    {issue.message}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Sticky/Collapsible Page Checklist when an item is selected */}
-        {(selectedPanel || selectedText || selectedOverlay) && checklist.length > 0 && (
-          <details className="border border-amber-300 bg-amber-50/90 p-2.5 rounded group shadow-xs">
-            <summary className="cursor-pointer select-none font-bold text-xs flex items-center justify-between text-amber-950">
-              <span className="flex items-center gap-1.5">
-                <span>📋 本页检查清单</span>
-                <span className="font-mono text-[11px] px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 font-semibold">
-                  {checklist.length} 项待处理
-                </span>
-              </span>
-              <span className="text-[11px] font-normal text-amber-800 underline">
-                展开清单
-              </span>
+      <div className="inspector-content min-h-0 flex-1 overflow-y-auto">
+        {notices.length > 0 ? (
+          <details className="validation-summary group" data-severity={errorCount ? "error" : "warning"} open={errorCount > 0}>
+            <summary className="flex cursor-pointer select-none items-center gap-2 text-[12px] font-medium">
+              {errorCount ? <AlertCircle size={15} className="shrink-0" aria-hidden="true" /> : <AlertTriangle size={15} className="shrink-0" aria-hidden="true" />}
+              <span className="flex-1">{errorCount ? `校验失败 · ${errorCount} 处错误${warningCount ? ` · ${warningCount} 条提醒` : ""}` : `${warningCount} 条提醒`}</span>
+              <ChevronDown size={14} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
+            <div className="validation-list mt-2" role="list">
+              {notices.map((notice) => <div key={notice.id} role="listitem"><button type="button" className="validation-item flex w-full items-start gap-2 text-left text-[12px] leading-relaxed" data-severity={notice.severity} disabled={!notice.targetKind || !notice.targetId} onClick={() => { if (notice.targetKind && notice.targetId) selectObject({ kind: notice.targetKind, id: notice.targetId }); }} title={notice.targetId ? `定位 ${notice.targetId}` : "页面提醒"}><span className="min-w-0 flex-1 break-words">{notice.message}</span>{notice.targetId && <ArrowUpRight size={13} className="mt-0.5 shrink-0" aria-hidden="true" />}</button></div>)}
+            </div>
+          </details>
+        ) : <div className="validation-summary flex items-center gap-2 text-[12px] text-[var(--ink-light)]" data-severity="success"><Check size={14} aria-hidden="true" />本页检查通过</div>}
 
-            <div className="mt-2.5 space-y-1.5 pt-2 border-t border-amber-200">
-              {checklist.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => selectItem({ kind: item.targetKind, id: item.targetId })}
-                  className="cursor-pointer border border-amber-200 bg-white/95 p-2 text-xs transition hover:bg-amber-100 hover:border-amber-400"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-amber-900 leading-snug">
-                      {item.title}
-                    </span>
-                    <span className="text-xs font-bold text-[var(--signal)] underline shrink-0 ml-2">
-                      跳转定位
-                    </span>
+        {selectedFigure && figurePanel && selection?.kind === "figure" ? (
+          <FigureInspector figure={selectedFigure} figureId={selection.id} panel={figurePanel} onSelectObject={selectObject} />
+        ) : selectedPanel ? (
+          <div key={selectedPanel.id}>
+            <InspectorSection title="画面描述"><label className="block"><span className="ui-label">这一格发生了什么？</span><textarea rows={3} value={selectedPanel.description || ""} onChange={(event) => updateSodaPanel(selectedPanel.id, { description: event.target.value })} placeholder="例如：姐姐推眼镜，向前一步" className="ui-textarea" /></label><div className="panel-split-actions"><span>需要更多格子？</span><div><button className="ui-btn ui-btn-sm" onClick={() => useEditorStore.getState().splitPanelHorizontal(selectedPanel.id)}><Rows2 />上下分格</button><button className="ui-btn ui-btn-sm" onClick={() => useEditorStore.getState().splitPanelVertical(selectedPanel.id)}><Columns2 />左右分格</button></div></div></InspectorSection>
+            <InspectorSection title="登场角色">
+              <div className="flex flex-wrap gap-2">{characters.map((character) => {
+                const checked = resolvedFigures(selectedPanel, sodaPage.reading_direction).some(figure => figure.character_id === character.id);
+                return <button key={character.id} type="button" aria-pressed={checked} onClick={() => useEditorStore.getState().togglePanelCharacter(selectedPanel.id, character.id)} className={`ui-btn ui-btn-sm ${checked ? "ui-btn-acid" : ""}`}>{checked && <Check size={12} aria-hidden="true" />}{character.display_name}</button>;
+              })}</div>
+            </InspectorSection>
+            <InspectorSection title="人物站位与姿态" open={false}>
+              <button type="button" onClick={() => {
+                useEditorStore.getState().addFigurePreset("stand", undefined, selectedPanel.id);
+                const addedSelection = useEditorStore.getState().selection;
+                if (addedSelection?.kind === "figure") selectObject(addedSelection);
+              }} className="ui-btn ui-btn-sm"><Plus size={14} aria-hidden="true" />添加人物</button>
+              {resolvedFigures(selectedPanel, sodaPage.reading_direction).map((figure, index) => (
+                <div key={getFigureId(figure, index)} className="space-y-3 border-t border-[var(--line)] pt-3">
+                  <div className="flex items-center justify-between"><span className="text-[12px] font-medium">人物 <span className="font-mono">{index + 1}</span></span><button type="button" onClick={() => removeFigureFromPanel(selectedPanel.id, index)} className="text-[12px] text-[var(--error)] hover:underline">移除</button></div>
+                  <button type="button" className="ui-btn ui-btn-sm" onClick={() => selectObject({ kind: "figure", id: getFigureId(figure, index), panelId: selectedPanel.id })}>编辑这个人物<ArrowUpRight size={13} aria-hidden="true" /></button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="min-w-0"><span className="ui-label">角色</span><InspectorSelect value={figure.character_id} options={characters.map((character) => ({ value: character.id, label: character.display_name }))} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { character_id: value })} /></label>
+                    <label className="min-w-0"><span className="ui-label">姿势</span><InspectorSelect value={figure.pose} options={POSE_OPTIONS} onChange={(value) => {
+                      const state = useEditorStore.getState();
+                      const panel = state.project.pages[0]?.panels.find(item => item.id === selectedPanel.id);
+                      const sketch = state.sketchGeometry?.panels.find(item => item.panel_id === selectedPanel.id)?.figures[index];
+                      updateFigureInPanel(selectedPanel.id, index, { pose: value, ...(panel ? { editor: applyFigurePoseInPanel(editableFigureEditor(figure, panel, sketch), value, panel) } : {}) });
+                    }} /></label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="min-w-0"><span className="ui-label">位置</span><input type="text" value={String(figure.position)} onChange={(event) => {
+                      const value = event.target.value;
+                      const number = parseFloat(value);
+                      const position = !isNaN(number) && number >= 0 && number <= 1 ? number : value as Figure["position"];
+                      const relative = typeof position === "number" ? position : ({ left: 0.23, center: 0.5, right: 0.77 } as Record<string, number>)[position];
+                      const width = selectedPanel.shape.type === "rect" ? selectedPanel.shape.w : Math.max(...selectedPanel.shape.points.map(([x]) => x)) - Math.min(...selectedPanel.shape.points.map(([x]) => x));
+                      updateFigureInPanel(selectedPanel.id, index, { position, ...(figure.editor && relative !== undefined ? { editor: { ...figure.editor, x: width * relative } } : {}) });
+                    }} placeholder="center / 0.5" className="ui-input" /></label>
+                    <label className="min-w-0"><span className="ui-label">朝向</span><InspectorSelect value={figure.facing} options={FACING_OPTIONS} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { facing: value as Figure["facing"], ...(figure.editor ? { editor: { ...figure.editor, flip: value === "left" ? true : value === "right" ? false : figure.editor.flip } } : {}) })} /></label>
+                    <label className="min-w-0"><span className="ui-label">景框</span><InspectorSelect value={figure.framing || ""} options={FRAMING_OPTIONS} onChange={(value) => updateFigureInPanel(selectedPanel.id, index, { framing: value ? value as Figure["framing"] : null })} /></label>
                   </div>
                 </div>
               ))}
-            </div>
-          </details>
-        )}
-
-        {/* PANEL INSPECTOR */}
-        {selectedPanel ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-2.5">
-              <div>
-                <span className="font-mono text-base font-bold text-[var(--signal)]">
-                  格 #{selectedPanel.order}
-                </span>
-                <span className="ml-2 font-mono text-xs text-[var(--ink-light)]">
-                  ID: {selectedPanel.id}
-                </span>
+            </InspectorSection>
+            <InspectorSection title="本格台词">
+              <div className="inspector-dialogue-list">
+                {panelTexts.length ? panelTexts.map((text, index) => {
+                  const speaker = characters.find((character) => character.id === text.speaker_id)?.display_name;
+                  return <button key={text.id} type="button" className="inspector-text-row" onClick={() => selectObject({ kind: "text", id: text.id })}>
+                    <span className="inspector-text-meta">{speaker || KIND_OPTIONS.find((option) => option.value === text.kind)?.label || "台词"} <span className="numeric">{index + 1}</span></span>
+                    <span className="inspector-text-content">{text.text?.trim() || "未填写内容"}</span>
+                    <ArrowUpRight size={14} aria-hidden="true" />
+                  </button>;
+                }) : <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">本格还没有台词，可以添加对话、旁白或拟声词。</p>}
               </div>
-              <button
-                type="button"
-                onClick={deleteSelection}
-                className="font-mono text-[13px] font-semibold text-[#d93829] hover:underline"
-              >
-                删除此格
-              </button>
-            </div>
-
-            {/* Reading Order */}
-            <div>
-              <label className="ui-label">阅读顺序 (Order)</label>
-              <input
-                type="number"
-                min={1}
-                value={selectedPanel.order}
-                onChange={(e) => updateSodaPanel(selectedPanel.id, { order: Number(e.target.value) || 1 })}
-                className="ui-input"
-              />
-            </div>
-
-            {/* Shot and Angle */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="ui-label">景别 (Shot)</label>
-                <CustomSelect
-                  value={selectedPanel.shot}
-                  options={SHOT_OPTIONS}
-                  onChange={(val) => updateSodaPanel(selectedPanel.id, { shot: val })}
-                />
+              <button type="button" className="ui-btn ui-btn-sm" onClick={() => {
+                addTextToPanel(selectedPanel.id);
+                const addedSelection = useEditorStore.getState().selection;
+                if (addedSelection?.kind === "text") selectObject(addedSelection);
+              }}><Plus size={14} aria-hidden="true" />添加台词</button>
+            </InspectorSection>
+            <InspectorSection title="镜头与阅读顺序" open={false}>
+              <label className="block"><span className="ui-label">阅读顺序</span><input type="number" min={1} value={selectedPanel.order} onChange={(event) => updateSodaPanel(selectedPanel.id, { order: Number(event.target.value) || 1 })} className="ui-input" /></label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="min-w-0"><span className="ui-label">景别</span><InspectorSelect value={selectedPanel.shot} options={SHOT_OPTIONS} onChange={(value) => updateSodaPanel(selectedPanel.id, { shot: value })} /></label>
+                <label className="min-w-0"><span className="ui-label">视角</span><InspectorSelect value={selectedPanel.angle} options={ANGLE_OPTIONS} onChange={(value) => updateSodaPanel(selectedPanel.id, { angle: value })} /></label>
               </div>
-
-              <div>
-                <label className="ui-label">视角 (Angle)</label>
-                <CustomSelect
-                  value={selectedPanel.angle}
-                  options={ANGLE_OPTIONS}
-                  onChange={(val) => updateSodaPanel(selectedPanel.id, { angle: val })}
-                />
-              </div>
-            </div>
-
-            {/* Characters Involved */}
-            <div>
-              <label className="ui-label">登场角色 (Characters)</label>
-              <div className="flex flex-wrap gap-2">
-                {characters.map((c) => {
-                  const isChecked = selectedPanel.character_ids?.includes(c.id);
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        const current = selectedPanel.character_ids || [];
-                        const next = isChecked
-                          ? current.filter((id) => id !== c.id)
-                          : [...current, c.id];
-                        updateSodaPanel(selectedPanel.id, { character_ids: next });
-                      }}
-                      className={`px-3 py-1.5 font-sans text-[13px] font-bold border transition ${
-                        isChecked
-                          ? "border-[var(--signal)] bg-[var(--signal)] text-white shadow-sm"
-                          : "border-[var(--line)] bg-[var(--paper-lift)] text-[var(--ink)] hover:border-[var(--ink)]"
-                      }`}
-                    >
-                      {c.display_name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Figures (Stick Figures / Poses) */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label className="ui-label mb-0">人物站位与姿态 (Figures)</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const defaultChar = characters[0]?.id || "char";
-                    const existingFigures = selectedPanel.figures || [];
-                    const defaultPos =
-                      existingFigures.length === 0
-                        ? "center"
-                        : existingFigures.length === 1
-                        ? "right"
-                        : 0.8;
-                    const newFigure: Figure = {
-                      character_id: defaultChar,
-                      pose: "stand",
-                      position: defaultPos,
-                      facing: "front",
-                      framing: null
-                    };
-                    addFigureToPanel(selectedPanel.id, newFigure);
-                  }}
-                  className="ui-btn ui-btn-sm text-[13px] font-bold"
-                >
-                  + 添加人物
-                </button>
-              </div>
-
-              <div className="space-y-2.5">
-                {(selectedPanel.figures || []).map((f, idx) => (
-                  <div key={idx} className="border border-[var(--line)] bg-[var(--paper-lift)] p-3 space-y-2">
-                    <div className="flex items-center justify-between border-b border-[var(--line)] pb-1.5">
-                      <span className="font-mono text-xs font-bold text-[var(--signal)]">
-                        人物 #{idx + 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeFigureFromPanel(selectedPanel.id, idx)}
-                        className="font-sans text-xs text-[#d93829] font-semibold hover:underline"
-                      >
-                        移除
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs font-semibold text-[var(--ink)] block mb-1">角色</label>
-                        <CustomSelect
-                          value={f.character_id}
-                          options={characters.map((c) => ({ value: c.id, label: `${c.display_name} (${c.id})` }))}
-                          onChange={(val) => updateFigureInPanel(selectedPanel.id, idx, { character_id: val })}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-[var(--ink)] block mb-1">姿势</label>
-                        <CustomSelect
-                          value={f.pose}
-                          options={POSE_OPTIONS}
-                          onChange={(val) => updateFigureInPanel(selectedPanel.id, idx, { pose: val })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-xs font-semibold text-[var(--ink)] block mb-1">位置</label>
-                        <input
-                          type="text"
-                          value={String(f.position)}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const num = parseFloat(val);
-                            updateFigureInPanel(selectedPanel.id, idx, {
-                              position: !isNaN(num) && num >= 0 && num <= 1 ? num : (val as any)
-                            });
-                          }}
-                          placeholder="left/center/right/0.5"
-                          className="ui-input text-[13px] py-1"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-[var(--ink)] block mb-1">朝向</label>
-                        <CustomSelect
-                          value={f.facing}
-                          options={FACING_OPTIONS}
-                          onChange={(val) => updateFigureInPanel(selectedPanel.id, idx, { facing: val as any })}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-[var(--ink)] block mb-1">景框</label>
-                        <CustomSelect
-                          value={f.framing || ""}
-                          options={FRAMING_OPTIONS}
-                          onChange={(val) => updateFigureInPanel(selectedPanel.id, idx, { framing: val ? (val as any) : null })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chinese Description */}
-            <div>
-              <label className="ui-label">中文分镜描述 (Description)</label>
-              <textarea
-                rows={3}
-                value={selectedPanel.description || ""}
-                onChange={(e) => updateSodaPanel(selectedPanel.id, { description: e.target.value })}
-                placeholder="例如：姐姐推眼镜，向前一步"
-                className="ui-textarea text-sm"
-              />
-            </div>
-
-            {/* English Caption (Collapsible) */}
-            <details
-              className="border border-[var(--line)] bg-[var(--paper-lift)] p-2.5 rounded group"
-              open={Boolean(selectedPanel.caption_en && selectedPanel.caption_en.trim())}
-            >
-              <summary className="ui-label mb-0 cursor-pointer select-none font-semibold flex items-center justify-between text-xs text-[var(--ink)]">
-                <span>英文生成提示词 (Caption EN)</span>
-                <span className="text-[11px] font-mono text-[var(--ink-light)] font-normal group-open:hidden">
-                  {selectedPanel.caption_en ? "已填写 (点击展开)" : "未填写 (点击展开)"}
-                </span>
-              </summary>
-              <div className="mt-2">
-                <textarea
-                  rows={3}
-                  value={selectedPanel.caption_en || ""}
-                  onChange={(e) => updateSodaPanel(selectedPanel.id, { caption_en: e.target.value })}
-                  placeholder="Top-right panel: inside kitchen..."
-                  className="ui-textarea font-mono text-xs"
-                />
-              </div>
-            </details>
-
-            {/* Shape Geometry Info */}
-            <div className="border border-[var(--line)] bg-[var(--paper-lift)] p-2.5 font-mono text-xs text-[var(--ink)]">
-              <span className="font-bold text-[var(--signal)]">形状几何: </span>
-              {selectedPanel.shape.type === "rect" ? (
-                <span>
-                  Rect ({selectedPanel.shape.x}, {selectedPanel.shape.y}) {selectedPanel.shape.w}×{selectedPanel.shape.h}
-                </span>
-              ) : (
-                <span>Quad 四边形 ({selectedPanel.shape.points?.length || 4} 顶点精确浮点)</span>
-              )}
-            </div>
+            </InspectorSection>
+            <InspectorSection title="英文生成提示词" open={false}><textarea aria-label="英文生成提示词" rows={3} value={selectedPanel.caption_en || ""} onChange={(event) => updateSodaPanel(selectedPanel.id, { caption_en: event.target.value })} placeholder="Top-right panel: inside kitchen…" className="ui-textarea" /></InspectorSection>
+            <InspectorSection title="几何信息" open={false}>
+              {selectedPanel.shape.type === "rect" ? <dl className="space-y-2 text-[12px]"><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">位置</dt><dd className="font-mono">{selectedPanel.shape.x}, {selectedPanel.shape.y}</dd></div><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">尺寸</dt><dd className="font-mono">{selectedPanel.shape.w} × {selectedPanel.shape.h}</dd></div></dl> : <p className="text-[12px] text-[var(--ink-light)]">四边形 · <span className="font-mono">{selectedPanel.shape.points?.length || 4}</span> 个顶点</p>}
+            </InspectorSection>
           </div>
         ) : selectedText ? (
-          /* TEXT INSPECTOR */
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-2.5">
-              <div>
-                <span className="font-mono text-base font-bold text-[var(--signal)]">
-                  台词框 ({selectedText.id})
-                </span>
+          <div key={selectedText.id}>
+            {textPanel && <div className="inspection-start inspector-return"><button type="button" className="ui-btn ui-btn-sm" onClick={() => selectObject({ kind: "panel", id: textPanel.id })}>返回格子 {textPanel.order}</button></div>}
+            <InspectorSection title="文字内容">
+              <label className="block"><span className="ui-label">类型</span><InspectorSelect value={selectedText.kind} options={KIND_OPTIONS} onChange={(value) => updateSodaText(selectedText.id, { kind: value })} /></label>
+              <label className="block"><span className="ui-label">原文台词</span><textarea rows={4} value={selectedText.text || ""} onChange={(event) => updateSodaText(selectedText.id, { text: event.target.value })} placeholder="输入台词，可换行" className="ui-textarea" /></label>
+              <label className="block"><span className="ui-label">说话人</span><InspectorSelect value={selectedText.speaker_id || ""} options={[{ value: "", label: "无（旁白 / 拟声）" }, ...characters.map((character) => ({ value: character.id, label: character.display_name }))]} onChange={(value) => updateSodaText(selectedText.id, { speaker_id: value || null })} /></label>
+            </InspectorSection>
+            <InspectorSection title="排版与气泡">
+              <label className="block"><span className="ui-label">字号（像素）</span><input type="number" min={8} max={128} step={1} value={resolveTextFontSize(selectedText.font_size, sodaPage.text_font_size, sodaPage.canvas_width)} className="ui-input w-full" onChange={(event) => {
+                if (event.target.value === "") return;
+                const value = Number(event.target.value);
+                if (Number.isFinite(value)) updateSodaText(selectedText.id, { font_size: Math.max(8, Math.min(128, value)) });
+              }} /></label>
+              <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">放不下时，文字会在框内自动缩小。放大文字框可保留设定的字号。</p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="min-w-0"><span className="ui-label">排列方向</span><InspectorSelect value={selectedText.direction || "vertical"} options={DIRECTION_OPTIONS} onChange={(value) => {
+                  const direction = value as "horizontal" | "vertical";
+                  const box = selectedText.bbox;
+                  let width = box?.w || 100;
+                  let height = box?.h || 200;
+                  if (direction === "horizontal" && height > width * 1.2) { width = Math.max(130, Math.min(260, Math.round(height * 0.7))); height = Math.max(65, Math.min(130, Math.round((box?.w || 100) * 0.9))); }
+                  else if (direction === "vertical" && width > height * 1.2) { width = Math.max(65, Math.min(130, Math.round(height * 0.9))); height = Math.max(140, Math.min(320, Math.round((box?.w || 100) * 0.7))); }
+                  updateSodaText(selectedText.id, { direction, bbox: box ? { ...box, w: width, h: height } : undefined });
+                }} /></label>
+                <label className="min-w-0"><span className="ui-label">气泡样式</span><InspectorSelect value={selectedText.bubble || "speech"} options={BUBBLE_OPTIONS} onChange={(value) => updateSodaText(selectedText.id, { bubble: value })} /></label>
               </div>
-              <button
-                type="button"
-                onClick={deleteSelection}
-                className="font-mono text-[13px] font-semibold text-[#d93829] hover:underline"
-              >
-                删除文字框
-              </button>
-            </div>
-
-            <div>
-              <label className="ui-label">类型 (Kind)</label>
-              <CustomSelect
-                value={selectedText.kind}
-                options={KIND_OPTIONS}
-                onChange={(val) => updateSodaText(selectedText.id, { kind: val as any })}
-              />
-            </div>
-
-            <div>
-              <label className="ui-label">原文台词文本 (Text)</label>
-              <textarea
-                rows={4}
-                value={selectedText.text || ""}
-                onChange={(e) => updateSodaText(selectedText.id, { text: e.target.value })}
-                placeholder="输入台词，可换行"
-                className="ui-textarea text-sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="ui-label">说话人 (Speaker)</label>
-                <CustomSelect
-                  value={selectedText.speaker_id || ""}
-                  options={[
-                    { value: "", label: "无 (旁白/拟声)" },
-                    ...characters.map((c) => ({ value: c.id, label: `${c.display_name} (${c.id})` }))
-                  ]}
-                  onChange={(val) => updateSodaText(selectedText.id, { speaker_id: val || null })}
-                />
-              </div>
-
-              <div>
-                <label className="ui-label">排列方向 (Direction)</label>
-                <CustomSelect
-                  value={selectedText.direction || "vertical"}
-                  options={DIRECTION_OPTIONS}
-                  onChange={(val) => {
-                    const newDir = val as any;
-                    const b = selectedText.bbox;
-                    let nextW = b?.w || 100;
-                    let nextH = b?.h || 200;
-                    if (newDir === "horizontal" && nextH > nextW * 1.2) {
-                      nextW = Math.max(130, Math.min(260, Math.round(nextH * 0.7)));
-                      nextH = Math.max(65, Math.min(130, Math.round((b?.w || 100) * 0.9)));
-                    } else if (newDir === "vertical" && nextW > nextH * 1.2) {
-                      nextW = Math.max(65, Math.min(130, Math.round(nextH * 0.9)));
-                      nextH = Math.max(140, Math.min(320, Math.round((b?.w || 100) * 0.7)));
-                    }
-                    updateSodaText(selectedText.id, {
-                      direction: newDir,
-                      bbox: b ? { ...b, w: nextW, h: nextH } : undefined
-                    });
-                  }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="ui-label">气泡样式 (Bubble Style)</label>
-              <CustomSelect
-                value={selectedText.bubble || "speech"}
-                options={BUBBLE_OPTIONS}
-                onChange={(val) => updateSodaText(selectedText.id, { bubble: val as any })}
-              />
-            </div>
-
-            {selectedText.bubble !== "box" && selectedText.bubble !== "none" && (
-              <div>
-                <label className="ui-label">气泡引线 (Tail)</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (selectedText.tail_tip) {
-                        updateSodaText(selectedText.id, { tail_tip: undefined });
-                      } else {
-                        const defaultTx = Math.round((selectedText.bbox?.w || 100) / 2);
-                        const defaultTy = Math.round((selectedText.bbox?.h || 200) + 28);
-                        updateSodaText(selectedText.id, { tail_tip: [defaultTx, defaultTy] });
-                      }
-                    }}
-                    className={`flex-1 px-3 py-1.5 text-xs rounded border font-mono transition text-center ${
-                      selectedText.tail_tip
-                        ? "bg-[var(--signal)] text-white border-[var(--signal)] font-bold shadow-sm"
-                        : "bg-[var(--paper-lift)] text-[var(--ink)] border-[var(--line)] hover:border-[var(--ink)]"
-                    }`}
-                  >
-                    {selectedText.tail_tip ? "✓ 已开启引线 (拖拽画布红点)" : "+ 开启气泡引线"}
-                  </button>
-                  {selectedText.tail_tip && (
-                    <button
-                      type="button"
-                      onClick={() => updateSodaText(selectedText.id, { tail_tip: undefined })}
-                      className="text-xs text-red-500 hover:underline px-1 font-mono"
-                    >
-                      移除
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {selectedText.bbox && (
-              <div className="border border-[var(--line)] bg-[var(--paper-lift)] p-2.5 font-mono text-xs text-[var(--ink)]">
-                位置: ({selectedText.bbox.x}, {selectedText.bbox.y}) 尺寸: {selectedText.bbox.w}×{selectedText.bbox.h}
-              </div>
-            )}
+              {selectedText.bubble !== "box" && selectedText.bubble !== "none" && <div><span className="ui-label">气泡引线</span><button type="button" aria-pressed={Boolean(selectedText.tail_tip)} onClick={() => updateSodaText(selectedText.id, { tail_tip: selectedText.tail_tip ? null : [Math.round((selectedText.bbox?.w || 100) / 2), Math.round((selectedText.bbox?.h || 200) + 28)] })} className="ui-btn ui-btn-sm w-full justify-start">{selectedText.tail_tip ? <Check size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}{selectedText.tail_tip ? "已开启引线 · 拖拽画布红点" : "开启气泡引线"}</button></div>}
+            </InspectorSection>
+            {selectedText.bbox && <InspectorSection title="几何信息"><dl className="space-y-2 text-[12px]"><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">位置</dt><dd className="font-mono">{selectedText.bbox.x}, {selectedText.bbox.y}</dd></div><div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">尺寸</dt><dd className="font-mono">{selectedText.bbox.w} × {selectedText.bbox.h}</dd></div></dl></InspectorSection>}
           </div>
         ) : selectedOverlay ? (
-          /* OVERLAY INSPECTOR */
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-2.5">
-              <span className="font-mono text-base font-bold text-[var(--signal)]">
-                跨格人物 ({selectedOverlay.id})
-              </span>
-              <button
-                type="button"
-                onClick={deleteSelection}
-                className="font-mono text-[13px] font-semibold text-[#d93829] hover:underline"
-              >
-                删除
-              </button>
-            </div>
-
-            <div>
-              <label className="ui-label">人物角色 (Character)</label>
-              <CustomSelect
-                value={selectedOverlay.character_id}
-                options={characters.map((c) => ({ value: c.id, label: c.display_name }))}
-                onChange={(val) => updateSodaOverlay(selectedOverlay.id, { character_id: val })}
-              />
-            </div>
-
-            <div>
-              <label className="ui-label">出格动作描述</label>
-              <textarea
-                rows={3}
-                value={selectedOverlay.description}
-                onChange={(e) => updateSodaOverlay(selectedOverlay.id, { description: e.target.value })}
-                className="ui-textarea text-sm"
-              />
-            </div>
+          <div key={selectedOverlay.id}>
+            <InspectorSection title="人物角色"><label className="block"><span className="ui-label">角色</span><InspectorSelect value={selectedOverlay.character_id} options={characters.map((character) => ({ value: character.id, label: character.display_name }))} onChange={(value) => updateSodaOverlay(selectedOverlay.id, { character_id: value })} /></label></InspectorSection>
+            <InspectorSection title="出格动作描述"><textarea aria-label="出格动作描述" rows={3} value={selectedOverlay.description} onChange={(event) => updateSodaOverlay(selectedOverlay.id, { description: event.target.value })} className="ui-textarea" /></InspectorSection>
           </div>
         ) : (
-          /* PAGE CHECKLIST & OVERVIEW (P4c Item 8) */
-          <div className="space-y-5">
-            {/* Checklist Section */}
-            <div className="border border-[var(--line)] bg-[var(--paper-lift)] p-3.5 shadow-sm">
-              <div className="flex items-center justify-between border-b border-[var(--line)] pb-2">
-                <span className="font-bold text-[14px] text-[var(--ink)]">
-                  📋 本页检查清单 (Page Checklist)
-                </span>
-                <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-[var(--paper-wash)] text-[var(--ink)]">
-                  {checklist.length === 0 ? "全部通过" : `${checklist.length} 项待处理`}
-                </span>
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {checklist.length === 0 ? (
-                  <div className="p-3 text-center text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200">
-                    ✔ 本页所有分镜描述完整、角色齐备，无超长台词与多 LoRA 冲突
-                  </div>
-                ) : (
-                  checklist.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => selectItem({ kind: item.targetKind, id: item.targetId })}
-                      className="cursor-pointer border border-amber-300 bg-amber-50/70 p-2.5 text-xs transition hover:bg-amber-100 hover:border-amber-400"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-amber-900 leading-snug">
-                          {item.title}
-                        </span>
-                        <span className="text-xs font-bold text-[var(--signal)] underline shrink-0 ml-2">
-                          跳转定位
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Page Overview Section */}
-            <div className="space-y-3">
-              <div className="border-b border-[var(--line)] pb-2">
-                <span className="font-mono text-xs font-bold text-[var(--ink)]">
-                  分镜页配置: {sodaPage.id}
-                </span>
-              </div>
-
-              <div className="space-y-2 text-sm text-[var(--ink)]">
-                <div className="flex justify-between border-b border-[var(--line)] py-1.5">
-                  <span className="text-[var(--ink-light)] font-medium">画布尺寸</span>
-                  <span className="font-mono font-bold">{sodaPage.canvas_width} × {sodaPage.canvas_height}</span>
-                </div>
-                <div className="flex justify-between border-b border-[var(--line)] py-1.5">
-                  <span className="text-[var(--ink-light)] font-medium">阅读方向</span>
-                  <span className="font-mono font-semibold">{sodaPage.reading_direction === "rtl" ? "从右往左 (RTL)" : "从左往右"}</span>
-                </div>
-                <div className="flex justify-between border-b border-[var(--line)] py-1.5">
-                  <span className="text-[var(--ink-light)] font-medium">分镜格数</span>
-                  <span className="font-mono font-bold text-[var(--signal)]">{sodaPage.panels.length} 格</span>
-                </div>
-                <div className="flex justify-between border-b border-[var(--line)] py-1.5">
-                  <span className="text-[var(--ink-light)] font-medium">台词框数</span>
-                  <span className="font-mono font-semibold">{sodaPage.texts.length} 项</span>
-                </div>
-              </div>
-
-              {sodaPage.style_prompt && (
-                <div>
-                  <label className="ui-label">画面风格提示词 (Style Prompt)</label>
-                  <div className="max-h-36 overflow-y-auto border border-[var(--line)] bg-[var(--paper-lift)] p-2.5 font-mono text-xs text-[var(--ink)] leading-relaxed">
-                    {sodaPage.style_prompt}
-                  </div>
-                </div>
-              )}
-            </div>
+          <div key="page">
+            <section className="inspection-start">
+              <h3 className="text-[14px] font-semibold">{firstPanel ? "从这一格开始" : "开始你的分镜页"}</h3>
+              <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-light)]">{firstPanel ? "选中一个格子，填写画面描述，安排人物，再添加台词。也可以直接点击画布上的格子。" : "先建立第一个格子，再安排版式和画面内容。"}</p>
+              {firstPanel ? <button type="button" className="ui-btn mt-3" onClick={() => selectObject({ kind: "panel", id: firstPanel.id })}>编辑第 {firstPanel.order} 格<ArrowUpRight size={14} aria-hidden="true" /></button> : onStartPage && <button type="button" className="ui-btn mt-3" onClick={onStartPage}><Plus size={14} aria-hidden="true" />建立第一个格子</button>}
+            </section>
+            <InspectorSection title="页面信息" open={false}>
+              <dl className="space-y-3 text-[13px]">
+                <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">画布尺寸</dt><dd className="font-mono">{sodaPage.canvas_width} × {sodaPage.canvas_height}</dd></div>
+                <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">阅读方向</dt><dd>{sodaPage.reading_direction === "rtl" ? "从右往左" : "从左往右"}</dd></div>
+                <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">分镜格数</dt><dd><span className="font-mono">{sodaPage.panels.length}</span> 格</dd></div>
+                <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">台词框数</dt><dd><span className="font-mono">{sodaPage.texts.length}</span> 项</dd></div>
+              </dl>
+            </InspectorSection>
+            {sodaPage.style_prompt && <InspectorSection title="画面风格提示词" open={false}><p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--ink-light)]">{sodaPage.style_prompt}</p></InspectorSection>}
           </div>
         )}
       </div>

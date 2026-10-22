@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { v4 as uuidv4 } from "uuid";
 import {
+  ApiError,
   cancelJob as apiCancelJob,
   CLIENT_ID,
   compilePage as apiCompilePage,
@@ -18,6 +19,7 @@ import {
   layoutSuggest as apiLayoutSuggest,
   pickRender as apiPickRender,
   savePage as apiSavePage,
+  saveCharacterColor as apiSaveCharacterColor,
   skewPage as apiSkewPage,
   validatePage as apiValidatePage
 } from "./api";
@@ -27,10 +29,14 @@ import {
   sodaPageToProjectPage
 } from "./project";
 import { generatePageSketchGeometry } from "./sketchGeometry";
+import { ensureFigureEditor, getFigureId, withFigurePose } from "./figureRig";
+import { TEXT_PRESETS, type TextPresetId } from "./elementPresets";
+import { resolvedFigures } from "./figures";
 import {
   Bubble,
   CharacterSummary,
   Figure,
+  FigurePose,
   Job,
   LayoutCandidate,
   PageSummary,
@@ -77,6 +83,8 @@ type EditorState = {
   currentVersion: string;
   hasUnsavedChanges: boolean;
   isSaving: boolean;
+  savePromise: Promise<boolean> | null;
+  editRevision: number;
   lastSavedTime: string | null;
 
   // Dirty tracking for precision & persistence (P4c Items 2 & 3)
@@ -96,6 +104,8 @@ type EditorState = {
   historyFuture: Array<{ project: Project; sodaPage: SodaPage }>;
   canUndo: boolean;
   canRedo: boolean;
+  historyGroup: { key: string; timestamp: number } | null;
+  recordEdit: (key: string) => void;
   pushHistory: () => void;
   undo: () => void;
   redo: () => void;
@@ -148,6 +158,7 @@ type EditorState = {
   };
 
   commandPaletteOpen: boolean;
+  importModalOpen: boolean;
 
   // Notification
   notice: string | null;
@@ -163,17 +174,24 @@ type EditorState = {
   init: () => Promise<void>;
   selectPage: (pageId: string) => Promise<void>;
   createPage: () => Promise<void>;
+  importPageAsNew: (page: SodaPage) => Promise<{ id: string; selected: boolean }>;
+  startFirstPanel: () => void;
   deletePage: (pageId: string) => Promise<void>;
 
   // Canvas & Page updates
   updatePanel: (id: string, patch: Partial<Panel>) => void;
   updateSodaPanel: (id: string, patch: Partial<SodaPanel>) => void;
+  togglePanelCharacter: (panelId: string, characterId: string) => void;
   updateBubble: (id: string, patch: Partial<Bubble>) => void;
   updateSodaText: (id: string, patch: Partial<SodaText>) => void;
   updateSodaOverlay: (id: string, patch: Partial<SodaOverlay>) => void;
   addFigureToPanel: (panelId: string, figure: Figure) => void;
   removeFigureFromPanel: (panelId: string, figureIndex: number) => void;
   updateFigureInPanel: (panelId: string, figureIndex: number, patch: Partial<Figure>) => void;
+  addTextPreset: (preset: TextPresetId, panelId?: string) => void;
+  addFigurePreset: (pose?: FigurePose, pair?: "handshake" | "hug", panelId?: string) => void;
+  updateFigureById: (panelId: string, id: string, patch: Partial<Figure>) => void;
+  removeFigureById: (panelId: string, id: string) => void;
 
   // Floating toolbar actions (P4c Item 5)
   splitPanelHorizontal: (panelId: string) => void;
@@ -195,7 +213,7 @@ type EditorState = {
   closeLayoutModal: () => void;
   applyLayoutCandidate: (candidateId: string) => Promise<void>;
 
-  openPreviewModal: () => void;
+  openPreviewModal: () => Promise<void>;
   closePreviewModal: () => void;
 
   openCompileModal: () => Promise<void>;
@@ -207,13 +225,31 @@ type EditorState = {
 
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
+  openImportModal: () => void;
+  closeImportModal: () => void;
 
   pickRender: (renderPath: string) => Promise<void>;
   cancelJob: (jobId: string) => Promise<void>;
 
   setLayerSettings: (patch: Partial<LayerSettings>) => void;
+  updateCharacterColor: (id: string, color: string) => Promise<boolean>;
   setNotice: (text: string) => void;
 };
+
+function insertionPanelId(state: Pick<EditorState, "selection" | "sodaPage" | "project">, explicit?: string): string | undefined {
+  if (explicit) return explicit;
+  const selection = state.selection;
+  if (selection?.kind === "panel") return selection.id;
+  if (selection?.kind === "figure") return selection.panelId;
+  if (selection?.kind === "text" || selection?.kind === "bubble") {
+    const panelId = state.sodaPage?.texts.find(text => text.id === selection.id)?.panel_id;
+    if (panelId) return panelId;
+  }
+  return [...(state.project.pages[0]?.panels || [])].sort((a, b) => a.order - b.order)[0]?.id;
+}
+
+let pageLoadSequence = 0;
+let pageReloadSequence = 0;
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   sodaProject: null,
@@ -226,6 +262,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   currentVersion: "",
   hasUnsavedChanges: false,
   isSaving: false,
+  savePromise: null,
+  editRevision: 0,
   lastSavedTime: null,
 
   dirtyPanelIds: new Set<string>(),
@@ -241,20 +279,33 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   historyFuture: [],
   canUndo: false,
   canRedo: false,
+  historyGroup: null,
+
+  // Coalesce typing and continuous adjustments while keeping separate objects
+  // and edits separated by a pause independently undoable.
+  recordEdit: (key) => {
+    const group = get().historyGroup;
+    const timestamp = Date.now();
+    if (!group || group.key !== key || timestamp - group.timestamp > 750) {
+      get().pushHistory();
+    }
+    set({ historyGroup: { key, timestamp } });
+  },
 
   pushHistory: () => {
     const state = get();
     if (!state.sodaPage) return;
     const snapshot = {
       project: JSON.parse(JSON.stringify(state.project)),
-      sodaPage: JSON.parse(JSON.stringify(state.sodaPage))
+      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds)
     };
     const nextPast = [...state.historyPast.slice(-29), snapshot];
     set({
       historyPast: nextPast,
       historyFuture: [],
       canUndo: true,
-      canRedo: false
+      canRedo: false,
+      historyGroup: null
     });
   },
 
@@ -265,11 +316,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const nextPast = state.historyPast.slice(0, -1);
     const currentSnapshot = {
       project: JSON.parse(JSON.stringify(state.project)),
-      sodaPage: JSON.parse(JSON.stringify(state.sodaPage))
+      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds)
     };
     set({
       project: prev.project,
       sodaPage: prev.sodaPage,
+      dirtyPanelIds: new Set<string>(),
+      dirtyBubbleIds: new Set<string>(),
+      sketchGeometry: generatePageSketchGeometry(prev.sodaPage, state.characters as any),
+      historyGroup: null,
       historyPast: nextPast,
       historyFuture: [currentSnapshot, ...state.historyFuture],
       canUndo: nextPast.length > 0,
@@ -285,11 +340,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const nextFuture = state.historyFuture.slice(1);
     const currentSnapshot = {
       project: JSON.parse(JSON.stringify(state.project)),
-      sodaPage: JSON.parse(JSON.stringify(state.sodaPage))
+      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds)
     };
     set({
       project: next.project,
       sodaPage: next.sodaPage,
+      dirtyPanelIds: new Set<string>(),
+      dirtyBubbleIds: new Set<string>(),
+      sketchGeometry: generatePageSketchGeometry(next.sodaPage, state.characters as any),
+      historyGroup: null,
       historyPast: [...state.historyPast, currentSnapshot],
       historyFuture: nextFuture,
       canUndo: true,
@@ -301,7 +360,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   layerSettings: {
     showSketch: false, // Default OFF per P4c Item 1
     sketchOpacity: 0.35,
-    showRender: true,
+    showRender: false,
     renderOpacity: 0.8
   },
   renders: null,
@@ -329,6 +388,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   commandPaletteOpen: false,
+  importModalOpen: false,
 
   notice: null,
   noticeHistory: [],
@@ -356,7 +416,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         for (const c of res.characters) {
           charMap[c.id] = c;
         }
-        set({ characterDetails: charMap });
+        set((state) => ({ characterDetails: charMap, characters: state.characters.map(character => ({
+          ...character, ...(charMap[character.id]?.sketch_color ? { sketch_color: charMap[character.id].sketch_color } : {})
+        })) }));
       }).catch(console.error);
 
       const requestedPage = new URLSearchParams(window.location.hash.slice(1)).get("page");
@@ -429,17 +491,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   selectPage: async (pageId: string) => {
+    const requestSequence = ++pageLoadSequence;
     const state = get();
     // If has unsaved changes, prompt save or preserve
-    if (state.hasUnsavedChanges) {
+    if (state.hasUnsavedChanges || state.savePromise) {
       if (!(await state.saveCurrentPage())) {
-        window.history.replaceState(null, "", `#page=${encodeURIComponent(state.activePageId)}`);
+        if (requestSequence === pageLoadSequence) window.history.replaceState(null, "", `#page=${encodeURIComponent(state.activePageId)}`);
         return;
       }
     }
+    if (requestSequence !== pageLoadSequence) return;
+    const revision = get().editRevision;
 
     try {
       const { page, version } = await apiGetPage(pageId);
+      if (requestSequence !== pageLoadSequence) return;
+      if (get().editRevision !== revision) {
+        window.history.replaceState(null, "", `#page=${encodeURIComponent(get().activePageId)}`);
+        get().setNotice("载入期间有新的编辑，已保留当前页；保存后可再次切换");
+        return;
+      }
       const openKomaPage = sodaPageToProjectPage(page);
 
       set({
@@ -453,6 +524,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         dirtyBubbleIds: new Set<string>(),
         historyPast: [],
         historyFuture: [],
+        historyGroup: null,
         canUndo: false,
         canRedo: false,
         project: {
@@ -467,11 +539,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       // Fetch sketch geometry (P4c Item 1)
       apiGetSketchGeometry(pageId).then((geo) => {
+        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return;
         set({
           sketchGeometry: geo,
           sketchGeometryUnavailable: !geo
         });
       }).catch(() => {
+        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return;
         set({
           sketchGeometry: null,
           sketchGeometryUnavailable: true
@@ -480,6 +554,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       // Fetch renders
       apiGetRenders(pageId).then((r) => {
+        if (get().activePageId !== pageId || get().currentVersion !== version) return;
         let selectedUrl: string | null = null;
         if (r.selected_render) {
           const matched = r.renders.find((x) => x.path === r.selected_render);
@@ -490,6 +565,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       get().setNotice(`已载入分镜页: ${pageId}`);
     } catch (err: any) {
+      if (requestSequence !== pageLoadSequence) return;
       console.error(`Failed to load page ${pageId}`, err);
       get().setNotice(`载入分镜页失败: ${err.message}`);
     }
@@ -502,16 +578,97 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         id: pageId,
         canvas_width: 1024,
         canvas_height: 1536,
-        panels: [],
+        panels: [{
+          id: "p1", order: 1, shot: "medium", angle: "eye", description: "", caption_en: "",
+          character_ids: [], figures: [],
+          shape: { type: "rect", x: 40, y: 40, w: 944, h: 1456 }
+        }],
         texts: []
       });
       const { pages } = await apiGetPages();
       set({ pages });
       await get().selectPage(page.id);
-      get().setNotice(`已新建分镜页: ${page.id}`);
+      get().selectItem({ kind: "panel", id: page.panels[0].id });
+      get().setNotice("已新建分镜页，先填写第一格的画面描述");
     } catch (err: any) {
       get().setNotice(`新建分镜页失败: ${err.message}`);
     }
+  },
+
+  importPageAsNew: async (page) => {
+    const initialPageId = get().activePageId;
+    const requestSequence = pageLoadSequence;
+    if ((get().hasUnsavedChanges || get().savePromise) && !(await get().saveCurrentPage())) {
+      throw new Error("当前页尚未保存，未导入新页。请先处理保存提示后重试。");
+    }
+    if (get().activePageId !== initialPageId || pageLoadSequence !== requestSequence) {
+      throw new Error("当前页面正在切换，未导入新页。请在切换完成后重试。");
+    }
+    const revision = get().editRevision;
+    const imported = JSON.parse(JSON.stringify(page)) as SodaPage;
+    imported.id = `import_${uuidv4().replace(/-/g, "").slice(0, 12)}`;
+    // Page.from_dict accepts this legacy alias before id. An external alias
+    // must never choose the new file's identity or defeat the safe fresh id.
+    delete imported.page_id;
+
+    let created: SodaPage;
+    let createdVersion: string;
+    try {
+      ({ page: created, version: createdVersion } = await apiCreatePage(imported));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 422) {
+        const issues = error.data?.errors || error.data?.issues || [];
+        get().setNotice(`导入未完成：${issues.map((issue: ValidationIssue) => issue.message).slice(0, 3).join("；") || error.message}`);
+      }
+      throw error;
+    }
+
+    // Once POST succeeds, never report a later list/load failure as a failed
+    // import: the file exists and another import would create a duplicate.
+    try {
+      const { pages } = await apiGetPages();
+      set({ pages });
+    } catch {
+      const summary: PageSummary = {
+        id: created.id, description: created.description || "", panel_count: created.panels.length, version: createdVersion
+      };
+      set({ pages: [...get().pages.filter(item => item.id !== created.id), summary] });
+      get().setNotice(`已导入新页 ${created.id}，页面列表刷新失败；请在左侧选择该页，勿重复导入。`);
+      return { id: created.id, selected: false };
+    }
+
+    if (get().activePageId !== initialPageId || get().editRevision !== revision || get().hasUnsavedChanges || pageLoadSequence !== requestSequence) {
+      get().setNotice(`已导入新页 ${created.id}，保留当前编辑位置；可从左侧打开。`);
+      return { id: created.id, selected: false };
+    }
+    await get().selectPage(created.id);
+    const selected = get().activePageId === created.id && get().sodaPage?.id === created.id;
+    get().setNotice(selected ? `已导入新分镜页 ${created.id}` : `已导入新页 ${created.id}，未自动打开；可从左侧选择，勿重复导入。`);
+    return { id: created.id, selected };
+  },
+
+  startFirstPanel: () => {
+    const state = get();
+    if (!state.sodaPage) return;
+    if (state.sodaPage.panels.length) {
+      state.selectItem({ kind: "panel", id: state.sodaPage.panels[0].id });
+      return;
+    }
+    state.pushHistory();
+    const panel: SodaPanel = {
+      id: "p1", order: 1, shot: "medium", angle: "eye", description: "", caption_en: "",
+      character_ids: [], figures: [],
+      shape: { type: "rect", x: 40, y: 40, w: Math.max(40, state.sodaPage.canvas_width - 80), h: Math.max(40, state.sodaPage.canvas_height - 80) }
+    };
+    const nextPage = { ...state.sodaPage, panels: [panel] };
+    set({
+      sodaPage: nextPage,
+      project: { ...state.project, pages: [sodaPageToProjectPage(nextPage)] },
+      sketchGeometry: generatePageSketchGeometry(nextPage, state.characters as any),
+      selection: { kind: "panel", id: panel.id },
+      dirtyPanelIds: new Set([panel.id])
+    });
+    get().triggerAutoSave();
   },
 
   deletePage: async (pageId: string) => {
@@ -521,10 +678,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return;
     }
     try {
-      await apiDeletePage(pageId, state.currentVersion);
+      if (pageId === get().activePageId && (get().hasUnsavedChanges || get().savePromise)) {
+        if (!(await get().saveCurrentPage())) return;
+      }
+      const version = pageId === get().activePageId ? get().currentVersion : (await apiGetPage(pageId)).version;
+      await apiDeletePage(pageId, version);
       const { pages } = await apiGetPages();
       set({ pages });
-      if (state.activePageId === pageId && pages.length > 0) {
+      if (get().activePageId === pageId && pages.length > 0) {
+        clearTimeout(get().autoSaveTimer);
+        set({ hasUnsavedChanges: false, autoSaveTimer: null, dirtyPanelIds: new Set(), dirtyBubbleIds: new Set() });
         await get().selectPage(pages[0].id);
       }
       get().setNotice(`分镜页 ${pageId} 已移入 .trash 目录`);
@@ -535,10 +698,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update canvas panel
   updatePanel: (id: string, patch: Partial<Panel>) => {
+    get().recordEdit(`panel:${id}`);
     const state = get();
     state.dirtyPanelIds.add(id);
     const activePage = state.project.pages[0];
     if (!activePage) return;
+
+    const originalPanel = activePage.panels.find(panel => panel.id === id);
+    const dx = originalPanel && patch.x !== undefined ? patch.x - originalPanel.x : 0;
+    const dy = originalPanel && patch.y !== undefined ? patch.y - originalPanel.y : 0;
 
     const nextPanels = activePage.panels.map((p) => {
       if (p.id !== id) return p;
@@ -548,24 +716,33 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       };
     });
 
+    const nextBubbles = activePage.bubbles.map(bubble => {
+      if ((!dx && !dy) || bubble.sodaData?.panel_id !== id) return bubble;
+      state.dirtyBubbleIds.add(bubble.id);
+      return { ...bubble, x: bubble.x + dx, y: bubble.y + dy };
+    });
+    const nextActivePage = { ...activePage, panels: nextPanels, bubbles: nextBubbles };
     const nextProject = {
       ...state.project,
       pages: [
-        {
-          ...activePage,
-          panels: nextPanels
-        }
+        nextActivePage
       ]
     };
 
-    set({ project: nextProject });
+    const nextSodaPage = state.sodaPage ? projectPageToSodaPage(nextActivePage, {
+      ...state.sodaPage,
+      ...(state.sodaPage.overlays ? { overlays: state.sodaPage.overlays.map(overlay => overlay.panel_id === id && (dx || dy)
+        ? { ...overlay, rect: { ...overlay.rect, x: overlay.rect.x + dx, y: overlay.rect.y + dy } } : overlay) } : {})
+    }, state.dirtyPanelIds, state.dirtyBubbleIds) : null;
+    set({ project: nextProject, ...(nextSodaPage ? { sodaPage: nextSodaPage, sketchGeometry: generatePageSketchGeometry(nextSodaPage, state.characters as any) } : {}) });
     get().triggerAutoSave();
   },
 
   // Update Soda panel metadata (shot, angle, figures, description, caption_en)
   updateSodaPanel: (id: string, patch: Partial<SodaPanel>) => {
+    get().recordEdit(`panel:${id}`);
     const state = get();
-    state.dirtyPanelIds.add(id);
+    if (patch.shape) state.dirtyPanelIds.add(id);
     if (!state.sodaPage) return;
 
     const activePage = state.project.pages[0];
@@ -598,7 +775,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
 
     // Real-time local stick figure geometry update for 0ms lag
-    const nextSketch = generatePageSketchGeometry(nextSodaPage, state.characters as any);
+    const nextSketch = generatePageSketchGeometry(
+      projectPageToSodaPage({ ...activePage, panels: nextPanels }, nextSodaPage, state.dirtyPanelIds, state.dirtyBubbleIds),
+      state.characters as any
+    );
 
     set({
       sodaPage: nextSodaPage,
@@ -617,8 +797,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     get().triggerAutoSave();
   },
 
+  // The cast buttons edit the visible people as well as the generated cast.
+  togglePanelCharacter: (panelId, characterId) => {
+    const state = get();
+    const panel = state.project.pages[0]?.panels.find(item => item.id === panelId);
+    if (!panel?.sodaData || !state.sodaPage) return;
+    const figures = resolvedFigures(panel.sodaData, state.sodaPage.reading_direction)
+      .map((figure, index) => ({ ...figure, id: getFigureId(figure, index) }));
+    const present = figures.some(figure => figure.character_id === characterId);
+    const nextFigures: Figure[] = present ? figures.filter(figure => figure.character_id !== characterId) : [
+      ...figures,
+      {
+        id: `fig_${uuidv4().slice(0, 8)}`,
+        character_id: characterId,
+        pose: "stand",
+        position: figures.length ? (state.sodaPage.reading_direction === "rtl" ? 0.23 : 0.77) : "center",
+        facing: "front"
+      }
+    ];
+    state.pushHistory();
+    set({ historyGroup: { key: `panel:${panelId}`, timestamp: Date.now() } });
+    get().updateSodaPanel(panelId, {
+      figures: nextFigures,
+      character_ids: [...new Set(nextFigures.map(figure => figure.character_id).filter(Boolean))]
+    });
+    set({ historyGroup: null });
+  },
+
   // Update Bubble (bidirectional sync with sodaData.bbox, fixing S1)
   updateBubble: (id: string, patch: Partial<Bubble>) => {
+    get().recordEdit(`text:${id}`);
     const state = get();
     state.dirtyBubbleIds.add(id);
     const activePage = state.project.pages[0];
@@ -662,6 +870,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update text box (bidirectional sync with OpenKoma bubble)
   updateSodaText: (id: string, patch: Partial<SodaText>) => {
+    get().recordEdit(`text:${id}`);
     const state = get();
     state.dirtyBubbleIds.add(id);
     if (!state.sodaPage) return;
@@ -691,6 +900,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           width: patch.bbox ? Math.max(30, patch.bbox.w) : b.width,
           height: patch.bbox ? Math.max(30, patch.bbox.h) : b.height,
           text: patch.text ?? b.text,
+          fontSize: typeof patch.font_size === "number" && Number.isFinite(patch.font_size) ? Math.max(1, Math.min(512, patch.font_size)) : b.fontSize,
+          ...(patch.bubble ? {
+            type: patch.bubble === "box" || patch.bubble === "none" ? "rect" as const : "rounded" as const,
+            background: patch.bubble === "none" ? "transparent" : "#ffffff",
+            borderColor: patch.bubble === "none" ? "transparent" : "#171815",
+            borderWidth: patch.bubble === "none" ? 0 : 2
+          } : {}),
           direction: patch.direction ? (patch.direction as any) : b.direction,
           tailTip: patch.tail_tip !== undefined ? patch.tail_tip : b.tailTip,
           sodaData: {
@@ -718,6 +934,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // Update overlay
   updateSodaOverlay: (id: string, patch: Partial<SodaOverlay>) => {
+    get().recordEdit(`overlay:${id}`);
     const state = get();
     if (!state.sodaPage) return;
 
@@ -741,46 +958,115 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   addFigureToPanel: (panelId: string, figure: Figure) => {
     const state = get();
-    state.dirtyPanelIds.add(panelId);
     if (!state.sodaPage) return;
 
     const targetPanel = state.sodaPage.panels.find((p) => p.id === panelId);
     if (!targetPanel) return;
 
-    const figures = [...(targetPanel.figures || []), figure];
+    const created = { ...figure, id: figure.id || `fig_${uuidv4().slice(0, 8)}` };
+    const figures = [...resolvedFigures(targetPanel, state.sodaPage.reading_direction).map((item, index) => ({ ...item, id: getFigureId(item, index) })), created];
     const character_ids = Array.from(
       new Set([...(targetPanel.character_ids || []), figure.character_id])
     );
+    state.pushHistory();
+    set({ historyGroup: { key: `panel:${panelId}`, timestamp: Date.now() } });
     get().updateSodaPanel(panelId, { figures, character_ids });
+    set({ selection: { kind: "figure", panelId, id: created.id }, historyGroup: null });
   },
 
   removeFigureFromPanel: (panelId: string, figureIndex: number) => {
     const state = get();
-    state.dirtyPanelIds.add(panelId);
-    if (!state.sodaPage) return;
-
-    const targetPanel = state.sodaPage.panels.find((p) => p.id === panelId);
+    const targetPanel = state.sodaPage?.panels.find((p) => p.id === panelId);
     if (!targetPanel) return;
-
-    const figures = (targetPanel.figures || []).filter((_, idx) => idx !== figureIndex);
-    const character_ids = Array.from(new Set(figures.map((f) => f.character_id)));
-    get().updateSodaPanel(panelId, { figures, character_ids });
+    const figure = resolvedFigures(targetPanel, state.sodaPage?.reading_direction)[figureIndex];
+    if (figure) state.removeFigureById(panelId, getFigureId(figure, figureIndex));
   },
 
   updateFigureInPanel: (panelId: string, figureIndex: number, patch: Partial<Figure>) => {
     const state = get();
-    state.dirtyPanelIds.add(panelId);
-    if (!state.sodaPage) return;
-
-    const targetPanel = state.sodaPage.panels.find((p) => p.id === panelId);
+    const targetPanel = state.sodaPage?.panels.find((p) => p.id === panelId);
     if (!targetPanel) return;
+    const figure = resolvedFigures(targetPanel, state.sodaPage?.reading_direction)[figureIndex];
+    if (figure) state.updateFigureById(panelId, getFigureId(figure, figureIndex), patch);
+  },
 
-    const figures = (targetPanel.figures || []).map((f, idx) => {
-      if (idx !== figureIndex) return f;
-      return { ...f, ...patch };
+  addFigurePreset: (pose = "stand", pair, panelId) => {
+    const state = get();
+    const activePage = state.project.pages[0];
+    if (!state.sodaPage || !activePage) return;
+    const targetId = insertionPanelId(state, panelId);
+    const panel = activePage.panels.find(item => item.id === targetId);
+    if (!panel) return;
+    const existing = resolvedFigures(panel.sodaData!, state.sodaPage.reading_direction).map((figure, index) => ({ ...figure, id: getFigureId(figure, index) }));
+    const size = Math.max(24, Math.min(panel.height * 0.68, panel.width * (pair ? 0.9 : 1.2), 400));
+    const chosenPose = pair || pose;
+    const count = pair ? 2 : 1;
+    const gap = size * (pair === "hug" ? 0.4 : 0.66);
+    const figures: Figure[] = Array.from({ length: count }, (_, index) => {
+      const characterId = state.characters[index % Math.max(1, state.characters.length)]?.id || "";
+      const figure: Figure = { id: `fig_${uuidv4().slice(0, 8)}`, character_id: characterId, pose: chosenPose, position: 0.5, facing: index ? "left" : "right", framing: "full" };
+      const editor = ensureFigureEditor(figure, { width: panel.width, height: panel.height, shot: "full" });
+      figure.editor = { ...withFigurePose(editor, chosenPose), style: "stick", size,
+        x: panel.width / 2 + (pair ? (index - 0.5) * gap : ((existing.length % 3) - 1) * size * 0.12),
+        y: Math.min(panel.height - 12, Math.max(size + 12, panel.height * 0.85)), flip: index === 1 };
+      figure.position = Math.max(0, Math.min(1, figure.editor.x / panel.width));
+      return figure;
     });
-    const character_ids = Array.from(new Set(figures.map((f) => f.character_id)));
-    get().updateSodaPanel(panelId, { figures, character_ids });
+    state.pushHistory();
+    // Keep insertion as a single undo step, including both members of a pair.
+    set({ historyGroup: { key: `panel:${panel.id}`, timestamp: Date.now() } });
+    const nextFigures = [...existing, ...figures];
+    get().updateSodaPanel(panel.id, { figures: nextFigures, character_ids: [...new Set(nextFigures.map(item => item.character_id).filter(Boolean))] });
+    set({ selection: { kind: "figure", panelId: panel.id, id: figures[0].id! }, historyGroup: null });
+    get().setNotice(pair === "handshake" ? "已添加握手双人，可分别拖动和编辑" : pair === "hug" ? "已添加拥抱双人，可分别拖动和编辑" : "已添加人物，拖动身体移动，拖动圆点调整关节");
+  },
+
+  updateFigureById: (panelId, id, patch) => {
+    const state = get();
+    const panel = state.project.pages[0]?.panels.find(item => item.id === panelId);
+    if (!panel?.sodaData) return;
+    const figures = resolvedFigures(panel.sodaData, state.sodaPage?.reading_direction).map((figure, index) => ({ ...figure, id: getFigureId(figure, index) }));
+    const index = figures.findIndex((figure, idx) => getFigureId(figure, idx) === id);
+    if (index < 0) return;
+    const original = figures[index];
+    let next = { ...original, ...patch, id: original.id || id };
+    const bounds = { width: panel.width, height: panel.height, shot: panel.sodaData.shot };
+    if (patch.editor) {
+      next.editor = ensureFigureEditor(next, bounds);
+      next.position = Math.max(0, Math.min(1, next.editor.x / panel.width));
+      if (!patch.facing && next.editor.flip !== ensureFigureEditor(original, bounds).flip) {
+        next.facing = next.editor.flip ? "left" : "right";
+      }
+    } else if (original.editor) {
+      let editor = ensureFigureEditor(original, bounds);
+      if (patch.pose) editor = withFigurePose(editor, patch.pose);
+      if (patch.position !== undefined) {
+        const position = typeof patch.position === "number" ? patch.position : ({ left: 0.23, center: 0.5, right: 0.77 } as const)[patch.position];
+        editor = { ...editor, x: position * panel.width };
+      }
+      if (patch.facing) editor = { ...editor, flip: patch.facing === "left" };
+      next = { ...next, editor };
+    }
+    figures[index] = next;
+    // Separate figure edits from panel description and other figures in history.
+    state.recordEdit(`figure:${panelId}:${id}`);
+    set({ historyGroup: { key: `panel:${panelId}`, timestamp: Date.now() } });
+    get().updateSodaPanel(panelId, { figures, character_ids: [...new Set(figures.map(item => item.character_id).filter(Boolean))] });
+    set({ historyGroup: { key: `figure:${panelId}:${id}`, timestamp: Date.now() } });
+  },
+
+  removeFigureById: (panelId, id) => {
+    const state = get();
+    const panel = state.project.pages[0]?.panels.find(item => item.id === panelId);
+    if (!panel?.sodaData) return;
+    const original = resolvedFigures(panel.sodaData, state.sodaPage?.reading_direction).map((figure, index) => ({ ...figure, id: getFigureId(figure, index) }));
+    const figures = original.filter((figure, index) => getFigureId(figure, index) !== id);
+    if (figures.length === original.length) return;
+    state.pushHistory();
+    set({ historyGroup: { key: `panel:${panelId}`, timestamp: Date.now() } });
+    get().updateSodaPanel(panelId, { figures, character_ids: [...new Set(figures.map(item => item.character_id).filter(Boolean))] });
+    set({ selection: { kind: "panel", id: panelId }, historyGroup: null });
+    get().setNotice("已删除人物");
   },
 
   // Floating mini-toolbar actions (P4c Item 5)
@@ -846,10 +1132,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     state.dirtyPanelIds.add(panelId);
     state.dirtyPanelIds.add(newPanelId);
 
+    const nextPage = { ...activePage, panels: updatedPanels };
+    const nextSodaPage = projectPageToSodaPage(nextPage, state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds);
+    nextPage.panels = nextPage.panels.map(panel => ({ ...panel, sodaData: nextSodaPage.panels.find(item => item.id === panel.id)! }));
     set({
+      sodaPage: nextSodaPage,
+      sketchGeometry: generatePageSketchGeometry(nextSodaPage, state.characters as any),
       project: {
         ...state.project,
-        pages: [{ ...activePage, panels: updatedPanels }]
+        pages: [nextPage]
       },
       selection: { kind: "panel", id: newPanelId }
     });
@@ -919,10 +1210,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     state.dirtyPanelIds.add(panelId);
     state.dirtyPanelIds.add(newPanelId);
 
+    const nextPage = { ...activePage, panels: updatedPanels };
+    const nextSodaPage = projectPageToSodaPage(nextPage, state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds);
+    nextPage.panels = nextPage.panels.map(panel => ({ ...panel, sodaData: nextSodaPage.panels.find(item => item.id === panel.id)! }));
     set({
+      sodaPage: nextSodaPage,
+      sketchGeometry: generatePageSketchGeometry(nextSodaPage, state.characters as any),
       project: {
         ...state.project,
-        pages: [{ ...activePage, panels: updatedPanels }]
+        pages: [nextPage]
       },
       selection: { kind: "panel", id: newPanelId }
     });
@@ -930,39 +1226,50 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     get().setNotice("已纵向切分分镜");
   },
 
-  addTextToPanel: (panelId: string) => {
+  addTextToPanel: (panelId: string) => get().addTextPreset("speech_vertical", panelId),
+
+  addTextPreset: (presetId, panelId) => {
     const state = get();
     const activePage = state.project.pages[0];
-    if (!activePage) return;
-    const panel = activePage.panels.find((p) => p.id === panelId);
-    const px = panel ? panel.x + 20 : 100;
-    const py = panel ? panel.y + 20 : 100;
+    if (!activePage || !state.sodaPage) return;
+    const targetId = insertionPanelId(state, panelId);
+    const panel = activePage.panels.find((p) => p.id === targetId);
+    if (!panel) return;
+    const preset = TEXT_PRESETS[presetId];
+    const width = Math.min(preset.width, Math.max(30, panel.width - 16));
+    const height = Math.min(preset.height, Math.max(30, panel.height - 16));
+    const offset = activePage.bubbles.filter(item => item.sodaData?.panel_id === panel.id).length % 5 * 16;
+    const px = panel.x + Math.min(Math.max(8, (panel.width - width) / 2 + offset), Math.max(8, panel.width - width - 8));
+    const py = panel.y + Math.min(Math.max(8, (panel.height - height) / 2 + offset), Math.max(8, panel.height - height - 8));
+    state.pushHistory();
 
     const newTextId = `t_${uuidv4().slice(0, 6)}`;
     const newBubble: Bubble = {
       id: newTextId,
-      type: "rounded",
+      type: preset.bubble === "box" || preset.bubble === "none" ? "rect" : "rounded",
       x: px,
       y: py,
-      width: 90,
-      height: 180,
-      text: "新台词",
-      direction: "vertical",
-      fontSize: 20,
+      width,
+      height,
+      text: preset.text,
+      direction: preset.direction,
+      fontSize: preset.fontSize,
       fontFamily: "Consolas, 'Microsoft YaHei', sans-serif",
       textColor: "#171815",
-      background: "#ffffff",
-      borderColor: "#171815",
-      borderWidth: 2,
+      background: preset.bubble === "none" ? "transparent" : "#ffffff",
+      borderColor: preset.bubble === "none" ? "transparent" : "#171815",
+      borderWidth: preset.bubble === "none" ? 0 : 2,
+      tailTip: null,
       sodaData: {
         id: newTextId,
-        text: "新台词",
-        kind: "dialogue",
-        panel_id: panelId,
+        text: preset.text,
+        kind: preset.kind,
+        panel_id: panel.id,
         speaker_id: null,
-        direction: "vertical",
-        bubble: "speech",
-        bbox: { type: "rect", x: px, y: py, w: 90, h: 180 }
+        direction: preset.direction,
+        bubble: preset.bubble,
+        font_size: preset.fontSize,
+        bbox: { type: "rect", x: px, y: py, w: width, h: height }
       }
     };
 
@@ -972,10 +1279,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...state.project,
         pages: [{ ...activePage, bubbles: [...activePage.bubbles, newBubble] }]
       },
+      sodaPage: state.sodaPage ? {
+        ...state.sodaPage,
+        texts: [...state.sodaPage.texts, newBubble.sodaData as SodaText]
+      } : null,
       selection: { kind: "text", id: newTextId }
     });
     get().triggerAutoSave();
-    get().setNotice("已添加文字框");
+    get().setNotice(`已添加${preset.label}，在右侧编辑文字`);
   },
 
   selectItem: (selection: Selection | null) => {
@@ -986,18 +1297,30 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     const sel = state.selection;
     if (!sel || !state.sodaPage) return;
+    if (sel.kind === "figure") {
+      state.removeFigureById(sel.panelId, sel.id);
+      return;
+    }
     get().pushHistory();
 
     const activePage = state.project.pages[0];
     if (sel.kind === "panel") {
+      const currentPage = projectPageToSodaPage(activePage, state.sodaPage, state.dirtyPanelIds, state.dirtyBubbleIds);
+      const removedTextIds = new Set(currentPage.texts.filter(text => text.panel_id === sel.id).map(text => text.id));
       const nextPanels = activePage.panels.filter((p) => p.id !== sel.id);
-      const nextSodaPanels = state.sodaPage.panels.filter((p) => p.id !== sel.id);
+      const nextSodaPage = {
+        ...currentPage,
+        panels: currentPage.panels.filter(panel => panel.id !== sel.id),
+        texts: currentPage.texts.filter(text => !removedTextIds.has(text.id)),
+        ...(currentPage.overlays ? { overlays: currentPage.overlays.filter(overlay => overlay.panel_id !== sel.id) } : {})
+      };
       set({
         selection: null,
-        sodaPage: { ...state.sodaPage, panels: nextSodaPanels },
+        sodaPage: nextSodaPage,
+        sketchGeometry: generatePageSketchGeometry(nextSodaPage, state.characters as any),
         project: {
           ...state.project,
-          pages: [{ ...activePage, panels: nextPanels }]
+          pages: [{ ...activePage, panels: nextPanels, bubbles: activePage.bubbles.filter(bubble => !removedTextIds.has(bubble.id)) }]
         }
       });
       get().triggerAutoSave();
@@ -1027,86 +1350,88 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   // Save current page
-  saveCurrentPage: async (_force = false): Promise<boolean> => {
-    const state = get();
-    if (!state.sodaPage || !state.activePageId || state.isSaving) return false;
+  saveCurrentPage: (_force = false): Promise<boolean> => {
+    const initial = get();
+    if (initial.savePromise) return initial.savePromise;
+    if (!initial.sodaPage || !initial.activePageId) return Promise.resolve(false);
+    const pageId = initial.activePageId;
 
-    set({ isSaving: true });
-    const activePage = state.project.pages[0];
-    const pageToSave = projectPageToSodaPage(
-      activePage,
-      state.sodaPage,
-      state.dirtyPanelIds,
-      state.dirtyBubbleIds
-    );
+    // Every caller shares one drain: edits made during a PUT get a subsequent
+    // PUT with the returned version, even if their autosave timer already fired.
+    const drain = async (): Promise<boolean> => {
+      try {
+        while (get().activePageId === pageId && get().sodaPage) {
+          const state = get();
+          const revision = state.editRevision;
+          const pageToSave = projectPageToSodaPage(
+            state.project.pages[0], state.sodaPage!, state.dirtyPanelIds, state.dirtyBubbleIds
+          );
+          const res = await apiSavePage(pageId, pageToSave, state.currentVersion);
+          if (get().activePageId !== pageId) return false;
 
-    try {
-      const res = await apiSavePage(state.activePageId, pageToSave, state.currentVersion);
+          if (res.success) {
+            const unchanged = get().editRevision === revision;
+            set({
+              currentVersion: res.version,
+              hasUnsavedChanges: !unchanged,
+              lastSavedTime: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }),
+              validationIssues: res.warnings || [],
+              ...(unchanged ? {
+                sodaPage: res.page || pageToSave,
+                dirtyPanelIds: new Set<string>(), dirtyBubbleIds: new Set<string>()
+              } : {})
+            });
+            if (!unchanged) continue;
 
-      if (res.success) {
-        state.dirtyPanelIds.clear();
-        state.dirtyBubbleIds.clear();
-
-        set({
-          sodaPage: res.page,
-          currentVersion: res.version,
-          hasUnsavedChanges: false,
-          isSaving: false,
-          lastSavedTime: new Date().toLocaleTimeString(),
-          validationIssues: res.warnings || []
-        });
-
-        // Stay synced with backend sketch geometry
-        apiGetSketchGeometry(state.activePageId)
-          .then((geo) => {
-            if (geo) {
-              set({ sketchGeometry: geo, sketchGeometryUnavailable: false });
-            }
-          })
-          .catch(console.error);
-
-        get().setNotice("分镜已保存");
-        return true;
-      }
-
-      if (res.status === 409) {
-        set({
-          isSaving: false,
-          conflictModal: {
-            open: true,
-            serverPage: res.current,
-            serverVersion: res.version,
-            reason: res.reason,
-            localBackup: JSON.stringify(pageToSave, null, 2)
+            clearTimeout(get().autoSaveTimer);
+            set({ autoSaveTimer: null });
+            apiGetSketchGeometry(pageId).then((geo) => {
+              const latest = get();
+              if (geo && latest.activePageId === pageId && latest.currentVersion === res.version && latest.editRevision === revision && !latest.hasUnsavedChanges) {
+                set({ sketchGeometry: geo, sketchGeometryUnavailable: false });
+              }
+            }).catch(console.error);
+            get().setNotice("分镜已保存");
+            return true;
           }
-        });
-        get().setNotice("保存冲突: 页面已被外部修改");
-        return false;
-      }
 
-      if (res.status === 422) {
-        const issues = res.issues || res.errors || [];
-        set({
-          isSaving: false,
-          validationIssues: issues
-        });
-        get().setNotice(`有 ${issues.length} 个问题，已在右栏列出`);
-        return false;
+          set({ hasUnsavedChanges: true });
+          if (res.status === 409) {
+            const latest = get();
+            const backup = projectPageToSodaPage(latest.project.pages[0], latest.sodaPage!, latest.dirtyPanelIds, latest.dirtyBubbleIds);
+            set({ conflictModal: {
+              open: true, serverPage: res.current, serverVersion: res.version, reason: res.reason,
+              localBackup: JSON.stringify(backup, null, 2)
+            } });
+            get().setNotice("保存冲突: 页面已被外部修改");
+          } else if (res.status === 422) {
+            const issues = res.issues || res.errors || [];
+            set({ validationIssues: issues });
+            get().setNotice(`有 ${issues.length} 个问题，已在右栏列出`);
+          } else {
+            get().setNotice(`保存失败: ${res.error}`);
+          }
+          return false;
+        }
+      } catch (err: any) {
+        if (get().activePageId === pageId) {
+          set({ hasUnsavedChanges: true });
+          get().setNotice(`保存异常: ${err.message}`);
+        }
       }
+      return false;
+    };
 
-      set({ isSaving: false });
-      get().setNotice(`保存失败: ${res.error}`);
-      return false;
-    } catch (err: any) {
-      set({ isSaving: false });
-      get().setNotice(`保存异常: ${err.message}`);
-      return false;
-    }
+    const promise = drain().finally(() => {
+      if (get().savePromise === promise) set({ savePromise: null, isSaving: false });
+    });
+    set({ savePromise: promise, isSaving: true });
+    return promise;
   },
 
   triggerAutoSave: () => {
     const state = get();
-    set({ hasUnsavedChanges: true });
+    set({ hasUnsavedChanges: true, editRevision: state.editRevision + 1 });
     if (state.autoSaveTimer) {
       clearTimeout(state.autoSaveTimer);
     }
@@ -1119,36 +1444,44 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   reloadCurrentPage: async () => {
     const state = get();
     if (!state.activePageId) return;
+    const pageId = state.activePageId;
+    const revision = state.editRevision;
+    const requestedVersion = state.currentVersion;
+    const requestSequence = pageLoadSequence;
+    const reloadSequence = ++pageReloadSequence;
     try {
-      const { page, version } = await apiGetPage(state.activePageId);
+      const { page, version } = await apiGetPage(pageId);
+      if (requestSequence !== pageLoadSequence || reloadSequence !== pageReloadSequence || get().activePageId !== pageId || get().editRevision !== revision || get().currentVersion !== requestedVersion) return;
       const openKomaPage = sodaPageToProjectPage(page);
-      state.dirtyPanelIds.clear();
-      state.dirtyBubbleIds.clear();
 
       set({
         sodaPage: page,
         currentVersion: version,
         hasUnsavedChanges: false,
+        dirtyPanelIds: new Set(), dirtyBubbleIds: new Set(),
         validationIssues: [],
         project: {
-          ...state.project,
+          ...get().project,
           pages: [openKomaPage]
         }
       });
 
-      apiGetSketchGeometry(state.activePageId).then((geo) => {
+      apiGetSketchGeometry(pageId).then((geo) => {
+        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return;
         set({
           sketchGeometry: geo,
           sketchGeometryUnavailable: !geo
         });
       }).catch(() => {
+        if (get().activePageId !== pageId || get().currentVersion !== version || get().editRevision !== revision) return;
         set({
           sketchGeometry: null,
           sketchGeometryUnavailable: true
         });
       });
 
-      apiGetRenders(state.activePageId).then((r) => {
+      apiGetRenders(pageId).then((r) => {
+        if (get().activePageId !== pageId || get().currentVersion !== version) return;
         let selectedUrl: string | null = null;
         if (r.selected_render) {
           const matched = r.renders.find((x) => x.path === r.selected_render);
@@ -1157,6 +1490,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         set({ renders: r, selectedRenderUrl: selectedUrl });
       }).catch(console.error);
     } catch (err: any) {
+      if (requestSequence !== pageLoadSequence || reloadSequence !== pageReloadSequence || get().activePageId !== pageId) return;
       get().setNotice(`重新载入失败: ${err.message}`);
     }
   },
@@ -1175,6 +1509,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   openLayoutModal: async () => {
     const state = get();
     if (!state.activePageId) return;
+    const pageId = state.activePageId;
+    if (!(await get().saveCurrentPage()) || get().activePageId !== pageId) return;
+    const version = get().currentVersion;
 
     set({
       layoutModal: {
@@ -1186,7 +1523,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
 
     try {
-      const res = await apiLayoutSuggest(state.activePageId, { candidates: 6, skew: 0 });
+      const res = await apiLayoutSuggest(pageId, { candidates: 6, skew: 0 });
+      if (get().activePageId !== pageId || get().currentVersion !== version) return;
       set({
         layoutModal: {
           open: true,
@@ -1211,20 +1549,41 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   applyLayoutCandidate: async (candidateId: string) => {
+    const pageId = get().activePageId;
+    if (!pageId) return;
+    // A clean PUT still replaces the file and changes its mtime-based ETag,
+    // invalidating the candidate created for the current saved version.
+    if ((get().hasUnsavedChanges || get().savePromise) && !(await get().saveCurrentPage())) return;
+    if (get().activePageId !== pageId) return;
     const state = get();
-    if (!state.activePageId) return;
+    const revision = state.editRevision;
+    const snapshot = {
+      project: JSON.parse(JSON.stringify(state.project)),
+      sodaPage: projectPageToSodaPage(state.project.pages[0], state.sodaPage!, state.dirtyPanelIds, state.dirtyBubbleIds)
+    };
 
     try {
-      const res = await apiLayoutApply(state.activePageId, candidateId, state.currentVersion);
+      const res = await apiLayoutApply(pageId, candidateId, state.currentVersion);
+      if (get().activePageId !== pageId) return;
+      if (get().editRevision !== revision) {
+        set({ currentVersion: res.version, layoutModal: { open: false, candidates: [], loading: false } });
+        get().setNotice("应用版式期间有新的编辑，已保留你的修改；请重新选择版式");
+        return;
+      }
       const openKomaPage = sodaPageToProjectPage(res.page);
       set({
         sodaPage: res.page,
         currentVersion: res.version,
         hasUnsavedChanges: false,
+        dirtyPanelIds: new Set(), dirtyBubbleIds: new Set(),
+        editRevision: revision + 1,
+        sketchGeometry: generatePageSketchGeometry(res.page, get().characters as any),
+        historyPast: [...get().historyPast.slice(-29), snapshot], historyFuture: [],
+        historyGroup: null, canUndo: true, canRedo: false,
         validationIssues: res.warnings || [],
         layoutModal: { open: false, candidates: [], loading: false },
         project: {
-          ...state.project,
+          ...get().project,
           pages: [openKomaPage]
         }
       });
@@ -1234,10 +1593,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
   },
 
-  openPreviewModal: () => {
-    const state = get();
-    if (!state.activePageId) return;
-    const url = `/api/pages/${encodeURIComponent(state.activePageId)}/preview.png?style=sketch&scale=1&v=${encodeURIComponent(state.currentVersion)}`;
+  openPreviewModal: async () => {
+    const pageId = get().activePageId;
+    if (!pageId || !(await get().saveCurrentPage()) || get().activePageId !== pageId) return;
+    const url = `/api/pages/${encodeURIComponent(pageId)}/preview.png?style=sketch&scale=1&v=${encodeURIComponent(get().currentVersion)}`;
     set({ previewModal: { open: true, url } });
   },
 
@@ -1246,11 +1605,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   openCompileModal: async () => {
-    const state = get();
-    if (!state.activePageId) return;
+    const pageId = get().activePageId;
+    if (!pageId || !(await get().saveCurrentPage()) || get().activePageId !== pageId) return;
 
     try {
-      const res = await apiCompilePage(state.activePageId, { with_ids: true, slant_mode: "cut" });
+      const res = await apiCompilePage(pageId, { with_ids: true, slant_mode: "cut" });
+      if (get().activePageId !== pageId) return;
       set({
         compileModal: {
           open: true,
@@ -1298,14 +1658,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ commandPaletteOpen: false });
   },
 
+  openImportModal: () => {
+    set({ importModalOpen: true });
+  },
+
+  closeImportModal: () => {
+    set({ importModalOpen: false });
+  },
+
   submitGenerate: async (options) => {
     const state = get();
     if (!state.activePageId) return;
+    const pageId = state.activePageId;
 
     set({ generateModal: { ...state.generateModal, loading: true, error: undefined } });
 
     try {
-      const job = await apiGeneratePage(state.activePageId, options);
+      if (!(await get().saveCurrentPage()) || get().activePageId !== pageId) {
+        set({ generateModal: { ...get().generateModal, loading: false, error: "页面尚未保存，请先处理保存提示后重试" } });
+        return;
+      }
+      const job = await apiGeneratePage(pageId, options);
+      if (get().activePageId !== pageId) return;
       set({
         activeJob: job,
         generateModal: { ...state.generateModal, open: false, loading: false }
@@ -1330,7 +1704,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     try {
       const job = await apiPickRender(state.activePageId, renderPath);
-      set({ activeJob: job });
+      // A quick CPU pick may complete over SSE before its POST response arrives.
+      // Do not replace that terminal state with the queued response snapshot.
+      set((latest) => ({
+        activeJob: latest.activeJob?.id === job.id && ["completed", "failed", "cancelled"].includes(latest.activeJob.status)
+          ? latest.activeJob
+          : job
+      }));
       get().setNotice(`已选择底图任务 (${job.message || "处理中"})`);
       // Update selected render
       const r = await apiGetRenders(state.activePageId);
@@ -1360,6 +1740,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...patch
       }
     });
+  },
+
+  updateCharacterColor: async (id, color) => {
+    try {
+      const character = await apiSaveCharacterColor(id, color);
+      set((state) => ({
+        characters: state.characters.map(item => item.id === id ? { ...item, sketch_color: character.sketch_color } : item),
+        characterDetails: { ...state.characterDetails, [id]: character },
+        sketchGeometry: state.sketchGeometry ? { ...state.sketchGeometry, panels: state.sketchGeometry.panels.map(panel => ({
+          ...panel, figures: panel.figures.map(figure => figure.character_id === id ? { ...figure, color: character.sketch_color! } : figure)
+        })) } : null
+      }));
+      get().setNotice(`已保存 ${character.display_name} 的人物颜色`);
+      return true;
+    } catch (error) {
+      get().setNotice(error instanceof ApiError && error.status === 409
+        ? "角色资料已变更，颜色未保存。请刷新后重新选择颜色。"
+        : `人物颜色保存失败：${(error as Error).message}`);
+      return false;
+    }
   },
 
   setNotice: (text: string) => {

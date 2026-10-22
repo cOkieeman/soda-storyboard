@@ -175,6 +175,37 @@ def test_project_pages_and_characters(client: Client) -> None:
     assert client.call("POST", "/api/characters", {"id": "guest"})[0] == 409
 
 
+def test_character_color_conditional_save_rejects_stale_versions(client: Client) -> None:
+    endpoint = "/api/characters/older"
+    path = client.root / "characters/older.json"
+    source = read_json(path)
+    source["lora"] = {"path": "role.safetensors", "strength": 0.75, "future": {"keep": True}}
+    source["appearance"]["future"] = {"keep": [1, 2]}
+    write_json(path, source)
+    status, headers, body = client.call("GET", endpoint)
+    assert status == 200
+    assert headers["ETag"] == body["version"]
+    original = body["character"]
+    updated = {**original, "sketch_color": "#B44A3A", "future_metadata": {"keep": [1, 2]}}
+    status, saved_headers, saved = client.call("PUT", endpoint, updated, {"If-Match": headers["ETag"]})
+    assert status == 200
+    assert saved_headers["ETag"] == saved["version"]
+    assert saved["character"]["lora"] == original["lora"]
+    assert saved["character"]["future_metadata"] == {"keep": [1, 2]}
+    assert saved["character"]["appearance"] == original["appearance"]
+    status, _, rejected = client.call(
+        "PUT", endpoint, {**updated, "sketch_color": "#123456"}, {"If-Match": headers["ETag"]}
+    )
+    assert status == 409
+    assert rejected["current"]["sketch_color"] == "#B44A3A"
+    assert read_json(client.root / "characters/older.json")["sketch_color"] == "#B44A3A"
+    summaries = client.call("GET", "/api/project")[2]["characters"]
+    summary = next(character for character in summaries if character["id"] == "older")
+    assert summary["sketch_color"] == "#B44A3A"
+    # Older callers that omit If-Match retain their existing API contract.
+    assert client.call("PUT", endpoint, updated)[0] == 200
+
+
 def test_page_write_validation_warning_and_conflict(client: Client) -> None:
     page, match = client.page()
     original = (client.root / "pages/pudding.json").read_bytes()

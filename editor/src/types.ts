@@ -91,6 +91,7 @@ export type Project = {
 
 export type Selection =
   | { kind: "panel"; id: string }
+  | { kind: "figure"; id: string; panelId: string }
   | { kind: "text"; id: string }
   | { kind: "overlay"; id: string }
   | { kind: "bubble"; id: string };
@@ -132,12 +133,34 @@ export type FigurePose =
   | "hands_clasped"
   | "hand_on_chin"
   | "lie"
-  | "back_view";
+  | "back_view"
+  | "handshake"
+  | "hug";
 
 export type FigureFacing = "left" | "right" | "front" | "back";
 export type FigureFraming = "full" | "waist" | "bust" | "face" | null;
 
+export type FigureJointName =
+  | "head" | "neck" | "hip"
+  | "lElbow" | "lHand" | "rElbow" | "rHand"
+  | "lKnee" | "lFoot" | "rKnee" | "rFoot";
+
+/** Panel-local foot anchor; joints use a 100-unit standing height, with feet at y=0. */
+export type FigureEditor = {
+  version: 1;
+  x: number;
+  y: number;
+  size: number;
+  flip: boolean;
+  style: "stick" | "box" | "rough";
+  view?: "front" | "side";
+  break_frame: boolean;
+  joints: Record<FigureJointName, [number, number]>;
+};
+
 export type Figure = {
+  id?: string;
+  editor?: FigureEditor;
   character_id: string;
   pose: FigurePose | string;
   position: "left" | "center" | "right" | number;
@@ -246,6 +269,7 @@ export type CharacterSummary = {
   display_name: string;
   has_lora: boolean;
   figure_hint?: string;
+  sketch_color?: string;
 };
 
 export type SodaCharacter = {
@@ -263,6 +287,7 @@ export type SodaCharacter = {
   };
   age?: string;
   figure_hint?: string;
+  sketch_color?: string;
   lora?: {
     path: string;
     strength: number;
@@ -293,7 +318,7 @@ export type RenderMeta = {
 
 export type RenderItem = {
   path: string;
-  seed?: number;
+  seed?: string;
   meta?: RenderMeta;
   url: string;
 };
@@ -392,6 +417,8 @@ export type Primitive =
   | { type: "polygon"; points: [number, number][]; fill: string | null; stroke?: string; width?: number };
 
 export type SketchFigure = {
+  figure_id?: string;
+  break_frame?: boolean;
   character_id: string;
   label: string;
   color: string;

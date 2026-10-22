@@ -15,6 +15,9 @@ import type {
   SodaOverlay,
   SodaPage
 } from "../types";
+import { ensureFigureEditor, figureEditorBounds, generateRigPrimitives, getFigureId } from "./figureRig";
+import { resolvedFigures } from "./figures";
+import { characterSketchColor } from "./characterColors";
 
 export const POSES = [
   "stand",
@@ -28,7 +31,9 @@ export const POSES = [
   "hands_clasped",
   "hand_on_chin",
   "lie",
-  "back_view"
+  "back_view",
+  "handshake",
+  "hug"
 ] as const;
 
 export const FRAMINGS: Record<string, string> = {
@@ -65,8 +70,22 @@ export function generateFigureGeometry(
 ): SketchFigure {
   const [width, height] = size;
   const shot = options.shot || "medium";
-  const color = options.color || "#00a8c4";
+  const color = characterSketchColor(character, options.color || "#00a8c4");
   const [ox, oy] = options.origin || [0, 0];
+
+  if (figure.editor != null) {
+    const editor = ensureFigureEditor(figure, { width, height, shot });
+    const bounds = figureEditorBounds(editor);
+    return {
+      character_id: figure.character_id,
+      figure_id: figure.id,
+      break_frame: editor.break_frame,
+      label: character?.display_name || figure.character_id,
+      color,
+      primitives: generateRigPrimitives(editor, [ox, oy]),
+      label_at: [ox + editor.x, oy + bounds.y - 24]
+    };
+  }
 
   const primitives: Primitive[] = [];
 
@@ -196,6 +215,14 @@ export function generateFigureGeometry(
 
   // Arms
   const armsMap: Record<string, [number, number][][]> = {
+    handshake: [
+      [[-0.085, 0.23], [-0.14, 0.39], [-0.17, 0.56]],
+      [[0.085, 0.23], [0.21, 0.36], [0.33, 0.42]]
+    ],
+    hug: [
+      [[-0.085, 0.23], [0.14, 0.31], [0.34, 0.27]],
+      [[0.085, 0.23], [0.24, 0.39], [0.36, 0.38]]
+    ],
     wave: [
       [[-0.085, 0.23], [-0.18, 0.36], [-0.19, 0.52]],
       [[0.085, 0.23], [0.20, 0.28], [0.19, 0.04]]
@@ -333,23 +360,7 @@ export function generatePageSketchGeometry(
     }
 
     // Determine figures to render
-    let figureList: Figure[] = [];
-    if (panel.figures && panel.figures.length > 0) {
-      figureList = panel.figures;
-    } else if (panel.character_ids && panel.character_ids.length > 0) {
-      const count = panel.character_ids.length;
-      figureList = panel.character_ids.map((cid, i) => {
-        const isRtl = sodaPage.reading_direction === "rtl";
-        const pos = isRtl ? 1 - (i + 0.5) / count : (i + 0.5) / count;
-        return {
-          character_id: cid,
-          pose: "stand",
-          position: pos,
-          facing: "front",
-          framing: null
-        };
-      });
-    }
+    const figureList = resolvedFigures(panel, sodaPage.reading_direction);
 
     const generatedFigures: SketchFigure[] = figureList.map((fig, idx) => {
       const char = charMap.get(fig.character_id);
@@ -358,6 +369,7 @@ export function generatePageSketchGeometry(
         color: "#00a8c4",
         origin: [x, y]
       });
+      generated.figure_id = getFigureId(fig, idx);
 
       // Offset subsequent label badges slightly so they do not overlap
       if (idx > 0 && generated.label_at) {

@@ -13,6 +13,7 @@ import {
 } from "../types";
 import { DEFAULT_BUBBLE_TEXT_COLOR, normalizeHexColor } from "./colors";
 import { normalizePanelRotation, normalizePanelShape, RECT_PANEL_SHAPE } from "./panelGeometry";
+import { resolveTextFontSize } from "./lettering";
 
 export const CANVAS_PRESETS: Record<CanvasPreset, { width: number; height: number; dpi: number }> = {
   A4: {
@@ -258,7 +259,7 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
       height,
       text: t.text || "",
       direction,
-      fontSize: 20,
+      fontSize: resolveTextFontSize(t.font_size, soda.text_font_size, soda.canvas_width),
       fontFamily: "Consolas, 'Microsoft YaHei', sans-serif",
       textColor: "#171815",
       background: t.bubble === "none" ? "rgba(255,255,255,0)" : "#ffffff",

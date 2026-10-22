@@ -74,7 +74,12 @@ class Store:
             "project": read_json(self.path("project.json")),
             "pages": self.pages(),
             "characters": [
-                {"id": c["id"], "display_name": c["display_name"], "has_lora": bool(c.get("lora"))}
+                {
+                    "id": c["id"],
+                    "display_name": c["display_name"],
+                    "has_lora": bool(c.get("lora")),
+                    **({"sketch_color": c["sketch_color"]} if "sketch_color" in c else {}),
+                }
                 for c in self.characters()
             ],
         }
@@ -194,7 +199,9 @@ class Store:
             self.page_path(page_id).replace(target)
             return {"id": page_id, "trash_path": relative}
 
-    def save_character(self, value: dict, character_id: str | None = None) -> dict:
+    def save_character(
+        self, value: dict, character_id: str | None = None, version: str | None = None
+    ) -> dict:
         with self.lock:
             character = Character.from_dict(value)
             identifier(character.id)
@@ -205,8 +212,19 @@ class Store:
                 raise APIError(409, "角色已存在")
             if character_id is not None and not path.exists():
                 raise APIError(404, "角色不存在")
-            self.atomic(path, character)
-            return {"character": character.to_dict()}
+            if version is not None and character_id is not None:
+                current, current_version = snapshot(path)
+                if current_version != version:
+                    raise APIError(
+                        409,
+                        "角色资料已在其他位置修改，请刷新后重试",
+                        current=current,
+                        version=current_version,
+                    )
+            # Validate with the model, but retain unknown nested fields in existing role files.
+            saved = value if character_id is not None else character.to_dict()
+            self.atomic(path, saved, version if character_id is not None else None)
+            return {"character": saved, "version": snapshot(path)[1]}
 
     def preview(self, page_id: str, style: str, scale: float) -> bytes:
         page = self.render_page(page_id)

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from math import cos, radians, sin
 from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw
 
+from .figure_rig import editor_figure_geometry
 from .models import POSES, Figure
 
 if TYPE_CHECKING:
@@ -23,6 +25,17 @@ FRAMINGS = {
     "extreme_close_up": "face",
 }
 POSITIONS = {"left": 0.23, "center": 0.5, "right": 0.77}
+SHORT_HEX_COLOR_LENGTH = 4
+
+
+def character_sketch_color(character: Character | None, fallback: str) -> str:
+    """Accept portable hex colors only; absent/invalid extensions retain the existing renderer color."""
+    value = character.extra.get("sketch_color") if character else None
+    if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?", value):
+        if len(value) == SHORT_HEX_COLOR_LENGTH:
+            value = "#" + "".join(digit * 2 for digit in value[1:])
+        return value.upper()
+    return fallback
 
 
 def panel_figures(panel: Panel, page: Page) -> list[Figure]:
@@ -83,7 +96,7 @@ class _Primitives:
         self.line(points, fill=fill, width=width)
 
 
-def figure_geometry(  # noqa: C901, PLR0913 -- shared deterministic pose construction
+def figure_geometry(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- shared deterministic pose construction
     size: tuple[int, int],
     figure: Figure,
     character: Character | None,
@@ -91,8 +104,20 @@ def figure_geometry(  # noqa: C901, PLR0913 -- shared deterministic pose constru
     shot: str,
     color: str,
     origin: tuple[int, int] = (0, 0),
+    editor_scale: float = 1,
 ) -> dict:
     """Return JSON primitives in page coordinates, shared by PNG and editor."""
+    color = character_sketch_color(character, color)
+    if figure.extra.get("editor") is not None:
+        return editor_figure_geometry(
+            size,
+            figure,
+            character.display_name if character else figure.character_id,
+            shot=shot,
+            color=color,
+            origin=origin,
+            scale=editor_scale,
+        )
     width, height = size
     draw = _Primitives()
     framing = figure_framing(figure, shot)
@@ -146,6 +171,14 @@ def figure_geometry(  # noqa: C901, PLR0913 -- shared deterministic pose constru
     line(torso)
     line([(0, 0.18), (0, 0.22)])
     arms = {
+        "handshake": [
+            [(-0.085, 0.23), (-0.14, 0.39), (-0.17, 0.56)],
+            [(0.085, 0.23), (0.21, 0.36), (0.33, 0.42)],
+        ],
+        "hug": [
+            [(-0.085, 0.23), (0.14, 0.31), (0.34, 0.27)],
+            [(0.085, 0.23), (0.24, 0.39), (0.36, 0.38)],
+        ],
         "wave": [[(-0.085, 0.23), (-0.18, 0.36), (-0.19, 0.52)], [(0.085, 0.23), (0.20, 0.28), (0.19, 0.04)]],
         "point": [
             [(-0.085, 0.23), (-0.16, 0.40), (-0.14, 0.54)],
@@ -229,7 +262,12 @@ def draw_primitives(
                 width=item["width"],
             )
         elif item["type"] == "polygon":
-            draw.polygon([tuple(p) for p in item["points"]], outline=color, fill=item.get("fill"))
+            draw.polygon(
+                [tuple(p) for p in item["points"]],
+                outline=color,
+                fill=item.get("fill"),
+                width=item.get("width", 1),
+            )
         else:
             draw.line([tuple(p) for p in item["points"]], fill=color, width=item["width"])
     if show_name and geometry.get("label_visible", True):
@@ -263,7 +301,7 @@ def panel_figure_geometry(
     occupied = [tuple(v * scale for v in shape_bbox(t.bbox)) for t in layout_texts(page) if t.bbox]
     figures = []
     measure = ImageDraw.Draw(Image.new("L", (1, 1)))
-    for figure in panel_figures(panel, page):
+    for index, figure in enumerate(panel_figures(panel, page)):
         data = figure_geometry(
             (max(1, right - left), max(1, bottom - top)),
             figure,
@@ -271,7 +309,9 @@ def panel_figure_geometry(
             shot=panel.shot,
             color="#00a8c4",
             origin=(left, top),
+            editor_scale=scale,
         )
+        data["figure_id"] = figure.extra.get("id") or f"legacy-figure-{index}"
         box = measure.textbbox((0, 0), data["label"], font=font, stroke_width=1, anchor="lt")
         position = label_position(bounds, (box[2] - box[0], box[3] - box[1]), occupied)
         data["label_visible"] = position is not None

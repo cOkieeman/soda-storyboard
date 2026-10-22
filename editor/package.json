@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
     "preview": "vite preview",
-    "test": "npx tsx test/unit.test.mjs"
+    "test": "npx tsx --test test/*.test.mjs"
   },
   "dependencies": {
     "fast-json-patch": "^3.1.1",
