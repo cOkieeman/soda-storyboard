@@ -10,6 +10,157 @@
 
 绯音是 25 岁的原创成年女性。这页用黑长发、红紫眼、酒红礼服、蕾丝手套和黑长靴建立人物识别度，用右侧全身主格突出舒展姿态，配合暖金灯光与冷紫色帘幕。角色通过**文字提示词**描述，没有图片输入，也没有角色 LoRA。
 
+## 独立路线：两句话、两格、从空目录开始
+
+如果你要做自己的故事，可以先走下面这条最小主线，不需要复制 `examples/stretch-color`。示例故事只有两句话：
+
+> 雨停后，晴雨牵着迷路的小猫来到旧书店。店主递给她一杯热茶，她笑着道谢。
+
+以下命令都在故事项目的工作目录运行；本次按同样顺序在一个空的 `two-sentence` 目录中实跑。`init`、角色卡和页面创建是自己或插件执行的命令；插件可以根据故事自动提出格子、人物和文字，**只有你确认后才写回**。`page new` 只建空页，不会自动增加格子。
+
+| 步骤 | 插件可以自动做的部分 | 需要你自己确认或保存的部分 |
+| --- | --- | --- |
+| 初始化、建角色、建页 | 代填命令参数、生成中英文设定草案 | 目标目录、角色身份、颜色和画布设置 |
+| 加格子、人物、文字 | 根据两句话提出拆格并写回 JSON | 格子数量、每格动作、台词原文，网页里等“已保存” |
+| 校验、翻译、预览、编译、导出 | 按你确认的顺序串起命令 | 翻译英文内容、阅读顺序和最终草稿；这些命令不会自动调用 ComfyUI |
+
+### 1. 初始化项目
+
+```powershell
+soda-storyboard init two-sentence --name "雨后的热茶" --width 1024 --height 1536 --direction rtl --json
+```
+
+预期输出（实际关键字段）：
+
+```json
+{"project":"two-sentence\\project.json","directories":["pages","characters","templates"]}
+```
+
+### 2. 写角色卡（命令行或编辑器）
+
+命令行方式把服装的款式和颜色直接写进中英文外观，并用 `--outfit` 再保存两件服装：
+
+```powershell
+soda-storyboard character new --project two-sentence --id qingyu --name "晴雨" `
+  --appearance-zh "黑色短发，琥珀色眼睛，青色雨衣，黄色围巾" `
+  --appearance-en "short black hair, amber eyes, a cyan raincoat, a yellow scarf" `
+  --role-en "the young traveler" --outfit "青色雨衣" --outfit "黄色围巾" --json
+soda-storyboard character list --project two-sentence --json
+```
+
+预期看到 `characters/qingyu.json`，其中 `clothing` 有 `青色雨衣` 和 `黄色围巾`，`appearance.zh/en` 也有相同的颜色信息。插件可以先把中文设定补成英文，再由你确认命令；颜色和款式仍由你决定。
+
+编辑器方式：先运行下面的命令，打开返回的 URL，切到“角色”页签，点“新建角色”，填写姓名、发型、发色、眼睛、服装款式与颜色，保存后再回到页面。选择已有角色可编辑，点“复制”可建立另一张角色卡。
+
+```powershell
+soda-storyboard edit two-sentence --detach --no-browser --json
+```
+
+本次实际返回 `url`、`port`、`pid` 三个字段；空项目也能先打开角色页。编辑器保存后会显示“已保存”。第 3 步建好 `tea-corner` 后，在页面列表选它继续编辑分镜。角色管理的字段说明见[角色卡](04-characters.md)和[网页编辑器](05-editor.md)。
+
+### 3. 建立空白页面
+
+```powershell
+soda-storyboard page new --project two-sentence --id tea-corner --direction rtl `
+  --width 1024 --height 1536 --style "Clean 2D anime comic, crisp ink outlines, soft cel shading" `
+  --description "雨后的街角，小猫把迷路的旅人带到旧书店，店主递给她一杯热茶。" `
+  --dialogue-mode moss_text --text-direction vertical --color-mode color --json
+```
+
+预期输出包含 `pages/tea-corner.json`、`"panels": []` 和 `"texts": []`。这是正常的空页状态。
+
+### 4. 加两格、人物和文字并保存
+
+这一步可以让插件在你确认拆格后自动写回，也可以自己编辑刚生成的 JSON。命令行手动方式是打开 `two-sentence/pages/tea-corner.json`，保留文件已有的项目字段，把 `panels` 和 `texts` 设为下面内容，然后保存文件：
+
+```json
+{
+  "panels": [
+    {
+      "id": "p1",
+      "order": 1,
+      "shape": {"type": "rect", "x": 48, "y": 48, "w": 928, "h": 680},
+      "shot": "long",
+      "angle": "eye",
+      "character_ids": ["qingyu"],
+      "description": "雨停后的街角，晴雨牵着一只迷路的小猫走到旧书店门口。青色雨衣和黄色围巾清楚可见，湿润的石板路反射着柔和天光。",
+      "figures": [{"character_id": "qingyu", "pose": "walk", "position": "center", "facing": "right", "framing": "full"}]
+    },
+    {
+      "id": "p2",
+      "order": 2,
+      "shape": {"type": "rect", "x": 48, "y": 752, "w": 928, "h": 736},
+      "shot": "medium",
+      "angle": "eye",
+      "character_ids": ["qingyu"],
+      "description": "旧书店柜台前，店主把一杯热茶递给晴雨。她双手接过杯子，肩膀放松，朝店主露出感谢的微笑；窗外的雨丝变成暖金色光点。",
+      "figures": [{"character_id": "qingyu", "pose": "stand", "position": "center", "facing": "left", "framing": "waist"}]
+    }
+  ],
+  "texts": [
+    {"id": "t1", "text": "雨停了。", "kind": "narration", "panel_id": "p1", "speaker_id": null, "direction": "vertical", "bubble": "box", "bbox": {"type": "rect", "x": 830, "y": 82, "w": 90, "h": 180}},
+    {"id": "t2", "text": "谢谢你，热茶真好喝。", "kind": "dialogue", "panel_id": "p2", "speaker_id": "qingyu", "direction": "vertical", "bubble": "speech", "bbox": {"type": "rect", "x": 820, "y": 820, "w": 90, "h": 520}}
+  ]
+}
+```
+
+在网页编辑器里则点“编辑分镜”，用“上/下分格”建立两个格子，在每格的“登场角色”里选晴雨，添加人物和台词，最后等顶部出现“已保存”。无论哪种方式，保存后都应能在页文件中数到 **2 格、2 个人物、2 条文字**。
+
+### 5. 校验、翻译、预览、编译和导出
+
+先校验结构；本次实跑返回 `"valid": true`，只提醒两格英文译文缺失：
+
+```powershell
+soda-storyboard validate two-sentence/pages/tea-corner.json --json
+```
+
+预期关键输出：
+
+```json
+{"valid":true,"exit_code":0,"warnings":[{"code":"caption_translation_missing","panel_id":"p1"},{"code":"caption_translation_missing","panel_id":"p2"}]}
+```
+
+`translate --todo` 由插件或你自己翻译场景、动作和道具；命令本身不会调用翻译服务：
+
+```powershell
+soda-storyboard translate two-sentence/pages/tea-corner.json --todo --json
+```
+
+把返回的 `source_hash` 原样带回译文文件。下面是本页实际使用的完整 `two-sentence/translations.json` 示例（角色外观和服装不放进译文）：
+
+```json
+{
+  "translations": [
+    {
+      "panel_id": "p1",
+      "source_hash": "fbf677e65bb223281a3c533e3ffa820a7ad61cb22f9b3e51e028f76f27de33e8",
+      "text": "On a street corner after the rain, Qingyu leads a lost kitten to the old bookshop door. Wet paving stones reflect the soft daylight."
+    },
+    {
+      "panel_id": "p2",
+      "source_hash": "959d5314d49331affa379554aae3bfe3430efe75f3bd9cac46b09f41abe40f7c",
+      "text": "At the old bookshop counter, the shopkeeper hands Qingyu a cup of hot tea. She accepts it with both hands, relaxes her shoulders and smiles gratefully; rain outside turns into warm golden points of light."
+    }
+  ]
+}
+```
+
+确认哈希无误后写回：
+
+```powershell
+soda-storyboard translate two-sentence/pages/tea-corner.json --apply two-sentence/translations.json --json
+```
+
+本次返回 `{"applied":["p1","p2"],"rejected":[]}`。之后依次生成本地草稿、MOSS JSON 和单文件分镜包：
+
+```powershell
+soda-storyboard preview two-sentence/pages/tea-corner.json --output two-sentence/previews/tea-corner.png --json
+soda-storyboard compile two-sentence/pages/tea-corner.json --output two-sentence/output/tea-corner.moss.json --slant-mode cut --json
+soda-storyboard export-bundle two-sentence/pages/tea-corner.json --output two-sentence/exports/tea-corner.storyboard.json --json
+```
+
+实际关键输出分别是：`preview` 返回 `{"path":"two-sentence\\previews\\tea-corner.png","font":"auto"}`；`compile` 返回 MOSS `summary`/`items`（坐标格式为 `abs_centralized`/`yxyx`）；`export-bundle` 返回 `panel_count: 2`、`characters: ["qingyu"]`、`translation_status` 为两格 `fresh`，并写出上述三个相对路径。`preview`、`validate`、`compile` 和 `export-bundle` 都是本地操作，不会调用 ComfyUI；插件只会在你确认后替你串起这些命令。
+
 ## 1. 先复制完整示例
 
 按 [安装章](02-installation.md)装好核心库和 Codex / Claude Code 插件。本例需要 **soda-storyboard 0.4.1 或更高版本**；如果要自己出图，还需要支持 MOSS 的 ComfyUI、节点包和模型。
@@ -154,6 +305,8 @@ soda-storyboard export-bundle examples/stretch-color/pages/stretch-color.json --
 先看主格人物是否完整、手部和双臂是否自然，再看各格发型、脸型和服装是否一致，最后读三句台词，检查气泡有没有挡脸。
 
 本次成图的第 2 格仍偏坐姿，和“推开椅子站起”的描述不完全一致。下一轮可以明确提出：
+
+第一格成图里人物仍握着笔，和“放下笔”的描述有出入，也要在复盘时单独记下。
 
 > 第二格镜头稍微拉远，让椅面和站起后的腰胯都进入画面；臀部已经离开座面，双脚着地，表现起身后的重心。保留其他格子、角色外观和台词，先改草稿给我看。
 

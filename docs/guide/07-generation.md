@@ -52,6 +52,19 @@ soda-storyboard gen page stretch-color --project examples/stretch-color --seeds 
 
 上面两条是不同的生成选择，按需要运行其中一条。`--seeds 2` 表示两次采样；需要指定多个种子时可重复 `--seed`，数量以给出的种子列表为准。提高步数也会改变画面，final 可能与 draft 构图不同。命令超时时，服务端任务可能仍在运行，先查看队列再决定下一步。
 
+### 登记外部生成的图片
+
+这是 0.4.2 新增的命令。
+
+如果图片是在 ComfyUI、其他图像工具或人工绘图流程中生成的，可以先登记为本地候选，再使用 `pick`、`split` 和后期命令。图片会复制到页面的生产目录，`--select` 会在登记后立即把它选为整页底图：
+
+```powershell
+soda-storyboard register-render stretch-color renders/from-comfyui.png --project examples/stretch-color `
+  --source comfyui --preset final --model moss-image-sft --seed 20261023 --select --json
+```
+
+返回值包含登记后的 `path`、`seed`、`meta.created_at`、`preset` 和 `model`。相对图片路径按项目目录解析；`--panel <格子id>` 可登记单格候选（需要已有整页底图），`--overlay <图层id>` 可登记 layer 图层候选，两者不能同时使用。登记不会生成图片，也不会提交 ComfyUI 任务。
+
 ## 选底图，看后期计划
 
 从 `gen page` 的返回结果中复制已登记候选的完整路径，替换下面的 `render.png`：

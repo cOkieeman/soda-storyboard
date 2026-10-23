@@ -13,13 +13,45 @@
 这里使用 wheel，也就是预先打好的 Python 安装包。安装 [uv](https://docs.astral.sh/uv/) 后，在终端运行下面两条命令：第一条安装，第二条查看命令行帮助。
 
 ```powershell
-uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.1/soda_storyboard-0.4.1-py3-none-any.whl
+uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl
 soda-storyboard --help
 ```
 
-上面的下载地址对应已发布的 0.4.1，也是本指南彩色示例使用并验证的版本。更新已有 CLI 安装时，在 `uv tool install` 后加 `--force`。后续版本的实际安装包以 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 为准。
+上面的下载地址对应已发布的 0.4.2。更新已有 CLI 安装时，在 `uv tool install` 后加 `--force`。后续版本的实际安装包以 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 为准。
+
+仓库源码中的 0.4.2 功能（角色管理界面和 `register-render`）可以在仓库根目录直接运行：
+
+```powershell
+uv run --no-sync soda-storyboard --help
+```
+
+这条源码入口和已发布 wheel 是两个可选入口；同一条命令不要混用两套环境。
 
 如果 uv 找不到合适的 Python，可以在安装命令后加 `--python 3.12`。安装成功后若终端仍找不到 `soda-storyboard`，执行 `uv tool update-shell`，再关闭并重开终端；也可以直接运行安装器提示的工具目录中的可执行文件。
+
+### 启动器文件在，但启动失败
+
+如果 `soda-storyboard` 或安装器给出的可执行文件确实存在，却在解析参数前报：
+
+```text
+uv trampoline failed to canonicalize script path
+```
+
+先确认 uv 的工具环境里是否真的有这个包，不要只根据文件名判断：
+
+```powershell
+uv tool list
+```
+
+如果列表里没有 `soda-storyboard`，或条目指向已经失效的工具环境，重新安装已发布的 wheel：
+
+```powershell
+uv tool install --force https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl
+```
+
+安装后用两步确认版本和启动器都恢复：`uv tool list` 应显示 `soda-storyboard v0.4.2`，而 `soda-storyboard --help` 应返回子命令列表并以 0 退出。需要核对其他已发布版本时，把 wheel URL 和 `uv tool list` 中显示的版本一起记录；不要把仍然报 trampoline 错误的空壳 exe 当成可用安装。
+
+如果 `uv tool list` 本身因权限或 uv 缓存目录报错，先修复 uv 的工具目录权限，再重复上面的检查；这与“命令不存在”是两种不同的故障。
 
 ## 在 Codex 里启用插件
 
@@ -57,7 +89,7 @@ claude plugin install soda-storyboard@soda-storyboard-local --scope local
 把 [ComfyUI-Soda-Storyboard](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) 放进 ComfyUI 的 `custom_nodes/ComfyUI-Soda-Storyboard/`。如果用的是便携版，在 `ComfyUI_windows_portable` 根目录运行下面的命令，用它自带的 Python 安装核心 wheel：
 
 ```powershell
-.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.1/soda_storyboard-0.4.1-py3-none-any.whl"
+.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl"
 .\python_embeded\python.exe -c "from importlib.metadata import version; print(version('soda-storyboard'))"
 ```
 

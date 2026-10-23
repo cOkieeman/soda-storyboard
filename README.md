@@ -6,7 +6,7 @@ soda-storyboard 帮你把一段故事整理成可编辑的漫画分镜，再交�
 
 这是随仓库提供的「起身舒展」示例：25 岁原创女主绯音结束工作，起身伸展，再邀请同伴喝点东西。五格从右向左阅读，右侧竖向主格完整展示舒展姿态，暖金灯光与冷紫帘幕衬托黑长发和酒红礼服。角色外观由文字提示词定义，**无参考图输入、无角色 LoRA**；三句中文台词由程序后期排字。
 
-从 [第一页教程](docs/guide/03-first-page.md) 开始，或直接使用 [示例项目](examples/stretch-color/)、[分镜包](examples/stretch-color/exports/stretch-color.storyboard.json) 和 [ComfyUI 工作流](examples/stretch-color/workflows/stretch-color.workflow.json)。它们对应上面这张成图。
+从 [第一页教程](docs/guide/03-first-page.md) 开始；想从空目录练习时，直接照着其中的[“两句话、两格”主线](docs/guide/03-first-page.md#独立路线两句话两格从空目录开始)。也可以直接使用 [示例项目](examples/stretch-color/)、[分镜包](examples/stretch-color/exports/stretch-color.storyboard.json) 和 [ComfyUI 工作流](examples/stretch-color/workflows/stretch-color.workflow.json)。它们对应上面这张成图。
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
 1. 安装命令行工具。准备 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/) 后运行，网页编辑器也会一起装好，无需另装 Node。
 
    ```powershell
-   uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.1/soda_storyboard-0.4.1-py3-none-any.whl
+   uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl
    soda-storyboard --help
    ```
 
@@ -75,7 +75,7 @@ flowchart LR
 2. 给 ComfyUI 使用的 Python 安装核心 wheel，然后重启。Windows 便携版在 `ComfyUI_windows_portable` 根目录运行：
 
    ```powershell
-   .\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.1/soda_storyboard-0.4.1-py3-none-any.whl"
+   .\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl"
    ```
 
    普通安装使用启动 ComfyUI 的那个 Python。完整安装与版本要求见 [安装章](docs/guide/02-installation.md)。
@@ -110,7 +110,7 @@ flowchart LR
 
 从 [中文使用说明目录](docs/guide/README.md) 继续：[安装](docs/guide/02-installation.md) · [第一页](docs/guide/03-first-page.md) · [角色卡](docs/guide/04-characters.md) · [编辑器](docs/guide/05-editor.md) · [提示词](docs/guide/06-prompts.md) · [出图后期](docs/guide/07-generation.md) · [ComfyUI](docs/guide/08-comfyui.md) · [排错](docs/guide/10-troubleshooting.md) · [命令速查](docs/guide/11-cli-reference.md)。
 
-本例已使用正式发布的 **soda-storyboard 0.4.1** 验证，安装示例使用该版本 wheel。源码后续变化见 [更新记录](CHANGELOG.md)。
+本例已使用正式发布的 **soda-storyboard 0.4.1** 验证，0.4.2 同样适用；安装示例使用最新的 0.4.2 wheel。源码后续变化见 [更新记录](CHANGELOG.md)。
 
 开发者可看 [开发与验证](docs/development.md)、[分镜包 API](docs/bundle-api.md)、[schema](schema/storyboard-v1.schema.json)。让其他 AI 输出可导入分镜，使用 [格式说明](docs/for-other-ai.md)。插件流程与来源见 [SKILL](skill/skills/soda-storyboard/SKILL.md) 和 [NOTICE](NOTICE)。
 

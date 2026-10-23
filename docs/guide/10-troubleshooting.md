@@ -26,6 +26,7 @@
 | 现象 | 处理 |
 | --- | --- |
 | 安装后找不到命令 | 执行 `uv tool update-shell` 后重开终端，或用安装器给出的可执行文件路径；也要确认包安装在当前使用的环境中 |
+| 启动器文件存在但报 `uv trampoline failed to canonicalize script path` | 先运行 `uv tool list` 确认工具环境里是否有 `soda-storyboard`；缺失或环境失效时，用 [安装章](02-installation.md) 的已发布 wheel 命令加 `--force` 重装，再用 `uv tool list` 的版本和 `soda-storyboard --help` 的退出码确认 |
 | 编辑器打不开 | 用 `edit --detach --no-browser --json` 获取实际 URL；确认后台服务已启动，浏览器能访问本机回环地址 |
 | 8780 被占用 | edit 会尝试其他空闲端口，使用返回的 URL 打开编辑器，旧书签可能仍指向原端口 |
 | 网页里刚改的内容被 AI 改回去 | 网页保存完成后，让 AI 重新读取页文件，再继续修改，避免沿用缓存版本 |
@@ -52,6 +53,8 @@ soda-storyboard comfy check --project my-project --json
 | 换底图后导出提示派生结果失效 | 对当前底图重新 compose / letter，再导出 |
 
 生成失败时，终端会给出简短原因，需要更多信息时可以查看故事项目 `logs/` 中的诊断。向别人求助时，错误摘要、版本和必要参数通常更方便排查；分享日志前，记得检查其中的本机文件信息。
+
+启动器问题要先分清两类：终端提示“找不到命令”时检查 PATH 和 `uv tool update-shell`；文件存在却出现 trampoline 错误时，问题在 uv 工具环境或其脚本目标，按上表先 `uv tool list`，再用发布版 wheel `--force` 重装。重装后应看到 `soda-storyboard v0.4.1`，并能独立运行 `soda-storyboard --help`。
 
 `validate` 检查的是结构和部分规则。没有 error 后，还需要查看 warning 的具体原因；info 中的本页 LoRA 则是说明信息。角色、手、斜格和台词最终画得怎样，需要在成图后检查。
 

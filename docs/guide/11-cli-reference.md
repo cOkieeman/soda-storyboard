@@ -1,6 +1,6 @@
 # 11. 命令速查
 
-需要自己敲命令时，可以按下面的分组查。表里省略了共同前缀 `soda-storyboard`，完整参数以本机 `soda-storyboard <子命令> --help` 为准。有些命令接页文件路径，有些接项目目录和页 id，使用时按各行的形式填写。
+需要自己敲命令时，可以按下面的分组查。表里省略了共同前缀 `soda-storyboard`，完整参数以本机 `soda-storyboard <子命令> --help` 为准。有些命令接页文件路径，有些接项目目录和页 id，使用时按各行的形式填写。本轮逐一运行了 29 条命令路径的 `--help`，另加 F10 新增的 `register-render`，共 30 次，返回码全部为 0；下面补齐了帮助里实际出现、原表遗漏的参数。
 
 ![草稿和成品](images/stretch-color-process.jpg)
 
@@ -11,10 +11,10 @@
 | 命令 | 用途与常用参数 |
 | --- | --- |
 | `init my-project` | 建项目；`--name`、`--width 1024 --height 1536`、`--direction rtl` |
-| `character new --project my-project --id hiyone` | 新建角色；`--name`、`--appearance-zh`、`--appearance-en`、`--role-en`；可选 `--lora`、`--lora-strength` |
-| `character set hiyone --project my-project` | 只改给出的字段；`--outfit`、`--trigger`、`--reference` 可重复，传入时替换整项列表 |
+| `character new --project my-project --id hiyone` | 新建角色；`--name`、`--trigger`、`--appearance-zh`、`--appearance-en`、`--role-en`、`--outfit`、`--reference`、`--output`；可选 `--lora`、`--lora-strength` |
+| `character set hiyone --project my-project` | 只改给出的字段；`--name`、`--trigger`、`--appearance-zh`、`--appearance-en`、`--role-en`、`--lora`、`--lora-strength`；`--outfit`、`--reference` 可重复，传入时替换整项列表 |
 | `character list --project my-project` | 列角色卡 |
-| `page new --project my-project --id stretch-color` | 建空页；`--dialogue-mode moss_text/lettering`、`--color-mode color/monochrome`、`--text-direction vertical/horizontal` |
+| `page new --project my-project --id stretch-color` | 建空页；`--output`、`--width`、`--height`、`--direction`、`--style`、`--description`、`--dialogue-mode moss_text/lettering`、`--color-mode color/monochrome`、`--text-direction vertical/horizontal` |
 | `page skew my-project/pages/stretch-color.json --panels p1,p2 --angle 8` | 倾斜相邻完整行 / 列的矩形分割线；`--axis auto/vertical/horizontal`，写回页面 |
 
 `page new` 不会自动添加格子。插件或网页需要继续填 `panels` 和连续 `order`。画布宽高为 16 的倍数；`page skew` 角度必须严格在 -45°～45° 内，非法几何会拒绝保存。
@@ -24,7 +24,7 @@
 | 命令 | 用途与常用参数 |
 | --- | --- |
 | `template list` | 列模板；`--panels 5` 按格数筛选 |
-| `layout suggest --panels 5` | 候选版式；`--candidates 6`、`--importance "1,1,3,1,1"`、`--direction rtl`、`--preview-dir`；`--skew 0` 只看矩形 |
+| `layout suggest --panels 5` | 候选版式；`--width`、`--height`、`--templates`、`--candidates 6`、`--importance "1,1,3,1,1"`、`--direction rtl`、`--preview-dir`、`--output`、`--write-page`；`--gap` 调格间距，`--skew 0` 只看矩形 |
 | `layout suggest --page <页文件> --pick <真实模板id>` | 把选中版式写回已有格子的页；预览候选时不要传 `--page` |
 | `layout extract <参考图>` | 提取框位；`--mode auto/color/standard`、`--preview`、`--direction`；保存模板用 `--save --name --project`，颜色保存问题见排错章 |
 | `validate <页文件>` | 检查几何、角色与文字；`--max-dialogue-chars 20`、`--geometry-tolerance 0.5` |
@@ -51,7 +51,7 @@
 
 | 命令 | 用途与常用参数 |
 | --- | --- |
-| `comfy config --project my-project` | 查看 / 改配置；`--url`、`--model`、`--preset`、`--sft`、`--base`、`--clip`、`--vae`、`--timeout`、`--poll-interval` |
+| `comfy config --project my-project` | 查看 / 改配置；`--url`、`--model`、`--workflow`、`--preset`、`--backend`、`--sft`、`--base`、`--clip`、`--vae`、`--timeout`、`--poll-interval`、`--cut-inset`、`--border-width` |
 | `comfy config --project my-project --backend v2 --workflow <API工作流>` | 可选 v2 后端；默认 minimal 不需要该文件，不能拿前端画布 JSON 代替 API JSON |
 | `comfy check --project my-project` | 读取当前后端所需节点和模型列表；实际采样还需要运行生成命令 |
 | `gen page stretch-color --project my-project` | 整页候选；`--seeds 4` 或重复 `--seed`；`--preset draft/final`、`--model base/sft/<文件名>`、`--lora auto/none/<角色id>` |
@@ -62,10 +62,13 @@
 
 ## 后期和导出
 
+`register-render` 是 0.4.2 新增的命令。
+
 | 命令 | 用途与常用参数 |
 | --- | --- |
+| `register-render stretch-color <图片>` | 登记外部生成的整页、单格或 layer 候选；`--project`、`--select`、`--seed`、`--source`、`--preset`、`--model`；`--panel` 与 `--overlay` 互斥，图片会复制到项目生产目录 |
 | `split stretch-color --project my-project` | 按框切格，保存四边形遮罩 |
-| `redraw stretch-color p3 --project my-project --mode detail` | 重画一格修细节；`--denoise 0.45`、`--seed`；swap 为高级选项 |
+| `redraw stretch-color p3 --project my-project --mode detail` | 重画一格修细节；`--character` 可指定 swap 角色，`--denoise 0.45`、`--seed`；swap 为高级选项 |
 | `inpaint stretch-color p3 --project my-project --character hiyone` | 局部重绘；先加 `--mask-only` 看遮罩，再考虑生成；`--denoise`、`--margin 24`、`--feather 16`、`--seed` |
 | `pick-panel stretch-color p3 <候选路径> --project my-project` | 选该格已登记的重画候选 |
 | `cutout stretch-color hero --project my-project` | 为 layer 图层生成透明图；`--seed`；加 `--png <透明图>` 则离线导入 |

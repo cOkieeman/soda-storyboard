@@ -11,14 +11,27 @@
 不带项目参数运行导入命令，可以只读查看报告：
 
 ```powershell
-soda-storyboard import external.json --json
+soda-storyboard import docs/examples/external-moss.json --json
 ```
+
+仓库里有一份最小、完整的[原生 MOSS JSON 示例](../examples/external-moss.json)。它以 `summary` 和 `items` 为核心字段，另带坐标声明，没有画布尺寸；三个条目分别是 `object`、`character` 和 `text`；`bbox_coord_space` 为 `abs_centralized`，`bbox_format` 为 `yxyx`。这是 MOSS 的输入格式，不是 `soda-storyboard-page-v1` 页面文件。
+
+本示例的理解报告应包含这些结果：画布尺寸缺失，工具按 bbox 范围吸附到 **1024×1536**；没有格子，导入页为 `canvas_mode: "single"`；人物只保留原框和描述，不猜角色身份或关节；一个越过推断画布边界的物件只在预览里裁切，原始 bbox 在 `moss_import` 中无损保留；文本条目保留原文“雨停了。”。源文件没有声明颜色模式，因此报告会说明沿用项目设置（独立导入时为 monochrome）。
 
 报告里的宽高、格数和未知条目核对好后，加上项目和页面参数，就能保存进项目：
 
 ```powershell
-soda-storyboard import external.json --project my-project --page-id imported --json
+soda-storyboard import docs/examples/external-moss.json --project my-project --page-id imported-moss --json
 ```
+
+保存后用本地草稿和编译结果核对单画布理解：
+
+```powershell
+soda-storyboard preview my-project/pages/imported-moss.json --output my-project/previews/imported-moss.png --json
+soda-storyboard compile my-project/pages/imported-moss.json --output my-project/output/imported-moss.moss.json --json
+```
+
+预期 `preview` 生成一张 1024×1536 的单画布草稿；`compile` 仍输出 `summary`、`items`、`bbox_coord_space: "abs_centralized"` 和 `bbox_format: "yxyx"`，并保留三个来源条目的顺序。先看报告和预览，再决定是否在编辑器里把人物框绑定到项目角色。
 
 网页导入弹窗使用同一套导入器。如果 MOSS 文件没有写尺寸，导入器会根据坐标范围的纵横比，选取最接近的常用画布：1024×1536、1536×1024、1024×1024、768×1344 或 1344×768。归一化或空布局会回退到 1024×1536。这样可以先得到一份可检查的布局，原稿尺寸仍需要你确认。
 
@@ -46,9 +59,13 @@ soda-storyboard import external.md --project my-project --page-id imported-page 
 soda-storyboard layout extract reference.webp --mode color --preview my-project/previews/import-overlay.png --json
 ```
 
-![颜色草图](images/stretch-color-sketch.png)
+| 作为输入的颜色约定图 | `layout extract --mode color` 的识别叠加图 |
+| --- | --- |
+| ![颜色约定输入图](images/color-layout-input.png) | ![颜色识别叠加图](images/color-layout-overlay.png) |
 
-图：「起身舒展」按颜色约定绘制的本地草稿。工具提取的是框的几何位置，不会 OCR 识别文字；原文和画面内容由插件 AI 看图补入。
+左图是用脚本绘制的实际输入：青色框是两个格子，绿色框是两处文字，红色高框是主角区域，框内只放了一个火柴人和小猫轮廓。右图是本地颜色识别的结果，标出两个 cyan panel、一个 red protagonist 和两个 green text；命令仍然不会 OCR，原文和画面内容要由插件 AI 看图补入。识别报告带“按颜色分类；未做 OCR”的提醒，使用前要核对坐标和阅读顺序。
+
+原来的 `images/stretch-color-sketch.png` 可以继续用来理解本地草稿与人物骨架，但它只是**本地草稿预览**，不是颜色约定的输入图。
 
 接下来，把原图和识别叠加图一起给插件，告诉它“按识别坐标填内容，不要重画框的位置”。AI 会补充每格画面和文字，展示新的草稿，等你确认后再翻译、编译。尤其要核对台词：提取到文字框的位置，只表示找到了框，里面的原文还需要看图补上。
 
