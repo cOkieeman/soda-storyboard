@@ -363,7 +363,7 @@ export function generatePageSketchGeometry(
     const figureList = resolvedFigures(panel, sodaPage.reading_direction);
 
     const generatedFigures: SketchFigure[] = figureList.map((fig, idx) => {
-      const char = charMap.get(fig.character_id);
+      const char = charMap.get(fig.character_id) || (fig.anonymous_character ? { ...fig.anonymous_character, has_lora: false } : undefined);
       const generated = generateFigureGeometry([w, h], fig, char, {
         shot: panel.shot || "medium",
         color: "#00a8c4",
@@ -400,7 +400,7 @@ export function generateOverlayFigure(
   overlay: SodaOverlay,
   characters: CharacterSummary[]
 ): SketchFigure {
-  const char = characters.find((c) => c.id === overlay.character_id);
+  const char = characters.find((c) => c.id === overlay.character_id) || (overlay.anonymous_character ? { ...overlay.anonymous_character, has_lora: false } : undefined);
   const rect = overlay.rect || { x: 50, y: 50, w: 200, h: 200 };
   const w = rect.w;
   const h = rect.h;

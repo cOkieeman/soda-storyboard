@@ -10,6 +10,7 @@ export type CharacterDraft = {
   key: string; value: SodaCharacter; baseline: SodaCharacter | null; version: string;
   dirty: boolean; revision: number; saving: boolean; error?: string; conflict?: boolean;
   validation?: CharacterValidation; validationError?: string; externalChanged?: boolean;
+  identityEditing?: boolean;
   sourceId?: string; sourceVersion?: string; source?: SodaCharacter;
   copyOptions: { copy_lora: boolean; copy_trigger_words: boolean; copy_reference_images: boolean };
   assignTo?: { pageId: string; panelId: string; figureId: string };
@@ -205,7 +206,7 @@ export const useCharacterDraftStore = create<CharacterDraftState>((set, get) => 
     for (const [key, draft] of Object.entries(get().drafts)) {
       const id = draft.sourceId || draft.baseline?.id, version = draft.sourceVersion || draft.version;
       if (!id || versions[id] === version) continue;
-      if (draft.dirty || draft.saving) set(state => ({ drafts: { ...state.drafts, [key]: { ...state.drafts[key], externalChanged: true } } }));
+      if (draft.dirty || draft.saving || draft.identityEditing) set(state => ({ drafts: { ...state.drafts, [key]: { ...state.drafts[key], externalChanged: true } } }));
       else void get().reload(key);
     }
   }

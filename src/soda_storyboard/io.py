@@ -8,6 +8,7 @@ from typing import Any
 
 from .json_safety import check_json_numbers, loads_json
 from .models import CHARACTER_FORMAT, PAGE_FORMAT, PROJECT_FORMAT, Character, Page, Project
+from .persistence import project_lock
 
 
 def read_json(path: str | Path) -> dict[str, Any]:
@@ -25,7 +26,7 @@ def write_json(path: str | Path, value: Any, *, indent: int = 2) -> Path:
     check_json_numbers(payload)
     content = json.dumps(payload, ensure_ascii=False, indent=indent, allow_nan=False) + "\n"
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    with file_path.open("w", encoding="utf-8", newline="\n") as handle:
+    with project_lock(file_path), file_path.open("w", encoding="utf-8", newline="\n") as handle:
         handle.write(content)
     return file_path
 

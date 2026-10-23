@@ -249,7 +249,7 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
     }
 
     const type: BubbleType = t.bubble === "box" || t.bubble === "none" ? "rect" : "rounded";
-    const direction = t.direction === "horizontal" ? "horizontal" : "vertical";
+    const direction = (t.direction ?? soda.text_direction) === "horizontal" ? "horizontal" : "vertical";
 
     return {
       id: t.id,
@@ -260,6 +260,7 @@ export function sodaPageToProjectPage(soda: SodaPage): ProjectPage {
       height,
       text: t.text || "",
       direction,
+      sourceDirection: direction,
       fontSize: resolveTextFontSize(t.font_size, soda.text_font_size, soda.canvas_width),
       fontFamily: "Consolas, 'Microsoft YaHei', sans-serif",
       textColor: "#171815",
@@ -367,16 +368,20 @@ export function projectPageToSodaPage(
 
   // Sync texts
   cloned.texts = page.bubbles.map((b) => {
-    const existing = cloned.texts.find((item) => item.id === b.id) || b.sodaData || {
+    const existing = (cloned.texts.find((item) => item.id === b.id) || b.sodaData || {
       id: b.id,
       kind: "dialogue",
       panel_id: null,
       speaker_id: null,
       bubble: "speech"
-    };
+    }) as SodaText;
 
-    let bbox = (existing as any).bbox;
-    if (!dirtyBubbleIds || dirtyBubbleIds.has(b.id) || !bbox) {
+    // Display defaults are not document fields. Only a geometry change may
+    // turn an automatic box into an explicit box (including tiny legacy boxes).
+    const original = sodaPageToProjectPage({ ...baseSodaPage, panels: [], texts: [existing as SodaText] }).bubbles[0];
+    let bbox = existing.bbox;
+    if ((!dirtyBubbleIds || dirtyBubbleIds.has(b.id)) &&
+      ["x", "y", "width", "height"].some(key => b[key as "x"] !== original[key as "x"])) {
       bbox = {
         type: "rect" as const,
         x: Number(b.x.toFixed(4)),
@@ -390,13 +395,13 @@ export function projectPageToSodaPage(
       ...existing,
       id: b.id,
       text: b.text,
-      direction: b.direction,
-      speaker_id: b.sodaData?.speaker_id ?? existing.speaker_id,
-      panel_id: b.sodaData?.panel_id ?? existing.panel_id,
+      ...(b.direction !== (b.sourceDirection ?? original.direction) ? { direction: b.direction } : {}),
+      ...((b.sodaData?.speaker_id ?? existing.speaker_id) !== undefined ? { speaker_id: b.sodaData?.speaker_id ?? existing.speaker_id } : {}),
+      ...((b.sodaData?.panel_id ?? existing.panel_id) !== undefined ? { panel_id: b.sodaData?.panel_id ?? existing.panel_id } : {}),
       kind: b.sodaData?.kind ?? existing.kind,
       bubble: b.sodaData?.bubble ?? existing.bubble,
-      tail_tip: b.tailTip !== undefined ? b.tailTip : (existing as any).tail_tip,
-      bbox
+      ...(b.tailTip !== undefined ? { tail_tip: b.tailTip } : {}),
+      ...("bbox" in existing || bbox !== undefined ? { bbox } : {})
     };
   });
 

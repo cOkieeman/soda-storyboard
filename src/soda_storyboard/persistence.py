@@ -34,7 +34,7 @@ def file_snapshot(path: Path) -> tuple[bytes, str]:
 
 
 @contextlib.contextmanager
-def page_lock(path: Path) -> Iterator[None]:
+def _file_lock(path: Path) -> Iterator[None]:
     """Lock the stable sidecar inode, including across atomic page replacements."""
     key = os.path.normcase(str(path.resolve()))
     with _guard:
@@ -73,3 +73,23 @@ def page_lock(path: Path) -> Iterator[None]:
                     msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
                 else:
                     fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def project_lock(path: Path) -> Iterator[None]:
+    """Join the project writer lock without adding sidecars to exported artifacts."""
+    project = next(
+        (parent for parent in (path.parent, *path.parents) if (parent / "project.json").is_file()), None
+    )
+    if project is not None:
+        with _file_lock(project / ".soda" / "project-write"):
+            yield
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def page_lock(path: Path) -> Iterator[None]:
+    """Project before file: cooperating page and identity writers use one lock order."""
+    with project_lock(path), _file_lock(path):
+        yield

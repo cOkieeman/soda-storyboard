@@ -4,6 +4,8 @@ import { activeCharacterDraft, characterAppearanceText, characterLora, composeAp
 import { useEditorStore } from "../lib/store";
 import { CHARACTER_COLOR_PRESETS, characterSketchColor } from "../lib/characterColors";
 import type { AppearanceProfile, BilingualText } from "../types";
+import CharacterIdentityDialog from "./CharacterIdentityDialog";
+import type { IdentityOptions } from "../lib/api";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return <section className="inspector-section"><h3 className="text-[13px] font-semibold">{title}</h3><div className="inspector-section-content space-y-3">{children}</div></section>;
@@ -18,6 +20,7 @@ export default function CharacterInspector() {
   const sodaPage = useEditorStore(editor => editor.sodaPage);
   const [conversionOpen, setConversionOpen] = useState(false);
   const [translationStatus, setTranslationStatus] = useState("");
+  const [identityAction, setIdentityAction] = useState<IdentityOptions["action"] | null>(null);
   useEffect(() => { setConversionOpen(false); setTranslationStatus(""); }, [draft?.key]);
   useEffect(() => {
     if (!draft) return;
@@ -66,7 +69,7 @@ export default function CharacterInspector() {
         <Section title="基本资料">
           <Field label="角色名称" value={character.display_name || character.name || ""} readOnly={Boolean(draft.baseline)} onChange={value => patch({ display_name: value })} placeholder="例如：妹妹" />
           <Field label="角色 ID" value={character.id} readOnly={Boolean(draft.baseline)} onChange={value => patch({ id: value })} placeholder="character_01" />
-          {draft.baseline ? <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">改名、更改 ID 和删除将在第二阶段支持。</p> : <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">ID 以小写字母开头，可使用小写字母、数字、下划线和短横线。</p>}
+          {draft.baseline ? <><div className="flex flex-wrap gap-2">{([ ["rename", "改名"], ["rename_id", "更改 ID…"], ["delete", "删除角色…"] ] as const).map(([action, label]) => <button key={action} className="ui-btn ui-btn-sm" disabled={draft.dirty || draft.saving || draft.conflict || draft.externalChanged} onClick={() => setIdentityAction(action)}>{label}</button>)}</div><p className="text-[12px] text-[var(--ink-light)]">先保存或放弃角色草稿，再检查跨页操作的影响范围。</p></> : <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">ID 以小写字母开头，可使用小写字母、数字、下划线和短横线。</p>}
           <Field label="英文称呼" value={character.role_en || ""} onChange={value => patch({ role_en: value })} placeholder="the younger sister" />
           <Field label="年龄" value={character.age || ""} onChange={value => patch({ age: value })} placeholder="可选" />
           <label className="block"><span className="ui-label">人物色 · {color}</span><div className="flex flex-wrap items-center gap-2">{CHARACTER_COLOR_PRESETS.map(item => <button key={item.value} type="button" className="h-7 w-7 rounded border-2" style={{ background: item.value, borderColor: item.value === color ? "var(--ink)" : "transparent" }} aria-label={`人物色 ${item.name}`} aria-pressed={item.value === color} onClick={() => patch({ sketch_color: item.value })} />)}<input aria-label="自定义人物色" type="color" value={color} onChange={event => patch({ sketch_color: event.target.value.toUpperCase() })} className="h-8 w-12 border border-[var(--line)]" /></div></label>
@@ -111,5 +114,6 @@ export default function CharacterInspector() {
       <p className="text-[12px] text-[var(--ink-light)]">{draft.saving ? "正在保存角色…" : draft.dirty ? "角色有未保存修改 · Ctrl+S 保存角色" : "角色已保存"}</p>
       <div className="flex flex-wrap gap-2"><button className="ui-btn ui-btn-sm" disabled={draft.saving || !draft.dirty} onClick={() => { if (window.confirm("放弃这个角色的未保存修改？")) state.discard(draft.key); }}>放弃修改</button><button className="ui-btn ui-btn-sm ui-btn-primary" disabled={!canSave} onClick={() => void state.save(draft.key)}><Save size={13} />{draft.baseline ? "保存角色" : draft.sourceId ? "创建副本" : draft.assignTo ? "创建并指派角色" : "创建角色"}</button></div>
     </div>
+    {identityAction && <CharacterIdentityDialog draft={draft} action={identityAction} close={() => setIdentityAction(null)} />}
   </aside>;
 }

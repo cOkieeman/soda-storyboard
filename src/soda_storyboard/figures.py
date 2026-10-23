@@ -107,12 +107,18 @@ def figure_geometry(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- shared determin
     editor_scale: float = 1,
 ) -> dict:
     """Return JSON primitives in page coordinates, shared by PNG and editor."""
+    if character is None and figure.extra.get("anonymous_character"):
+        from .models import Character  # noqa: PLC0415 -- instance-owned appearance
+
+        character = Character.from_dict(figure.extra["anonymous_character"])
     color = character_sketch_color(character, color)
     if figure.extra.get("editor") is not None:
         return editor_figure_geometry(
             size,
             figure,
-            character.display_name if character else figure.character_id,
+            character.display_name
+            if character
+            else ("无名人物" if figure.extra.get("anonymous_character") else figure.character_id),
             shot=shot,
             color=color,
             origin=origin,
@@ -212,7 +218,11 @@ def figure_geometry(  # noqa: C901, PLR0912, PLR0913, PLR0915 -- shared determin
         line(leg)
     if pose == "sit":
         line([(-0.27, 0.59), (0.27, 0.59), (0.27, 0.88)], thin=True)
-    name = character.display_name if character else figure.character_id
+    name = (
+        character.display_name
+        if character
+        else ("无名人物" if figure.extra.get("anonymous_character") else figure.character_id)
+    )
     ox, oy = origin
     for item in draw.items:
         if item["type"] == "circle":

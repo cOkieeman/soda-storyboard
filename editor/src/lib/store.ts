@@ -569,6 +569,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const disconnect = connectEvents((event: SseEvent) => {
         const state = get();
         if (event.type === "ready" || event.type === "resync") {
+          void import("./characterIdentity").then(module => { module.resetIdentityHistory(); return module.refreshIdentityHistory(); }).catch(() => {});
           void get().refreshCharacters().catch(console.error);
           // Re-fetch project and current page if no unsaved changes
           apiGetProject().then(({ project: p, pages: pgs, characters: chs }) => {
@@ -577,6 +578,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           if (!state.hasUnsavedChanges && state.activePageId) {
             get().reloadCurrentPage();
           }
+        } else if (event.type === "character_operation") {
+          void import("./characterIdentity").then(module => module.acceptIdentityResult(event.data)).catch(error => get().setNotice(`角色操作刷新失败：${error.message}`));
         } else if (event.type === "file_changed") {
           if (event.data.character_id || /(^|[\\/])characters[\\/]/.test(event.data.path || "")) {
             void get().refreshCharacters().catch(console.error);
@@ -1018,13 +1021,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           text: patch.text ?? t.text,
           direction: patch.direction ?? t.direction,
           tail_tip: patch.tailTip !== undefined ? patch.tailTip : t.tail_tip,
-          bbox: {
+          ...(["x", "y", "width", "height"].some(key => key in patch) ? { bbox: {
             type: "rect" as const,
             x: targetB ? targetB.x : (patch.x ?? t.bbox?.x ?? 0),
             y: targetB ? targetB.y : (patch.y ?? t.bbox?.y ?? 0),
             w: targetB ? targetB.width : (patch.width ?? t.bbox?.w ?? 100),
             h: targetB ? targetB.height : (patch.height ?? t.bbox?.h ?? 200)
-          }
+          } } : {})
         };
       });
     }
@@ -1079,8 +1082,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             borderColor: patch.bubble === "none" ? "transparent" : "#171815",
             borderWidth: patch.bubble === "none" ? 0 : 2
           } : {}),
-          direction: patch.direction ? (patch.direction as any) : b.direction,
+          direction: "direction" in patch ? (patch.direction ?? state.sodaPage!.text_direction ?? "vertical") : b.direction,
+          ...("direction" in patch ? { sourceDirection: patch.direction ?? state.sodaPage!.text_direction ?? "vertical" } : {}),
           tailTip: patch.tail_tip !== undefined ? patch.tail_tip : b.tailTip,
+          ...("bbox" in patch && !patch.bbox ? (() => { const view = sodaPageToProjectPage(nextSodaPage).bubbles.find(item => item.id === id)!; return { x: view.x, y: view.y, width: view.width, height: view.height }; })() : {}),
           sodaData: {
             ...(b.sodaData as any),
             ...patch

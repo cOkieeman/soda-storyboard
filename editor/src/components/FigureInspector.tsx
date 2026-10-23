@@ -48,7 +48,8 @@ export default function FigureInspector({ figure, figureId, panel, onSelectObjec
   const knownPose = Object.prototype.hasOwnProperty.call(FIGURE_POSE_PRESETS, figure.pose);
   const poseOptions = knownPose ? POSE_OPTIONS : [{ value: figure.pose, label: `自定义 · ${figure.pose}` }, ...POSE_OPTIONS];
   const characterOptions = characters.map((character) => ({ value: character.id, label: character.display_name }));
-  if (!characterOptions.some((option) => option.value === figure.character_id)) characterOptions.unshift({ value: figure.character_id, label: !figure.character_id || figure.character_id === "char" ? "未指定角色" : figure.character_id });
+  const color = characterSketchColor(characters.find(character => character.id === figure.character_id) || figure.anonymous_character);
+  if (!characterOptions.some((option) => option.value === figure.character_id)) characterOptions.unshift({ value: figure.character_id, label: figure.anonymous_character?.display_name || (!figure.character_id || figure.character_id === "char" ? "未指定角色" : figure.character_id) });
   const maxSize = Math.max(100, Math.round(Math.max(width, height) * 2));
   const changeNumber = (field: "x" | "y" | "size", raw: string) => {
     if (raw === "") return;
@@ -61,8 +62,9 @@ export default function FigureInspector({ figure, figureId, panel, onSelectObjec
     <div className="inspection-start inspector-return"><button type="button" className="ui-btn ui-btn-sm" onClick={() => onSelectObject({ kind: "panel", id: panel.id })}><ArrowLeft size={13} aria-hidden="true" />返回格子 {panel.order}</button></div>
     <FigureSection title="人物与姿势">
       <FigureSelect label="角色" value={figure.character_id} options={characterOptions} onChange={(value) => update({ character_id: value })} />
+      {figure.anonymous_character && !figure.character_id && <div className="ui-notice-box text-[12px] space-y-1"><p>无名人物 · 已保留外观快照，可重新指派项目角色。</p><p>{figure.anonymous_character.appearance?.zh || figure.anonymous_character.appearance?.en || "原角色没有填写外观描述。"}</p></div>}
       <div className="flex flex-wrap gap-2"><button className="ui-btn ui-btn-sm" disabled={!characters.some(item => item.id === figure.character_id)} onClick={() => void useCharacterDraftStore.getState().open(figure.character_id)}>编辑角色资料</button><button className="ui-btn ui-btn-sm" onClick={() => useCharacterDraftStore.getState().create({ pageId: useEditorStore.getState().activePageId, panelId: panel.id, figureId })}>新建并指派</button></div>
-      <p className="flex items-center gap-2 text-[13px] text-[var(--ink-light)]"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: characterSketchColor(characters.find(character => character.id === figure.character_id)) }} />人物色 {characterSketchColor(characters.find(character => character.id === figure.character_id)).toUpperCase()} · 在左侧“角色”中更改</p>
+      <p className="flex items-center gap-2 text-[13px] text-[var(--ink-light)]"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: color }} />人物色 {color.toUpperCase()} · {figure.anonymous_character && !figure.character_id ? "来自外观快照" : "在左侧“角色”中更改"}</p>
       <FigureSelect label="姿势预设" value={figure.pose} options={poseOptions} onChange={applyPose} />
       {figure.pose === "lie" && editor.view !== "side" && <div className="ui-notice-box space-y-2"><p>这个人物保留了旧躺姿，可重新应用侧视躺卧。</p><button type="button" className="ui-btn ui-btn-sm" onClick={() => applyPose("lie")}>应用侧视躺卧</button></div>}
       <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">拖动人物移动站位；拖动红色关节点调整动作。</p>

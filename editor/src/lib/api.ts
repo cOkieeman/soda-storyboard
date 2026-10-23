@@ -299,6 +299,14 @@ export const createCharacter = (character: SodaCharacter) => writeCharacter("/ap
 export const patchCharacter = (id: string, patch: Partial<SodaCharacter>, version: string) => writeCharacter(`/api/characters/${encodeURIComponent(id)}`, "PATCH", patch, version);
 export const duplicateCharacter = (id: string, character: SodaCharacter, version: string, options: { copy_lora: boolean; copy_trigger_words: boolean; copy_reference_images: boolean }) => writeCharacter(`/api/characters/${encodeURIComponent(id)}/duplicate`, "POST", { character, ...options }, version);
 
+export type IdentityOptions = { action: "rename" | "rename_id" | "delete"; display_name?: string; new_id?: string; mode?: "block" | "replace" | "anonymous"; replacement_id?: string; preserve_lora?: boolean };
+export type IdentityPlan = { plan_id: string; action: string; character_id: string; target_id: string | null; affected_files: string[]; references: { path: string; pointer: string; kind: string }[]; lora_changes: { path: string; before: any; after: any }[]; warnings: string[] };
+export type IdentityResult = { operation_id: string; action: string; character_id?: string; target_id?: string | null; affected_files: string[] };
+export const planCharacterIdentity = async (id: string, options: IdentityOptions, version: string) => (await request<IdentityPlan>(`/api/characters/${encodeURIComponent(id)}/plan`, { method: "POST", headers: { "If-Match": version }, body: JSON.stringify(options) })).data;
+export const commitCharacterIdentity = async (id: string, plan_id: string, version: string) => (await request<IdentityResult>(`/api/characters/${encodeURIComponent(id)}/commit`, { method: "POST", headers: { "If-Match": version }, body: JSON.stringify({ plan_id }) })).data;
+export const characterOperationHistory = async () => (await request<{ operations: (IdentityResult & { version: string })[] }>("/api/character-operations")).data.operations;
+export const undoCharacterOperation = async (id: string, version: string) => (await request<IdentityResult>(`/api/character-operations/${encodeURIComponent(id)}/undo`, { method: "POST", headers: { "If-Match": version }, body: "{}" })).data;
+
 /** Read the complete latest file before merging its color; conditional PUT never overwrites a concurrent edit. */
 export async function saveCharacterColor(id: string, color: string): Promise<SodaCharacter> {
   const normalized = normalizeCharacterColor(color);
@@ -502,6 +510,11 @@ export function connectEvents(
       console.error("Failed to parse file_changed event", err);
     }
   });
+
+    eventSource.addEventListener("character_operation", (e) => {
+      try { onEvent({ type: "character_operation", data: parseJsonWithStringSeeds(e.data) }); }
+      catch (error) { console.error("Invalid character operation event", error); }
+    });
 
   eventSource.addEventListener("job", (e) => {
     try {

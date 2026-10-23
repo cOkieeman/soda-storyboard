@@ -278,7 +278,7 @@ def command_page_skew(args: argparse.Namespace) -> int:
     quads = skew_rectangles(selected, angle=args.angle, gap=page.panel_gap, axis=args.axis)
     for identifier, quad in zip(ids, quads, strict=True):
         panels[identifier]["shape"] = quad
-    report = validate_page(Page.from_dict(payload), _characters_near(path))
+    report = validate_page(Page.from_dict(payload), _characters_near(path) or None)
     if report.errors:
         raise ValueError(report.errors[0].message)
     write_json(path, payload)

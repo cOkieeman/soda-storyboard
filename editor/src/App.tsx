@@ -150,6 +150,7 @@ export default function App() {
       const key = event.key.toLowerCase();
       const state = useEditorStore.getState();
       if (state.importModalOpen) return;
+      if (document.querySelector('[role="dialog"][aria-labelledby="identity-title"]')) return;
       if (isCharacterScope(useCharacterDraftStore.getState().target)) {
         if (modified && key === "s") { event.preventDefault(); void useCharacterDraftStore.getState().save(); }
         if (!isInput && (event.key === "Delete" || event.key === "Backspace" || (modified && ["z", "y", "c", "v", "d"].includes(key)))) event.preventDefault();

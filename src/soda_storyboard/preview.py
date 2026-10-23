@@ -380,7 +380,7 @@ def _render_sketch(  # noqa: PLR0912 -- labels, figures, overlays and lettering 
             layer = Image.new("RGBA", (max(1, x2 - x), max(1, y2 - y)))
             draw_figure(
                 layer,
-                Figure(overlay.character_id, pose="arms_up"),
+                Figure(overlay.character_id, pose="arms_up", extra=overlay.extra),
                 character_map.get(overlay.character_id),
                 shot="full",
                 color=CHARACTER_COLOR,

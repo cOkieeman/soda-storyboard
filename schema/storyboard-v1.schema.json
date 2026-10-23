@@ -234,8 +234,7 @@
           ]
         },
         "character_id": {
-          "type": "string",
-          "minLength": 1
+          "type": "string"
         },
         "rect": {
           "$ref": "#/$defs/rect"
@@ -277,9 +276,28 @@
           ],
           "default": "auto",
           "description": "Layer generation framing. Auto infers body-part or explicit whole-person descriptions; ambiguous descriptions use object."
+        },
+        "anonymous_character": {
+          "$ref": "#/$defs/anonymousCharacter"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "character_id": {
+                "const": ""
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "anonymous_character"
+            ]
+          }
+        }
+      ]
     },
     "page": {
       "type": "object",
@@ -827,6 +845,9 @@
             }
           },
           "additionalProperties": true
+        },
+        "anonymous_character": {
+          "$ref": "#/$defs/anonymousCharacter"
         }
       },
       "additionalProperties": true
@@ -1119,6 +1140,61 @@
         }
       },
       "additionalProperties": true
+    },
+    "anonymousCharacter": {
+      "type": "object",
+      "required": [
+        "id",
+        "display_name",
+        "appearance"
+      ],
+      "properties": {
+        "id": {
+          "const": ""
+        },
+        "display_name": {
+          "const": "无名人物"
+        },
+        "appearance": {
+          "type": "object",
+          "required": [
+            "zh",
+            "en"
+          ],
+          "properties": {
+            "zh": {
+              "type": "string"
+            },
+            "en": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "lora"
+            ]
+          },
+          {
+            "required": [
+              "lora_path"
+            ]
+          },
+          {
+            "required": [
+              "trigger_words"
+            ]
+          },
+          {
+            "required": [
+              "triggers"
+            ]
+          }
+        ]
+      }
     }
   }
 }

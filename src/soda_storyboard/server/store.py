@@ -21,6 +21,7 @@ from soda_storyboard.production.paths import validate_production_paths
 from soda_storyboard.templates import suggest_layouts
 from soda_storyboard.validation import validate_page
 
+from .character_operations import CharacterOperations
 from .characters import CharacterStore
 from .common import APIError, identifier, inside, snapshot
 
@@ -36,6 +37,18 @@ MAX_CANDIDATES = 32
 CANDIDATE_CACHE_SIZE = 256
 
 
+def preserve_text_layout(page: dict, source: dict) -> dict:
+    """Model defaults remain display defaults when absent in the submitted document."""
+    result = deepcopy(page)
+    originals = {text["id"]: text for text in source.get("texts", [])}
+    for text in result.get("texts", []):
+        original = originals.get(text["id"], {})
+        for key in ("direction", "bbox"):
+            if key not in original and text.get(key) is None:
+                text.pop(key, None)
+    return result
+
+
 class Store:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
@@ -44,6 +57,7 @@ class Store:
         self.production_pages: set[str] = set()
         self.character_store = CharacterStore(self)
         load_project(self.path("project.json"))
+        self.character_operations = CharacterOperations(self)
 
     def path(self, relative: str) -> Path:
         return inside(self.root, relative)
@@ -90,11 +104,23 @@ class Store:
             ],
         }
 
-    def atomic(self, path: Path, value: Any, expected_version: str | None = None) -> tuple[dict, str]:
+    def atomic(
+        self,
+        path: Path,
+        value: Any,
+        expected_version: str | None = None,
+        *,
+        layout_source: dict | None = None,
+    ) -> tuple[dict, str]:
         temporary = self.path(path.relative_to(self.root).as_posix() + f".{uuid.uuid4().hex}.tmp")
         try:
             if isinstance(value, Page):
                 save_page(value, temporary)
+                if layout_source is not None:
+                    prepared = read_json(temporary)
+                    preserved = preserve_text_layout(prepared, layout_source)
+                    if prepared != preserved:
+                        write_json(temporary, preserved)
             else:
                 write_json(temporary, value)
             committed, committed_version = snapshot(temporary)
@@ -181,7 +207,9 @@ class Store:
                 raise APIError(400, "页面 id 必须与 URL 一致")
             # Validation can be slow; catch CLI changes made during validation too.
             self.match(page_id, version)
-            saved, saved_version = self.atomic(self.page_path(page_id), page, expected_version=version)
+            saved, saved_version = self.atomic(
+                self.page_path(page_id), page, expected_version=version, layout_source=value
+            )
             return {"page": saved, "version": saved_version, "warnings": report["warnings"]}
 
     def create_page(self, value: dict) -> dict:
@@ -205,7 +233,7 @@ class Store:
             page, report = self.checked({**defaults, **value})
             if page.id != page_id:
                 raise APIError(400, "页面 id 与 page_id 不一致")
-            saved, saved_version = self.atomic(target, page)
+            saved, saved_version = self.atomic(target, page, layout_source=value)
             return {"page": saved, "version": saved_version, "warnings": report["warnings"]}
 
     def delete(self, page_id: str, version: str | None) -> dict:

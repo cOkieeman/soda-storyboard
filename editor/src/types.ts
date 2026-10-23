@@ -65,6 +65,7 @@ export type Bubble = {
   height: number;
   text: string;
   direction: BubbleDirection;
+  sourceDirection?: BubbleDirection;
   fontSize: number;
   fontFamily: string;
   textColor: string;
@@ -178,6 +179,7 @@ export type FigureEditor = {
 };
 
 export type Figure = {
+  anonymous_character?: SodaCharacter;
   id?: string;
   editor?: FigureEditor;
   character_id: string;
@@ -244,6 +246,7 @@ export type OverlayMode = "moss" | "layer";
 export type OverlayStatus = "planned" | "approved";
 
 export type SodaOverlay = {
+  anonymous_character?: SodaCharacter;
   id: string;
   character_id: string;
   rect: RectShape;
@@ -443,6 +446,7 @@ export type ValidationResult = {
 };
 
 export type SseEvent =
+  | { type: "character_operation"; data: { operation_id: string; action: string; affected_files: string[]; character_id?: string; target_id?: string | null } }
   | { type: "ready"; data: { refresh: boolean } }
   | { type: "resync"; data: { message: string } }
   | {

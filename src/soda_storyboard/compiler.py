@@ -7,9 +7,10 @@ from itertools import combinations
 from math import ceil, floor
 from typing import TYPE_CHECKING, Any
 
+from .captions import character_caption as character_caption  # noqa: PLC0414 -- public re-export
 from .captions import (
-    character_caption,
     custom_caption_enabled,
+    instance_caption,
     panel_caption,
     translation_state,
 )
@@ -373,7 +374,8 @@ def _overlay_item(
         "label": "character",
         "caption": (
             "Main center character focus breaking across the middle panels: "
-            f"{character_caption(overlay.character_id, characters, language)}, {overlay.description}"
+            f"{instance_caption(overlay.character_id, overlay.extra, characters, language)}, "
+            f"{overlay.description}"
         ),
         "bbox": _integer_bbox(overlay.rect, page),
     }

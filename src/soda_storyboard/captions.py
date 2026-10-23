@@ -134,11 +134,22 @@ def figure_caption(
 ) -> str:
     return _join_preserving(
         [
-            character_caption(figure.character_id, characters, language),
+            instance_caption(figure.character_id, figure.extra, characters, language),
             figure_description(figure, language, head_only=shot in {"close_up", "extreme_close_up"}),
         ],
         language,
     )
+
+
+def instance_caption(identifier: str, extra: dict, characters: Mapping[str, Character], language: str) -> str:
+    """Anonymous figures carry their own appearance and never load a character LoRA."""
+    from .character_references import anonymous_character  # noqa: PLC0415
+    from .models import Character  # noqa: PLC0415 -- needed for instance snapshots
+
+    snapshot = extra.get("anonymous_character")
+    if not identifier and anonymous_character(snapshot):
+        return character_caption("", {"": Character.from_dict(snapshot)}, language)
+    return character_caption(identifier, characters, language)
 
 
 def custom_caption_enabled(panel: Panel, page: Page) -> bool:
@@ -173,7 +184,13 @@ def _scene_without_repeated_appearance(
 
 
 def panel_character_ids(panel: Panel, page: Page) -> list[str]:
-    return list(dict.fromkeys([*panel.character_ids, *(f.character_id for f in panel_figures(panel, page))]))
+    return list(
+        dict.fromkeys(
+            identifier
+            for identifier in [*panel.character_ids, *(f.character_id for f in panel_figures(panel, page))]
+            if identifier
+        )
+    )
 
 
 def outfit_distinction(panel: Panel, page: Page, characters: Mapping[str, Character], language: str) -> str:

@@ -200,7 +200,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const selectedOverlay = selection?.kind === "overlay" ? sodaPage.overlays?.find((overlay) => overlay.id === selection.id) : undefined;
   const selectedObject = selection?.kind === "object" ? sodaPage.objects?.find(object => object.id === selection.id) : undefined;
   const hasSelection = Boolean(selectedPanel || selectedFigure || selectedText || selectedOverlay || selectedObject);
-  const figureName = selectedFigure ? characters.find(character => character.id === selectedFigure.character_id)?.display_name || characterDetails[selectedFigure.character_id]?.display_name || "未指定角色" : "";
+  const figureName = selectedFigure ? characters.find(character => character.id === selectedFigure.character_id)?.display_name || characterDetails[selectedFigure.character_id]?.display_name || selectedFigure.anonymous_character?.display_name || "未指定角色" : "";
   const title = selections.length > 1 ? "批量属性" : selectedObject ? selectedObject.label === "character" ? "人物框" : "物件框" : selectedFigure ? `${figureName} · 第 ${figurePanel!.order} 格` : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
   const objectId = selectedFigure ? "人物与姿势" : selectedObject?.id || selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
   const deleteLabel = `删除${selectedObject ? "物件框" : selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;

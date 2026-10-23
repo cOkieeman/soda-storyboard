@@ -15,7 +15,13 @@ if TYPE_CHECKING:
 
 def panel_characters(panel: Panel) -> list[str]:
     """List each appearing character once, including figure-only appearances."""
-    return list(dict.fromkeys([*panel.character_ids, *(f.character_id for f in panel.figures)]))
+    return list(
+        dict.fromkeys(
+            identifier
+            for identifier in [*panel.character_ids, *(f.character_id for f in panel.figures)]
+            if identifier
+        )
+    )
 
 
 def _appearance_areas(page: Page) -> Counter[str]:

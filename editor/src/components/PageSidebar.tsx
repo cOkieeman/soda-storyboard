@@ -8,6 +8,7 @@ import { readUiPreference, saveUiPreference } from "../lib/localUiPreferences";
 import { selectionKey } from "../lib/batchEditing";
 import type { Selection, SodaOverlay, SodaText } from "../types";
 import { useCharacterDraftStore } from "../lib/characterDrafts";
+import { CharacterOperationUndo } from "./CharacterIdentityDialog";
 
 const shotLabels: Record<string, string> = {
   extreme_long: "大远景", long: "远景", full: "全景", medium: "中景", close_up: "近景", extreme_close_up: "特写"
@@ -101,7 +102,7 @@ export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebar
 
   const renderOverlay = (overlay: SodaOverlay) => {
     const selected = isSelected({ kind: "overlay", id: overlay.id });
-    const characterName = characters.find(character => character.id === overlay.character_id)?.display_name || overlay.character_id || "未指定角色";
+    const characterName = characters.find(character => character.id === overlay.character_id)?.display_name || overlay.anonymous_character?.display_name || overlay.character_id || "未指定角色";
     return <div key={overlay.id} className="object-tree-row relative" data-overlay-id={overlay.id}><button type="button" className={"outline-text-button outline-figure-button" + (selected ? " is-selected" : "")} style={{ paddingRight: 64 }} aria-pressed={selected} onClick={event => selectObject({ kind: "overlay", id: overlay.id }, event.shiftKey || event.ctrlKey || event.metaKey)}>
       <span className="outline-panel-meta">跨格人物 · {characterName}</span><span>{shortText(overlay.description || "", 36) || "未填写动作描述"}</span>
     </button><ObjectControls selection={{ kind: "overlay", id: overlay.id }} label={`跨格人物 ${characterName}`} /></div>;
@@ -113,6 +114,7 @@ export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebar
   const visibleUnassignedOverlays = unassignedOverlays.filter(overlayMatches);
   return (
     <aside className="page-sidebar" aria-label="页面与角色">
+      <CharacterOperationUndo />
       <div className="sidebar-tabs" role="tablist" aria-label="资源类型">
         <button role="tab" aria-selected={tab === "pages"} aria-controls="page-resources" id="pages-tab" onClick={() => setTab("pages")}>页面 <span>{pages.length}</span></button>
         <button role="tab" aria-selected={tab === "characters"} aria-controls="character-resources" id="characters-tab" onClick={() => setTab("characters")}>角色 <span>{characters.length}</span></button>
@@ -176,7 +178,7 @@ export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebar
                     {expanded && <div className="outline-text-list">{figures.map(({ figure, figureIndex }) => {
                       const figureId = getFigureId(figure, figureIndex);
                       const selectedFigure = isSelected({ kind: "figure", panelId: panel.id, id: figureId });
-                      const characterName = characters.find((character) => character.id === figure.character_id)?.display_name;
+                      const characterName = characters.find((character) => character.id === figure.character_id)?.display_name || figure.anonymous_character?.display_name;
                       return <div key={figureId} className="object-tree-row relative"><button type="button" className={"outline-text-button outline-figure-button" + (selectedFigure ? " is-selected" : "")} style={{ paddingRight: 64 }} aria-pressed={selectedFigure} onClick={event => selectObject({ kind: "figure", id: figureId, panelId: panel.id }, event.shiftKey || event.ctrlKey || event.metaKey)}><span className="outline-panel-meta">人物 {figureIndex + 1}{figure.editor?.break_frame ? " · 出框" : ""}</span><span>{characterName || "未指定角色"}</span></button><ObjectControls selection={{ kind: "figure", id: figureId, panelId: panel.id }} label={`人物 ${characterName || figureIndex + 1}`} /></div>;
                     })}{panelTexts.map(renderText)}{panelOverlays.map(renderOverlay)}</div>}
                   </> : <span className="outline-panel-meta">尚未添加人物或文字</span>}

@@ -137,7 +137,7 @@ def _validated_warnings(page: Page, cards: dict[str, Character], *, bare: bool =
     if page.dialogue_mode not in DIALOGUE_MODES:
         message = "台词模式必须为 moss_text 或 lettering"
         raise ValueError(message)
-    report = validate_page(page, cards)
+    report = validate_page(page, None if bare and not cards else cards)
     # A bare page deliberately has no character table. Keep every geometry and
     # content error, but permit overlays to use the same id-only fallback as figures.
     errors = [

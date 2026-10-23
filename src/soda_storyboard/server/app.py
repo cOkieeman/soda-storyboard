@@ -262,6 +262,24 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(store.create_page(body), 201)
         elif path == "/api/characters" and method == "GET":
             self.send(200, store.character_store.catalog())
+        elif path == "/api/character-operations" and method == "GET":
+            self.send(200, store.character_operations.history())
+        elif path == "/api/character-operations/preview" and method == "POST":
+            self.send(
+                200,
+                store.character_operations.plan(body.get("character_id"), body, self.headers.get("If-Match")),
+            )
+        elif path.startswith("/api/character-operations/") and method == "POST":
+            parts = path.split("/")
+            if len(parts) != 5 or parts[4] not in {"undo", "commit"}:
+                raise APIError(404, "角色操作接口不存在")
+            with self.server.events.lock:
+                if parts[4] == "undo":
+                    result = store.character_operations.undo(parts[3], self.headers.get("If-Match"))
+                else:
+                    result = store.character_operations.commit_plan(parts[3], self.headers.get("If-Match"))
+                self.server.events.publish("character_operation", result)
+                self.send(200, result)
         elif path == "/api/characters/validate" and method == "POST":
             self.send(200, store.character_store.validate(body))
         elif path == "/api/characters" and method == "POST":
@@ -323,7 +341,23 @@ class Handler(BaseHTTPRequestHandler):
             return
         client_id = self.editor_client_id()
         with self.server.events.lock:
-            if len(parts) == 4 and method in {"PATCH", "PUT"}:
+            if len(parts) == 5 and parts[4] == "references" and method == "GET":
+                self.json_response(self.server.store.character_operations.references(character_id))
+            elif len(parts) == 5 and parts[4] == "plan" and method == "POST":
+                self.send(200, self.server.store.character_operations.plan(character_id, body, expected))
+            elif len(parts) == 5 and parts[4] == "commit" and method == "POST":
+                result = self.server.store.character_operations.commit(
+                    character_id, body.get("plan_id"), expected
+                )
+                self.server.events.publish("character_operation", result)
+                self.send(200, result)
+            elif len(parts) == 4 and method == "DELETE":
+                operations = self.server.store.character_operations
+                planned = operations.plan(character_id, {"action": "delete", "mode": "block"}, expected)
+                result = operations.commit(character_id, planned["plan_id"], expected)
+                self.server.events.publish("character_operation", result)
+                self.send(200, result)
+            elif len(parts) == 4 and method in {"PATCH", "PUT"}:
                 result = characters.save(character_id, body, expected, patch=method == "PATCH")
                 self.character_changed(result, client_id)
                 self.json_response(result)
@@ -332,7 +366,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.character_changed(result, client_id, "added")
                 self.json_response(result, 201)
             else:
-                raise APIError(405, "角色接口支持读取、新建、PATCH、兼容 PUT 和复制；跨页身份操作之后支持")
+                raise APIError(405, "角色接口不支持此请求方法")
 
     def editor_client_id(self) -> str | None:
         client_id = self.headers.get("X-Client-Id")

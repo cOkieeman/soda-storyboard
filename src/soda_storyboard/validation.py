@@ -433,6 +433,19 @@ def validate_page(
         report.add("error", "invalid_canvas", "画布宽高必须为正数", field_name="canvas")
 
     char_map = _character_map(characters)
+    if characters is not None:
+        from .character_references import page_references  # noqa: PLC0415
+
+        raw_page = page.to_dict() if isinstance(page, Page) else _as_dict(page)
+        for reference in page_references(raw_page):
+            if reference["character_id"] not in char_map:
+                report.add(
+                    "error",
+                    "unknown_character_reference",
+                    "页面有悬空角色引用",
+                    field_name=reference["pointer"],
+                    details=reference,
+                )
     if isinstance(page, Page):
         caption_page = page
     else:
@@ -788,7 +801,7 @@ def _validate_overlays(
         parent = _get(overlay, "panel_id")
         if parent and parent not in panel_ids:
             report.add("error", "unknown_overlay_panel", "出格图层引用了不存在的格子", field_name="overlays")
-        if _get(overlay, "character_id", "") not in characters:
+        if _get(overlay, "character_id", "") not in characters and not _anonymous_instance(overlay):
             report.add(
                 "error", "unknown_overlay_character", "出格图层引用了不存在的角色", field_name="overlays"
             )
@@ -806,6 +819,14 @@ def _validate_overlays(
             report.add("error", "invalid_overlay_status", "出格图层状态无效", field_name="overlays")
         if _number(_get(overlay, "z_index", 1)) < 1:
             report.add("error", "invalid_overlay_layer", "出格图层层级必须高于格子", field_name="overlays")
+
+
+def _anonymous_instance(value: Any) -> bool:
+    from .character_references import anonymous_character  # noqa: PLC0415
+
+    return not _get(value, "character_id", "") and anonymous_character(
+        _get(value, "anonymous_character", _get(value, "extra", {}).get("anonymous_character"))
+    )
 
 
 def _validate_storytelling(
@@ -929,7 +950,7 @@ def _validate_storytelling(
                     field_name="figures.framing",
                 )
             identifier = _get(figure, "character_id", "")
-            if characters and identifier not in characters:
+            if characters and identifier not in characters and not _anonymous_instance(figure):
                 report.add(
                     "error",
                     "unknown_figure_character",
