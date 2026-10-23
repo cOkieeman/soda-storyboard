@@ -11,8 +11,12 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/soda-storyboard/
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -43,3 +47,7 @@ jobs:
             "dist/soda_storyboard-${VERSION}-py3-none-any.whl" \
             "dist/soda_storyboard-${VERSION}.tar.gz" \
             --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+      - name: Publish to PyPI (trusted publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

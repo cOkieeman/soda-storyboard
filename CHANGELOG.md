@@ -1,5 +1,9 @@
 # 更新记录
 
+## 0.4.4 — 2026-10-24
+
+- 发布流程新增：打标签时通过可信发布（Trusted Publishing）自动上传到 PyPI，之后可以直接 `pip install soda-storyboard` / `uv tool install soda-storyboard`。代码无功能变化。
+
 ## 0.4.3 — 2026-10-24
 
 - F11 / U2：修复外来 MOSS 导入页保存重载后因整数/浮点快照差异误判为编辑、导致原 bbox 被预览裁剪框替换的问题；兼容已有导入页的旧快照，未编辑条目保留原坐标，编辑条目使用当前数据。
