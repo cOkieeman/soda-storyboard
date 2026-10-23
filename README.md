@@ -27,7 +27,7 @@ flowchart LR
 1. 安装命令行工具。准备 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/) 后运行，网页编辑器也会一起装好，无需另装 Node。
 
    ```powershell
-   uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl
+   uv tool install soda-storyboard
    soda-storyboard --help
    ```
 
@@ -72,10 +72,10 @@ flowchart LR
 ## 用配套节点工作流出图
 
 1. 将节点仓库 [ComfyUI-Soda-Storyboard](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) 放到 `ComfyUI/custom_nodes/ComfyUI-Soda-Storyboard`。插件用于讨论和编辑分镜，在 ComfyUI 出图还需要这个节点包。
-2. 给 ComfyUI 使用的 Python 安装核心 wheel，然后重启。Windows 便携版在 `ComfyUI_windows_portable` 根目录运行：
+2. 给 ComfyUI 使用的 Python 安装核心库，然后重启。用 ComfyUI Manager 安装节点时会自动装好；手动安装时，Windows 便携版在 `ComfyUI_windows_portable` 根目录运行：
 
    ```powershell
-   .\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl"
+   .\python_embeded\python.exe -m pip install --upgrade soda-storyboard
    ```
 
    普通安装使用启动 ComfyUI 的那个 Python。完整安装与版本要求见 [安装章](docs/guide/02-installation.md)。
@@ -110,10 +110,10 @@ flowchart LR
 
 从 [中文使用说明目录](docs/guide/README.md) 继续：[安装](docs/guide/02-installation.md) · [第一页](docs/guide/03-first-page.md) · [角色卡](docs/guide/04-characters.md) · [编辑器](docs/guide/05-editor.md) · [提示词](docs/guide/06-prompts.md) · [出图后期](docs/guide/07-generation.md) · [ComfyUI](docs/guide/08-comfyui.md) · [排错](docs/guide/10-troubleshooting.md) · [命令速查](docs/guide/11-cli-reference.md)。
 
-本例已使用正式发布的 **soda-storyboard 0.4.1** 验证，之后的版本同样适用；安装示例使用最新发布的 wheel。源码后续变化见 [更新记录](CHANGELOG.md)。
+本例已使用正式发布的 **soda-storyboard 0.4.1** 验证，之后的版本同样适用。源码后续变化见 [更新记录](CHANGELOG.md)。
 
 开发者可看 [开发与验证](docs/development.md)、[分镜包 API](docs/bundle-api.md)、[schema](schema/storyboard-v1.schema.json)。让其他 AI 输出可导入分镜，使用 [格式说明](docs/for-other-ai.md)。插件流程与来源见 [SKILL](skill/skills/soda-storyboard/SKILL.md) 和 [NOTICE](NOTICE)。
 
 ## English
 
-soda-storyboard turns a short story into an editable comic storyboard. Plan panels with the Codex / Claude Code plugin, adjust figures and text in the bundled web editor, then export a single-file storyboard bundle for local ComfyUI. The [companion nodes](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) preview the bundle and connect it to MOSS workflows. The included [full-color example](examples/stretch-color/) uses text-only character descriptions and program-rendered Chinese lettering, with no reference-image input or LoRA. Its 50-step SLG workflow is separate from the optional CLI generation presets. This example was verified with the released 0.4.1 wheel. Python 3.12+ is required; the wheel includes the editor. See the [Chinese guide](docs/guide/README.md).
+soda-storyboard turns a short story into an editable comic storyboard. Plan panels with the Codex / Claude Code plugin, adjust figures and text in the bundled web editor, then export a single-file storyboard bundle for local ComfyUI. The [companion nodes](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) preview the bundle and connect it to MOSS workflows. The included [full-color example](examples/stretch-color/) uses text-only character descriptions and program-rendered Chinese lettering, with no reference-image input or LoRA. Its 50-step SLG workflow is separate from the optional CLI generation presets. Install with `pip install soda-storyboard` or `uv tool install soda-storyboard` (Python 3.12+); the package includes the web editor. See the [Chinese guide](docs/guide/README.md).

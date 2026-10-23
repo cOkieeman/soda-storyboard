@@ -10,14 +10,14 @@
 
 ## 安装命令行工具
 
-这里使用 wheel，也就是预先打好的 Python 安装包。安装 [uv](https://docs.astral.sh/uv/) 后，在终端运行下面两条命令：第一条安装，第二条查看命令行帮助。
+核心库发布在 [PyPI](https://pypi.org/project/soda-storyboard/)。安装 [uv](https://docs.astral.sh/uv/) 后，在终端运行下面两条命令：第一条安装，第二条查看命令行帮助。
 
 ```powershell
-uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl
+uv tool install soda-storyboard
 soda-storyboard --help
 ```
 
-上面的下载地址对应已发布的 0.4.3。更新已有 CLI 安装时，在 `uv tool install` 后加 `--force`。后续版本的实际安装包以 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 为准。
+这样装的是 PyPI 上的最新版本。升级到新版本用 `uv tool upgrade soda-storyboard`；需要固定版本时写成 `uv tool install soda-storyboard==0.4.4`。每个版本的安装包也附在 [GitHub Releases](https://github.com/cOkieeman/soda-storyboard/releases) 里。
 
 想试用仓库里尚未发布的新功能，可以在仓库根目录直接运行源码版本：
 
@@ -25,7 +25,7 @@ soda-storyboard --help
 uv run --no-sync soda-storyboard --help
 ```
 
-这条源码入口和已发布 wheel 是两个可选入口；同一条命令不要混用两套环境。
+这条源码入口和已发布的版本是两个可选入口；同一条命令不要混用两套环境。
 
 如果 uv 找不到合适的 Python，可以在安装命令后加 `--python 3.12`。安装成功后若终端仍找不到 `soda-storyboard`，执行 `uv tool update-shell`，再关闭并重开终端；也可以直接运行安装器提示的工具目录中的可执行文件。
 
@@ -43,13 +43,13 @@ uv trampoline failed to canonicalize script path
 uv tool list
 ```
 
-如果列表里没有 `soda-storyboard`，或条目指向已经失效的工具环境，重新安装已发布的 wheel：
+如果列表里没有 `soda-storyboard`，或条目指向已经失效的工具环境，强制重新安装：
 
 ```powershell
-uv tool install --force https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl
+uv tool install --force soda-storyboard
 ```
 
-安装后用两步确认版本和启动器都恢复：`uv tool list` 中 soda-storyboard 的版本应与所装 wheel 的版本一致，而 `soda-storyboard --help` 应返回子命令列表并以 0 退出。把 wheel URL 和 `uv tool list` 中显示的版本一起记录；不要把仍然报 trampoline 错误的空壳 exe 当成可用安装。
+安装后用两步确认版本和启动器都恢复：`uv tool list` 中 soda-storyboard 的版本应与 PyPI 上的最新版本一致，而 `soda-storyboard --help` 应返回子命令列表并以 0 退出。反馈问题时附上 `uv tool list` 显示的版本；不要把仍然报 trampoline 错误的空壳 exe 当成可用安装。
 
 如果 `uv tool list` 本身因权限或 uv 缓存目录报错，先修复 uv 的工具目录权限，再重复上面的检查；这与“命令不存在”是两种不同的故障。
 
@@ -86,16 +86,16 @@ claude plugin install soda-storyboard@soda-storyboard-local --scope local
 
 ## 安装 ComfyUI 节点包
 
-把 [ComfyUI-Soda-Storyboard](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) 放进 ComfyUI 的 `custom_nodes/ComfyUI-Soda-Storyboard/`。如果用的是便携版，在 `ComfyUI_windows_portable` 根目录运行下面的命令，用它自带的 Python 安装核心 wheel：
+把 [ComfyUI-Soda-Storyboard](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) 放进 ComfyUI 的 `custom_nodes/ComfyUI-Soda-Storyboard/`。如果用的是便携版，在 `ComfyUI_windows_portable` 根目录运行下面的命令，用它自带的 Python 安装核心库（用 ComfyUI Manager 安装节点时会自动安装，可以跳过这一步）：
 
 ```powershell
-.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl"
+.\python_embeded\python.exe -m pip install --upgrade soda-storyboard
 .\python_embeded\python.exe -c "from importlib.metadata import version; print(version('soda-storyboard'))"
 ```
 
 `python_embeded` 是便携版实际使用的目录名。普通安装则用运行 ComfyUI 的那个 Python 执行 `-m pip install`。两种方式安装后都需要重启 ComfyUI。
 
-便携版适合直接安装 wheel：它已经包含网页资源和运行时数据，无需现场构建。从 Git 源码安装则需要构建后端和相应步骤，嵌入式 Python 环境未必具备这些条件。包也必须装进便携版自己的 Python，装到系统 Python 后，便携版仍可能找不到。
+从 PyPI 安装的是预先打好的 wheel，已经包含网页资源和运行时数据，便携版无需现场构建。不要从 Git 源码安装：那需要构建后端，嵌入式 Python 环境未必具备这些条件。包也必须装进便携版自己的 Python，装到系统 Python 后，便携版仍可能找不到。
 
 ## 准备模型并检查
 

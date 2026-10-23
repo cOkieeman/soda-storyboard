@@ -15,7 +15,7 @@
 | 章节 | 你会用到的内容 |
 | --- | --- |
 | [1. 这是什么](01-overview.md) | 了解插件、核心库、编辑器与 ComfyUI 节点的关系 |
-| [2. 安装](02-installation.md) | wheel、Codex / Claude Code 插件、便携版 ComfyUI、模型和连接检查 |
+| [2. 安装](02-installation.md) | 从 PyPI 安装核心库、Codex / Claude Code 插件、便携版 ComfyUI、模型和连接检查 |
 | [3. 从这张彩色漫画开始](03-first-page.md) | 先看「起身舒展」示例；也可按“**两句话、两格、从空目录开始**”主线完成角色、格子、译文与分镜包 |
 | [4. 角色卡怎么写](04-characters.md) | 写清人物外观和服装，共用角色设定，了解可选 LoRA |
 | [5. 网页编辑器](05-editor.md) | 格子、人物、关节、台词、最终提示词、保存与同步 |
@@ -28,6 +28,6 @@
 
 展示的成图由配套节点工作流运行：Quality 50 步、CFG 3、euler / simple、SLG 单层 22、种子 20261022。本机一次运行约 102.5 秒，耗时和结果会受硬件及模型版本影响。CLI 也提供 `draft` / `final` 候选生成，`final` 的基础采样参数与这里相同，任务登记和后处理按各自流程管理。
 
-本例的五格成图使用正式发布的 **soda-storyboard 0.4.1** 验证；安装说明提供当前已发布版本的 wheel，版本以该章链接及 Releases 为准。后续源码变化见 [更新记录](../../CHANGELOG.md)。
+本例的五格成图使用正式发布的 **soda-storyboard 0.4.1** 验证；安装说明默认安装 PyPI 上的最新版本。后续源码变化见 [更新记录](../../CHANGELOG.md)。
 
 如果用别的 AI 写分镜，可以把 [格式说明](../for-other-ai.md) 发给它。准备接入自己的程序时，再查 [共享 API](../bundle-api.md) 和 [页面 schema](../../schema/storyboard-v1.schema.json)；修改源码的步骤放在 [开发说明](../development.md)。

@@ -28,7 +28,7 @@
 | 现象 | 处理 |
 | --- | --- |
 | 安装后找不到命令 | 执行 `uv tool update-shell` 后重开终端，或用安装器给出的可执行文件路径；也要确认包安装在当前使用的环境中 |
-| 启动器文件存在但报 `uv trampoline failed to canonicalize script path` | 先运行 `uv tool list` 确认工具环境里是否有 `soda-storyboard`；缺失或环境失效时，用 [安装章](02-installation.md) 的已发布 wheel 命令加 `--force` 重装，再用 `uv tool list` 的版本和 `soda-storyboard --help` 的退出码确认 |
+| 启动器文件存在但报 `uv trampoline failed to canonicalize script path` | 先运行 `uv tool list` 确认工具环境里是否有 `soda-storyboard`；缺失或环境失效时，用 `uv tool install --force soda-storyboard` 重装（见[安装章](02-installation.md)），再用 `uv tool list` 的版本和 `soda-storyboard --help` 的退出码确认 |
 | 编辑器打不开 | 用 `edit --detach --no-browser --json` 获取实际 URL；确认后台服务已启动，浏览器能访问本机回环地址 |
 | 8780 被占用 | edit 会尝试其他空闲端口，使用返回的 URL 打开编辑器，旧书签可能仍指向原端口 |
 | 网页里刚改的内容被 AI 改回去 | 网页保存完成后，让 AI 重新读取页文件，再继续修改，避免沿用缓存版本 |
@@ -48,15 +48,15 @@ soda-storyboard comfy check --project my-project --json
 | 连不上 ComfyUI | 确认服务已启动，核对配置的协议、地址和端口；默认 8190，使用时以实际端口为准 |
 | 缺节点或模型 | 按 check 的具体名单补齐，模型名按 ComfyUI 下拉中的相对文件名填写；节点检查“无法确认”时到界面核对 |
 | 导入节点能看图，采样报错 | 预览和采样需要的节点不同，需要检查 MOSS 支持、编码器、VAE 和工作流 Loader 是否齐备 |
-| 便携版说缺核心库 | 用 `python_embeded/python.exe` 安装 wheel，并重启 ComfyUI；系统 Python 的安装不能代替它 |
-| 找不到 `uv_build` | 检查是否从 Git 源码安装，便携版改用预构建 wheel |
+| 便携版说缺核心库 | 用 `python_embeded/python.exe -m pip install --upgrade soda-storyboard` 安装，并重启 ComfyUI；系统 Python 的安装不能代替它 |
+| 找不到 `uv_build` | 说明装成了 Git 源码依赖，改用 `pip install soda-storyboard`（从 PyPI 装预构建的 wheel） |
 | 超时了，不知道是否还在生成 | 根据任务号查看 ComfyUI 队列，确认原任务状态后再决定是否重新提交 |
 | 排字缺字或找不到字体 | 用 `letter --font <字体文件>` 指定有中文字形的字体，再核对成图 |
 | 换底图后导出提示派生结果失效 | 对当前底图重新 compose / letter，再导出 |
 
 生成失败时，终端会给出简短原因，需要更多信息时可以查看故事项目 `logs/` 中的诊断。向别人求助时，错误摘要、版本和必要参数通常更方便排查；分享日志前，记得检查其中的本机文件信息。
 
-启动器问题要先分清两类：终端提示“找不到命令”时检查 PATH 和 `uv tool update-shell`；文件存在却出现 trampoline 错误时，问题在 uv 工具环境或其脚本目标，按上表先 `uv tool list`，再用发布版 wheel `--force` 重装。重装后 `uv tool list` 显示的 soda-storyboard 版本应与所装 wheel 的版本一致，并能独立运行 `soda-storyboard --help`。
+启动器问题要先分清两类：终端提示“找不到命令”时检查 PATH 和 `uv tool update-shell`；文件存在却出现 trampoline 错误时，问题在 uv 工具环境或其脚本目标，按上表先 `uv tool list`，再用 `uv tool install --force soda-storyboard` 重装。重装后 `uv tool list` 显示的版本应与 PyPI 上的最新版本一致，并能独立运行 `soda-storyboard --help`。
 
 `validate` 检查的是结构和部分规则。没有 error 后，还需要查看 warning 的具体原因；info 中的本页 LoRA 则是说明信息。角色、手、斜格和台词最终画得怎样，需要在成图后检查。
 
