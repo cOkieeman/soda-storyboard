@@ -13,11 +13,11 @@
 这里使用 wheel，也就是预先打好的 Python 安装包。安装 [uv](https://docs.astral.sh/uv/) 后，在终端运行下面两条命令：第一条安装，第二条查看命令行帮助。
 
 ```powershell
-uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl
+uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl
 soda-storyboard --help
 ```
 
-上面的下载地址对应已发布的 0.4.2。更新已有 CLI 安装时，在 `uv tool install` 后加 `--force`。后续版本的实际安装包以 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 为准。
+上面的下载地址对应已发布的 0.4.3。更新已有 CLI 安装时，在 `uv tool install` 后加 `--force`。后续版本的实际安装包以 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 为准。
 
 仓库源码中的 0.4.2 功能（角色管理界面和 `register-render`）可以在仓库根目录直接运行：
 
@@ -46,7 +46,7 @@ uv tool list
 如果列表里没有 `soda-storyboard`，或条目指向已经失效的工具环境，重新安装已发布的 wheel：
 
 ```powershell
-uv tool install --force https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl
+uv tool install --force https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl
 ```
 
 安装后用两步确认版本和启动器都恢复：`uv tool list` 中 soda-storyboard 的版本应与所装 wheel 的版本一致，而 `soda-storyboard --help` 应返回子命令列表并以 0 退出。把 wheel URL 和 `uv tool list` 中显示的版本一起记录；不要把仍然报 trampoline 错误的空壳 exe 当成可用安装。
@@ -89,7 +89,7 @@ claude plugin install soda-storyboard@soda-storyboard-local --scope local
 把 [ComfyUI-Soda-Storyboard](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard) 放进 ComfyUI 的 `custom_nodes/ComfyUI-Soda-Storyboard/`。如果用的是便携版，在 `ComfyUI_windows_portable` 根目录运行下面的命令，用它自带的 Python 安装核心 wheel：
 
 ```powershell
-.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl"
+.\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl"
 .\python_embeded\python.exe -c "from importlib.metadata import version; print(version('soda-storyboard'))"
 ```
 

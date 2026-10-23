@@ -27,7 +27,7 @@ flowchart LR
 1. 安装命令行工具。准备 Python 3.12+ 和 [uv](https://docs.astral.sh/uv/) 后运行，网页编辑器也会一起装好，无需另装 Node。
 
    ```powershell
-   uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl
+   uv tool install https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl
    soda-storyboard --help
    ```
 
@@ -75,7 +75,7 @@ flowchart LR
 2. 给 ComfyUI 使用的 Python 安装核心 wheel，然后重启。Windows 便携版在 `ComfyUI_windows_portable` 根目录运行：
 
    ```powershell
-   .\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl"
+   .\python_embeded\python.exe -m pip install --upgrade "https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.3/soda_storyboard-0.4.3-py3-none-any.whl"
    ```
 
    普通安装使用启动 ComfyUI 的那个 Python。完整安装与版本要求见 [安装章](docs/guide/02-installation.md)。
