@@ -110,7 +110,7 @@ flowchart LR
 
 从 [中文使用说明目录](docs/guide/README.md) 继续：[安装](docs/guide/02-installation.md) · [第一页](docs/guide/03-first-page.md) · [角色卡](docs/guide/04-characters.md) · [编辑器](docs/guide/05-editor.md) · [提示词](docs/guide/06-prompts.md) · [出图后期](docs/guide/07-generation.md) · [ComfyUI](docs/guide/08-comfyui.md) · [排错](docs/guide/10-troubleshooting.md) · [命令速查](docs/guide/11-cli-reference.md)。
 
-本例已使用正式发布的 **soda-storyboard 0.4.1** 验证，0.4.2 同样适用；安装示例使用最新的 0.4.2 wheel。源码后续变化见 [更新记录](CHANGELOG.md)。
+本例已使用正式发布的 **soda-storyboard 0.4.1** 验证，之后的版本同样适用；安装示例使用最新发布的 wheel。源码后续变化见 [更新记录](CHANGELOG.md)。
 
 开发者可看 [开发与验证](docs/development.md)、[分镜包 API](docs/bundle-api.md)、[schema](schema/storyboard-v1.schema.json)。让其他 AI 输出可导入分镜，使用 [格式说明](docs/for-other-ai.md)。插件流程与来源见 [SKILL](skill/skills/soda-storyboard/SKILL.md) 和 [NOTICE](NOTICE)。
 

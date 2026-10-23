@@ -19,7 +19,7 @@ soda-storyboard --help
 
 上面的下载地址对应已发布的 0.4.3。更新已有 CLI 安装时，在 `uv tool install` 后加 `--force`。后续版本的实际安装包以 [Releases](https://github.com/cOkieeman/soda-storyboard/releases) 为准。
 
-仓库源码中的 0.4.2 功能（角色管理界面和 `register-render`）可以在仓库根目录直接运行：
+想试用仓库里尚未发布的新功能，可以在仓库根目录直接运行源码版本：
 
 ```powershell
 uv run --no-sync soda-storyboard --help
