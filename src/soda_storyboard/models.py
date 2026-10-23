@@ -294,6 +294,12 @@ class Character:
             result["en"] = self.appearance_en
         return result
 
+    @property
+    def appearance_profile(self) -> JsonObject | None:
+        """Optional editor source; compilers continue to consume final appearance text."""
+        profile = self.extra.get("appearance_profile")
+        return profile if isinstance(profile, dict) else None
+
     def appearance_text(self) -> str:
         return self.appearance_zh or self.appearance_en
 

@@ -23,6 +23,7 @@ import ShortcutHelp from "./components/ShortcutHelp";
 import { batchActions } from "./lib/editorActions";
 import DialogueEditor from "./components/modals/DialogueEditor";
 import FavoritesDialog from "./components/modals/FavoritesDialog";
+import { hasCharacterDraftChanges, isCharacterScope, useCharacterDraftStore } from "./lib/characterDrafts";
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
@@ -30,6 +31,7 @@ export default function App() {
   const notice = useEditorStore(s => s.notice);
   const activePageId = useEditorStore(s => s.activePageId);
   const activeJob = useEditorStore(s => s.activeJob);
+  const inspectorTarget = useCharacterDraftStore(state => state.target);
   const [mode, setMode] = useState<CanvasMode>("draft");
   const [tool, setTool] = useState<CanvasTool>("select");
   const [initialWorkspace] = useState(readWorkspace);
@@ -49,6 +51,19 @@ export default function App() {
   },[]);
   const canvasRef = useRef<CanvasEditorHandle>(null);
   const completedGenerationRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isCharacterScope(inspectorTarget)) return;
+    setMode("draft"); setInspectorOpen(true); setWorkspaceFocused(false);
+    if (window.innerWidth < 1280) setSidebarOpen(false);
+  }, [inspectorTarget]);
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (useEditorStore.getState().hasUnsavedChanges || hasCharacterDraftChanges(useCharacterDraftStore.getState())) { event.preventDefault(); event.returnValue = ""; }
+    };
+    const refresh = () => { void useEditorStore.getState().refreshCharacters().catch(() => {}); };
+    window.addEventListener("beforeunload", beforeUnload); window.addEventListener("focus", refresh);
+    return () => { window.removeEventListener("beforeunload", beforeUnload); window.removeEventListener("focus", refresh); };
+  }, []);
 
   const changeMode = useCallback((next: CanvasMode) => {
     setMode(next);
@@ -135,6 +150,12 @@ export default function App() {
       const key = event.key.toLowerCase();
       const state = useEditorStore.getState();
       if (state.importModalOpen) return;
+      if (isCharacterScope(useCharacterDraftStore.getState().target)) {
+        if (modified && key === "s") { event.preventDefault(); void useCharacterDraftStore.getState().save(); }
+        if (!isInput && (event.key === "Delete" || event.key === "Backspace" || (modified && ["z", "y", "c", "v", "d"].includes(key)))) event.preventDefault();
+        if (!isInput && event.key === "Escape") useCharacterDraftStore.getState().showCanvas();
+        return;
+      }
       if (modified && key === "s") { event.preventDefault(); void state.saveCurrentPage(true); return; }
       if (modified && key === "k") { event.preventDefault(); state.openCommandPalette(); return; }
       if (isInput || document.querySelector('[role="dialog"]') || state.commandPaletteOpen || state.generateModal.open || state.layoutModal.open || state.previewModal.open || state.compileModal?.open || state.conflictModal?.open) return;

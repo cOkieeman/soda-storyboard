@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { previewPanelCaptions, type PanelCaptionPreview as CaptionResult } from "../lib/api";
 import type { SodaPage, SodaPanel } from "../types";
+import { useEditorStore } from "../lib/store";
 
 type PreviewState = { source: SodaPage; panelId: string; result?: CaptionResult; error?: string };
 
@@ -16,6 +17,7 @@ export function captionSourceKey(item: SodaPanel): string {
 }
 
 export default function PanelCaptionPreview({ page, panel }: { page: SodaPage; panel: SodaPanel }) {
+  const characterRevision = useEditorStore(state => state.characterRevision);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -30,7 +32,7 @@ export default function PanelCaptionPreview({ page, panel }: { page: SodaPage; p
       });
     }, 250);
     return () => { current = false; clearTimeout(timer); controller.abort(); };
-  }, [page, panel.id]);
+  }, [page, panel.id, characterRevision]);
 
   const current = preview?.source === page && preview.panelId === panel.id ? preview : null;
   const overridden = current?.result?.custom_override ?? usesCustomCaption(panel, page);

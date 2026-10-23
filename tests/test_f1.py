@@ -195,16 +195,18 @@ def test_character_put_source_and_no_duplicate_watch_event(client: Client) -> No
     try:
         _, _, body = client.call("GET", "/api/characters/older")
         body["character"]["display_name"] = "Updated"
-        assert (
-            client.call("PUT", "/api/characters/older", body["character"], {"X-Client-Id": "client-b"})[0]
-            == 200
+        status, headers, saved = client.call(
+            "PUT", "/api/characters/older", body["character"], {"X-Client-Id": "client-b"}
         )
+        assert status == 200
         event, payload = queue.get(timeout=3)
         assert event == "file_changed"
         assert payload["source"] == "editor"
         assert payload["client_id"] == "client-b"
         assert payload["page_id"] is None
-        assert payload["version"] is None
+        assert payload["character_id"] == "older"
+        assert payload["version"] == headers["ETag"] == saved["version"]
+        assert payload["operation_id"] == saved["operation_id"]
         with client.server.events.lock:
             client.server.events.poll()
         assert queue.empty()

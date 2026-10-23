@@ -33,6 +33,7 @@ import { generatePageSketchGeometry } from "./sketchGeometry";
 import { ensureFigureEditor, getFigureId, withFigurePose } from "./figureRig";
 import { TEXT_PRESETS, type TextPresetId } from "./elementPresets";
 import { resolvedFigures } from "./figures";
+import { useCharacterDraftStore } from "./characterDrafts";
 import { alignPageSelections, copyPageSelections, deletePageSelections, isSelectionHidden, isSelectionLocked, movePageSelections, normalizeSelections, panelHasLockedChildren, pastePageSelections, selectionKey, stylePageSelections, type SelectionClipboard } from "./batchEditing";
 import { clearRecoveryDraft, discoverProjectIdentity, readObjectFlags, readRecoveryDraft, writeObjectFlags, writeRecoveryDraft } from "./recovery";
 import {
@@ -84,6 +85,9 @@ type EditorState = {
   pages: PageSummary[];
   characters: CharacterSummary[];
   characterDetails: Record<string, SodaCharacter>;
+  characterRevision: number;
+  acceptCharacter: (character: SodaCharacter) => void;
+  refreshCharacters: () => Promise<void>;
 
   // Current active page
   activePageId: string;
@@ -346,6 +350,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   pages: [],
   characters: [],
   characterDetails: {},
+  characterRevision: 0,
+  acceptCharacter: character => set(state => {
+    const summary = { id: character.id, display_name: character.display_name || character.name || character.id, has_lora: Boolean(character.lora || character.lora_path), figure_hint: character.figure_hint, sketch_color: character.sketch_color };
+    const characters = state.characters.some(item => item.id === character.id) ? state.characters.map(item => item.id === character.id ? { ...item, ...summary } : item) : [...state.characters, summary];
+    return { characters, characterDetails: { ...state.characterDetails, [character.id]: character }, characterRevision: state.characterRevision + 1,
+      sketchGeometry: state.sodaPage ? generatePageSketchGeometry(state.sodaPage, characters as any) : state.sketchGeometry };
+  }),
+  refreshCharacters: async () => {
+    const result = await apiGetCharacters();
+    const details = Object.fromEntries(result.characters.map(character => [character.id, character]));
+    const characters = result.characters.map(character => ({ id: character.id, display_name: character.display_name || character.name || character.id, has_lora: Boolean(character.lora || character.lora_path), figure_hint: character.figure_hint, sketch_color: character.sketch_color }));
+    set(state => ({ characters, characterDetails: details, characterRevision: state.characterRevision + 1,
+      sketchGeometry: state.sodaPage ? generatePageSketchGeometry(state.sodaPage, characters as any) : state.sketchGeometry }));
+    if (result.versions) useCharacterDraftStore.getState().checkExternal(result.versions);
+    const pageId = get().activePageId;
+    if (pageId) void apiValidatePage(pageId).then(result => { if (get().activePageId === pageId) set({ validationIssues: result.issues }); }).catch(() => {});
+  },
 
   activePageId: "",
   sodaPage: null,
@@ -548,6 +569,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const disconnect = connectEvents((event: SseEvent) => {
         const state = get();
         if (event.type === "ready" || event.type === "resync") {
+          void get().refreshCharacters().catch(console.error);
           // Re-fetch project and current page if no unsaved changes
           apiGetProject().then(({ project: p, pages: pgs, characters: chs }) => {
             set({ sodaProject: p, pages: pgs, characters: chs });
@@ -556,6 +578,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             get().reloadCurrentPage();
           }
         } else if (event.type === "file_changed") {
+          if (event.data.character_id || /(^|[\\/])characters[\\/]/.test(event.data.path || "")) {
+            void get().refreshCharacters().catch(console.error);
+            return;
+          }
           const { page_id, message, source, client_id, version } = event.data;
           // Refresh page list
           apiGetPages().then(({ pages: pgs }) => set({ pages: pgs }));
@@ -1461,6 +1487,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   selectItem: (selection: Selection | null, additive = false) => {
+    useCharacterDraftStore.getState().showCanvas();
     const state = get();
     if (!selection || !state.sodaPage) { set({ selection: null, selections: [] }); return; }
     let items = additive ? currentSelections(state) : [];
@@ -1470,6 +1497,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ selections, selection: selections[selections.length - 1] || null });
   },
   selectItems: (items) => {
+    useCharacterDraftStore.getState().showCanvas();
     const source = get().getEditableSource();
     const selections = source ? normalizeSelections(source, items) : [];
     set({ selections, selection: selections[selections.length - 1] || null });

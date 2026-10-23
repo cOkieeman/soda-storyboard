@@ -269,15 +269,35 @@ export async function deletePage(id: string, version: string): Promise<void> {
   });
 }
 
-export async function getCharacters(): Promise<{ characters: SodaCharacter[] }> {
-  const { data } = await request<{ characters: SodaCharacter[] }>("/api/characters");
+export async function getCharacters(): Promise<{ characters: SodaCharacter[]; versions?: Record<string, string> }> {
+  const { data } = await request<{ characters: SodaCharacter[]; versions?: Record<string, string> }>("/api/characters");
   return data;
 }
 
-export async function getCharacter(id: string): Promise<{ character: SodaCharacter }> {
-  const { data } = await request<{ character: SodaCharacter }>(`/api/characters/${encodeURIComponent(id)}`);
-  return data;
+export type CharacterSnapshot = { character: SodaCharacter; version: string; warnings?: ValidationIssue[] };
+export type CharacterValidation = { character: SodaCharacter; warnings: ValidationIssue[]; errors: ValidationIssue[]; appearance?: { zh: string; en: string } };
+
+export async function getCharacter(id: string): Promise<CharacterSnapshot> {
+  const { data, headers } = await request<CharacterSnapshot>(`/api/characters/${encodeURIComponent(id)}`);
+  const version = data.version || headers.get("ETag") || "";
+  if (!version) throw new ApiError("角色服务缺少版本信息，请重新读取后重试", 502, data);
+  return { ...data, version };
 }
+
+export async function validateCharacter(character: SodaCharacter, page?: SodaPage | null, signal?: AbortSignal): Promise<CharacterValidation> {
+  return (await request<CharacterValidation>("/api/characters/validate", { method: "POST", body: JSON.stringify({ character, ...(page ? { page } : {}) }), signal })).data;
+}
+
+async function writeCharacter(endpoint: string, method: string, body: unknown, version?: string): Promise<CharacterSnapshot> {
+  const { data, headers } = await request<CharacterSnapshot>(endpoint, { method, headers: version ? { "If-Match": version } : {}, body: JSON.stringify(body) });
+  const savedVersion = data.version || headers.get("ETag");
+  if (!data.character || !savedVersion || (headers.get("ETag") && headers.get("ETag") !== savedVersion)) throw new ApiError("保存响应缺少有效的角色版本，请重新读取后重试", 502, data);
+  return { ...data, version: savedVersion };
+}
+
+export const createCharacter = (character: SodaCharacter) => writeCharacter("/api/characters", "POST", character);
+export const patchCharacter = (id: string, patch: Partial<SodaCharacter>, version: string) => writeCharacter(`/api/characters/${encodeURIComponent(id)}`, "PATCH", patch, version);
+export const duplicateCharacter = (id: string, character: SodaCharacter, version: string, options: { copy_lora: boolean; copy_trigger_words: boolean; copy_reference_images: boolean }) => writeCharacter(`/api/characters/${encodeURIComponent(id)}/duplicate`, "POST", { character, ...options }, version);
 
 /** Read the complete latest file before merging its color; conditional PUT never overwrites a concurrent edit. */
 export async function saveCharacterColor(id: string, color: string): Promise<SodaCharacter> {

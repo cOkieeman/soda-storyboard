@@ -24,7 +24,7 @@ from soda_storyboard.io import load_page
 from soda_storyboard.json_safety import InvalidJSONNumberError, loads_json
 from soda_storyboard.validation import validate_page
 
-from .common import APIError, identifier, inside, json_default, snapshot
+from .common import APIError, identifier, inside, json_default
 from .events import IMAGE_TYPES, Events
 from .jobs import Jobs
 from .store import Store
@@ -261,24 +261,17 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/pages" and method == "POST":
             self.json_response(store.create_page(body), 201)
         elif path == "/api/characters" and method == "GET":
-            self.send(200, {"characters": store.characters()})
+            self.send(200, store.character_store.catalog())
+        elif path == "/api/characters/validate" and method == "POST":
+            self.send(200, store.character_store.validate(body))
         elif path == "/api/characters" and method == "POST":
-            self.send(201, store.save_character(body))
-        elif path.startswith("/api/characters/") and len(path.split("/")) == 4:
-            character_id = identifier(path.split("/")[3])
-            if method == "GET":
-                character, file_version = snapshot(store.path(f"characters/{character_id}.json"))
-                self.json_response({"character": character, "version": file_version})
-            elif method == "PUT":
-                client_id = self.editor_client_id()
-                relative = f"characters/{character_id}.json"
-                with self.server.events.lock:
-                    result = store.save_character(body, character_id, self.headers.get("If-Match"))
-                    _, file_version = snapshot(store.path(relative))
-                    self.server.events.editor_changed(relative, file_version, client_id)
-                self.json_response(result)
-            else:
-                raise APIError(405, "角色接口只支持 GET、PUT")
+            client_id = self.editor_client_id()
+            with self.server.events.lock:
+                result = store.character_store.create(body)
+                self.character_changed(result, client_id, "added")
+            self.json_response(result, 201)
+        elif path.startswith("/api/characters/"):
+            self.character_route(path, body)
         elif path == "/api/templates" and method == "GET":
             from soda_storyboard.templates import builtin_templates  # noqa: PLC0415
 
@@ -306,6 +299,40 @@ class Handler(BaseHTTPRequestHandler):
             self.page_route(path, query, body)
         else:
             raise APIError(404, "接口不存在或请求方法不支持")
+
+    def character_changed(self, result: dict, client_id: str | None, change: str = "modified") -> None:
+        self.server.events.editor_changed(
+            result["path"],
+            result["version"],
+            client_id,
+            character_id=result["character"]["id"],
+            operation_id=result["operation_id"],
+            change=change,
+        )
+
+    def character_route(self, path: str, body: dict) -> None:
+        parts = path.split("/")
+        if len(parts) not in {4, 5}:
+            raise APIError(404, "角色接口不存在")
+        character_id = parts[3]
+        characters = self.server.store.character_store
+        method = self.command
+        expected = self.headers.get("If-Match")
+        if len(parts) == 4 and method == "GET":
+            self.json_response(characters.detail(character_id))
+            return
+        client_id = self.editor_client_id()
+        with self.server.events.lock:
+            if len(parts) == 4 and method in {"PATCH", "PUT"}:
+                result = characters.save(character_id, body, expected, patch=method == "PATCH")
+                self.character_changed(result, client_id)
+                self.json_response(result)
+            elif len(parts) == 5 and parts[4] == "duplicate" and method == "POST":
+                result = characters.duplicate(character_id, body, expected)
+                self.character_changed(result, client_id, "added")
+                self.json_response(result, 201)
+            else:
+                raise APIError(405, "角色接口支持读取、新建、PATCH、兼容 PUT 和复制；跨页身份操作之后支持")
 
     def editor_client_id(self) -> str | None:
         client_id = self.headers.get("X-Client-Id")

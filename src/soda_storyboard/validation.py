@@ -14,7 +14,7 @@ from math import isfinite
 from typing import Any
 
 from .captions import caption_notices
-from .clothing import clothing_profile
+from .clothing import clothing_warnings
 from .figure_semantics import figure_page_box
 from .figures import panel_figures
 from .geometry import convex_polygon, polygons_overlap, shape_distance
@@ -636,46 +636,14 @@ def _validate_character_clothing(
         if identifier in characters
     }
     appearing.update(overlay.character_id for overlay in page.overlays if overlay.character_id in characters)
-    profiles = {identifier: clothing_profile(characters[identifier]) for identifier in sorted(appearing)}
-    for identifier, (phrases, _, colors) in profiles.items():
-        name = characters[identifier].display_name or identifier
-        if not phrases:
-            report.add(
-                "warning",
-                "character_clothing_missing",
-                f"角色 {name} 缺少服装描述（clothing 为空且外观中没有服装词），请补充服装款式和颜色",
-                field_name="appearance",
-                details={"character_id": identifier},
-            )
-        elif not colors:
-            report.add(
-                "warning",
-                "character_clothing_color_missing",
-                f"角色 {name} 的服装描述缺少颜色词，请写明服装款式和颜色（当前：{'；'.join(phrases)}）",
-                field_name="clothing",
-                details={"character_id": identifier},
-            )
-    identifiers = list(profiles)
-    for index, first in enumerate(identifiers):
-        for second in identifiers[index + 1 :]:
-            _, first_categories, first_colors = profiles[first]
-            _, second_categories, second_colors = profiles[second]
-            if (
-                first_categories & second_categories
-                or not first_colors
-                or not second_colors
-                or first_colors & second_colors
-            ):
-                first_name = characters[first].display_name or first
-                second_name = characters[second].display_name or second
-                report.add(
-                    "warning",
-                    "character_clothing_similar",
-                    f"同页角色 {first_name} 和 {second_name} 的服装类别或颜色容易混淆，"
-                    "请写明不同的服装和颜色",
-                    field_name="clothing",
-                    details={"character_ids": [first, second]},
-                )
+    for warning in clothing_warnings(characters, appearing):
+        report.add(
+            "warning",
+            warning["code"],
+            warning["message"],
+            field_name=warning["field"],
+            details=warning["details"],
+        )
 
 
 def _validation_shape(panel: Any, box: tuple[float, float, float, float]) -> dict[str, Any]:
