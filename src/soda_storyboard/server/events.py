@@ -71,7 +71,16 @@ class Events:
             with self.lock:
                 self.poll()
 
-    def editor_changed(self, relative: str, version: str, client_id: str | None) -> None:
+    def editor_changed(  # noqa: PLR0913 -- additive compatible event metadata
+        self,
+        relative: str,
+        version: str,
+        client_id: str | None,
+        *,
+        character_id: str | None = None,
+        operation_id: str | None = None,
+        change: str = "modified",
+    ) -> None:
         """Called under lock after PUT, before the watcher can attribute its write."""
         path = inside(self.root, relative)
         is_page = Path(relative).parent == Path("pages")
@@ -83,9 +92,11 @@ class Events:
             "file_changed",
             {
                 "path": relative,
-                "change": "modified",
+                "change": change,
                 "page_id": Path(relative).stem if is_page else None,
-                "version": version if is_page else None,
+                "version": version if is_page or character_id is not None else None,
+                "character_id": character_id,
+                "operation_id": operation_id,
                 "source": "editor",
                 "client_id": client_id,
                 "message": "页面已由编辑器保存" if is_page else "项目文件已由编辑器保存",
@@ -101,6 +112,7 @@ class Events:
                 "deleted" if relative not in current else "modified" if relative in self.files else "added"
             )
             page_id = None
+            character_id = None
             version = None
             path = Path(relative)
             if path.parent == Path("pages") and path.suffix == ".json":
@@ -112,12 +124,21 @@ class Events:
                         # Retry a temporarily incomplete CLI write on the next scan.
                         current.pop(relative, None)
                         continue
+            elif path.parent == Path("characters") and path.suffix == ".json" and change != "deleted":
+                try:
+                    raw, version = snapshot(inside(self.root, relative))
+                    character_id = raw.get("id")
+                except (OSError, ValueError, APIError):
+                    current.pop(relative, None)
+                    continue
             self.publish(
                 "file_changed",
                 {
                     "path": relative,
                     "change": change,
                     "page_id": page_id,
+                    "character_id": character_id,
+                    "operation_id": None,
                     "version": version,
                     "source": "external",
                     "client_id": None,

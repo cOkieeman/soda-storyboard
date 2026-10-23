@@ -9,6 +9,8 @@ import { resolveTextFontSize } from "../lib/lettering";
 import NumberInput from "./ui/NumberInput";
 import BatchInspector from "./BatchInspector";
 import PanelCaptionPreview from "./PanelCaptionPreview";
+import CharacterInspector from "./CharacterInspector";
+import { useCharacterDraftStore } from "../lib/characterDrafts";
 
 const SHOT_OPTIONS: { value: ShotType; label: string }[] = [
   { value: "extreme_long", label: "大远景" },
@@ -126,6 +128,7 @@ type InspectorPanelProps = {
 };
 
 export default function InspectorPanel({ onSelectObject, onStartPage }: InspectorPanelProps) {
+  const inspectorTarget = useCharacterDraftStore(state => state.target);
   const sodaPage = useEditorStore((state) => state.sodaPage);
   const characters = useEditorStore((state) => state.characters);
   const characterDetails = useEditorStore((state) => state.characterDetails);
@@ -185,6 +188,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
     return items.sort((a, b) => Number(b.severity === "error") - Number(a.severity === "error"));
   }, [sodaPage, characterDetails, validationIssues]);
 
+  if (inspectorTarget.kind !== "canvas") return <CharacterInspector />;
   if (!sodaPage) {
     return <aside className="inspector-panel flex items-center justify-center p-4 text-[13px] text-[var(--ink-light)]">请选择分镜页</aside>;
   }

@@ -323,10 +323,23 @@ export type SodaCharacter = {
   age?: string;
   figure_hint?: string;
   sketch_color?: string;
+  appearance_profile?: AppearanceProfile;
   lora?: {
     path: string;
     strength: number;
   };
+  [key: string]: any;
+};
+
+export type BilingualText = { zh?: string; en?: string; [key: string]: any };
+export type AppearanceProfile = {
+  version: 1;
+  mode: "structured" | "text";
+  hair?: { style?: BilingualText; color?: BilingualText; [key: string]: any };
+  eyes?: BilingualText;
+  outfit?: Array<{ id: string; style?: BilingualText; color?: BilingualText; detail?: BilingualText; [key: string]: any }>;
+  signatures?: BilingualText[];
+  extra?: BilingualText;
   [key: string]: any;
 };
 
@@ -438,6 +451,7 @@ export type SseEvent =
         path: string;
         change: "modified" | "added" | "deleted";
         page_id: string | null;
+        character_id?: string | null;
         version: string | null;
         source?: string;
         client_id?: string;

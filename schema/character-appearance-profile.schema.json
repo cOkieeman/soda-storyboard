@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "soda-storyboard-character-appearance-profile-v1",
+  "$ref": "#/$defs/appearance_profile",
+  "$defs": {
+    "appearance_profile": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "mode": {
+          "enum": [
+            "structured",
+            "text"
+          ]
+        },
+        "hair": {
+          "type": "object",
+          "properties": {
+            "style": {
+              "$ref": "#/$defs/bilingual_appearance_field"
+            },
+            "color": {
+              "$ref": "#/$defs/bilingual_appearance_field"
+            }
+          },
+          "additionalProperties": true
+        },
+        "eyes": {
+          "$ref": "#/$defs/bilingual_appearance_field"
+        },
+        "outfit": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "style": {
+                "$ref": "#/$defs/bilingual_appearance_field"
+              },
+              "color": {
+                "$ref": "#/$defs/bilingual_appearance_field"
+              },
+              "detail": {
+                "$ref": "#/$defs/bilingual_appearance_field"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/bilingual_appearance_field"
+          }
+        },
+        "extra": {
+          "$ref": "#/$defs/bilingual_appearance_field"
+        },
+        "generated": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "composer": {
+              "type": "string"
+            },
+            "source_hash": {
+              "type": "string"
+            },
+            "appearance_hash": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "bilingual_appearance_field": {
+      "type": "object",
+      "properties": {
+        "zh": {
+          "type": "string"
+        },
+        "en": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

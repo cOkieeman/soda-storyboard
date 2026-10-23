@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileUp, LoaderCircle, Lock, Plus, Search, Trash2, Unlock, Users } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileUp, LoaderCircle, Lock, Plus, Search, Trash2, Unlock } from "lucide-react";
 import { useEditorStore } from "../lib/store";
 import { getFigureId } from "../lib/figureRig";
 import { resolvedFigures } from "../lib/figures";
-import { CHARACTER_COLOR_PRESETS, characterSketchColor } from "../lib/characterColors";
+import { characterSketchColor } from "../lib/characterColors";
 import { readUiPreference, saveUiPreference } from "../lib/localUiPreferences";
 import { selectionKey } from "../lib/batchEditing";
 import type { Selection, SodaOverlay, SodaText } from "../types";
+import { useCharacterDraftStore } from "../lib/characterDrafts";
 
 const shotLabels: Record<string, string> = {
   extreme_long: "大远景", long: "远景", full: "全景", medium: "中景", close_up: "近景", extreme_close_up: "特写"
@@ -36,32 +37,10 @@ type PageSidebarProps = {
   onStartPage?: () => void;
 };
 
-function CharacterColorControls({ id, name, color }: { id: string; name: string; color: string }) {
-  const [draft, setDraft] = useState(color);
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
-  useEffect(() => { setDraft(color); }, [color]);
-  const save = async (value: string) => {
-    if (status === "saving") return;
-    setDraft(value);
-    setStatus("saving");
-    const saved = await useEditorStore.getState().updateCharacterColor(id, value);
-    setStatus(saved ? "saved" : "failed");
-    if (!saved) setDraft(color);
-  };
-  const preset = CHARACTER_COLOR_PRESETS.find(item => item.value === draft.toUpperCase());
-  return <div className="space-y-2 border-b border-[var(--line)] px-4 pb-3 pt-2" data-testid={`character-color-${id}`}
-    onPointerDown={event => event.stopPropagation()} onDragStart={event => { event.preventDefault(); event.stopPropagation(); }}>
-    <div className="flex flex-wrap items-center justify-between gap-2 text-[13px]"><span>人物色 · {preset?.name || "自定义"}</span><span className="numeric text-[var(--ink-light)]">{draft.toUpperCase()}</span></div>
-    <div className="flex flex-wrap items-center gap-2">{CHARACTER_COLOR_PRESETS.map(item => <button key={item.value} type="button"
-      className="h-7 w-7 shrink-0 rounded border-2 disabled:opacity-50" style={{ backgroundColor: item.value, borderColor: draft.toUpperCase() === item.value ? "var(--ink)" : "transparent", boxShadow: draft.toUpperCase() === item.value ? "inset 0 0 0 2px var(--paper)" : undefined }}
-      aria-label={`${name}使用${item.name} ${item.value}`} aria-pressed={draft.toUpperCase() === item.value} title={`${item.name} ${item.value}`} disabled={status === "saving"} onClick={() => void save(item.value)} />)}</div>
-    <div className="flex flex-wrap items-center justify-between gap-2"><label className="flex cursor-pointer items-center gap-2 text-[13px]"><span>自定义</span><input type="color" className="h-8 w-12 cursor-pointer rounded border border-[var(--line)] bg-transparent p-0.5" aria-label={`${name}自定义人物颜色`} value={draft} disabled={status === "saving"} onChange={event => { setDraft(event.target.value); setStatus("idle"); }} /></label><button type="button" className="ui-btn ui-btn-sm" aria-label={`保存${name}的自定义颜色`} disabled={status === "saving" || draft.toUpperCase() === color.toUpperCase()} onClick={() => void save(draft)}>保存颜色</button></div>
-    {status === "idle" && draft.toUpperCase() !== color.toUpperCase() && <p className="text-[13px] text-[var(--ink-light)]">点击“保存颜色”应用到所有分镜</p>}
-    {status !== "idle" && <p className="text-[13px] text-[var(--ink-light)]" role="status">{status === "saving" ? "正在保存人物色…" : status === "saved" ? "已保存，同角色的所有分镜同步更新" : "保存失败，请查看提示后重试"}</p>}
-  </div>;
-}
-
 export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebarProps) {
+  const characterDrafts = useCharacterDraftStore(state => state.drafts);
+  const inspectorTarget = useCharacterDraftStore(state => state.target);
+  const [characterSearch, setCharacterSearch] = useState("");
   const pages = useEditorStore(s => s.pages);
   const characters = useEditorStore(s => s.characters);
   const details = useEditorStore(s => s.characterDetails);
@@ -212,13 +191,18 @@ export default function PageSidebar({ onSelectObject, onStartPage }: PageSidebar
           <p className="px-4 py-2 text-xs text-[var(--muted)]">锁定防止误移动；眼睛控制本次编辑中的显示。</p>
         </section>
       </div> : <div className="sidebar-tab-content" role="tabpanel" id="character-resources" aria-labelledby="characters-tab">
-        <div className="sidebar-subheading"><span>项目角色</span><Users size={16} /></div>
-        <div className="character-list">{characters.map((character, index) => <div key={character.id}><div className="character-row" draggable title="拖入分镜格添加人物" onDragStart={e => { e.dataTransfer.setData("application/soda-character-id", character.id); e.dataTransfer.effectAllowed = "copy"; }}>
-          <span className={"character-avatar avatar-" + (index % 2)}>{character.display_name.slice(0, 1)}</span>
-          <span className="character-name">{character.display_name}<span className="character-id">{character.id}</span></span>
-          <span className="character-strength">{character.has_lora ? "×" + (details[character.id]?.lora?.strength ?? 1) : "—"}</span>
-        </div><CharacterColorControls id={character.id} name={character.display_name} color={characterSketchColor(character)} /></div>)}</div>
-        <p className="sidebar-footnote">将角色拖入格子，安排人物站位。</p>
+        <div className="sidebar-subheading"><span>项目角色</span><button className="sidebar-new-page" onClick={() => useCharacterDraftStore.getState().create()} aria-label="新建角色"><Plus size={14} />新建角色</button></div>
+        <label className="mx-3 mb-2 flex items-center gap-2"><Search size={14} className="shrink-0 text-[var(--muted)]" /><input className="ui-input" aria-label="搜索角色" value={characterSearch} placeholder="搜索名称或 ID" onChange={event => setCharacterSearch(event.target.value)} /></label>
+        <div className="character-list">{characters.filter(character => `${character.display_name} ${character.id}`.toLocaleLowerCase().includes(characterSearch.trim().toLocaleLowerCase())).map((character, index) => <div key={character.id} className="relative border-b border-[var(--line)]"><div className="character-row" draggable title="点击编辑角色；拖入分镜格添加人物" onDragStart={event => { if ((event.target as Element).closest("[data-character-action]")) { event.preventDefault(); return; } event.dataTransfer.setData("application/soda-character-id", character.id); event.dataTransfer.effectAllowed = "copy"; }}>
+          <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={`编辑角色 ${character.display_name}`} aria-pressed={inspectorTarget.kind === "character" && inspectorTarget.id === character.id} onClick={() => void useCharacterDraftStore.getState().open(character.id)}>
+          <span className={"character-avatar avatar-" + (index % 2)} style={{ background: characterSketchColor(character) }}>{character.display_name.slice(0, 1)}</span>
+          <span className="character-name">{character.display_name}<span className="character-id">{character.id}</span><span className="character-id">{characterDrafts[character.id]?.dirty ? "未保存 · " : ""}{characterDrafts[character.id]?.externalChanged ? "外部更新 · " : ""}{character.has_lora ? "有 LoRA" : "描述角色"}</span></span>
+          </button>
+          <button type="button" className="ui-icon-btn shrink-0" data-character-action="copy" aria-label={`复制角色 ${character.display_name}`} draggable={false} onPointerDown={event => event.stopPropagation()} onClick={() => void useCharacterDraftStore.getState().duplicate(character.id)}><Copy size={14} /></button>
+        </div></div>)}</div>
+        {Object.values(characterDrafts).filter(draft => !draft.baseline).map(draft => <button key={draft.key} className="outline-panel-button mx-3 mt-2" onClick={() => useCharacterDraftStore.setState({ target: { kind: "new-character", draftId: draft.key } })}>{draft.value.display_name || "新角色"} · 未保存</button>)}
+        {!characters.length && <p className="px-4 py-3 text-[13px] text-[var(--muted)]">还没有角色，点击“新建角色”开始。无需先创建页面。</p>}
+        <p className="sidebar-footnote">点击角色编辑资料；将角色拖入格子安排站位。人物色随角色资料保存。</p>
       </div>}
     </aside>
   );

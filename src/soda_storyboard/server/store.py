@@ -12,7 +12,7 @@ from soda_storyboard.captions import panel_caption_info
 from soda_storyboard.compiler import compile_geometry_map, compile_page
 from soda_storyboard.figures import sketch_geometry
 from soda_storyboard.geometry import bbox_overlap, bbox_xywh, shape_bbox, skew_rectangles
-from soda_storyboard.io import load_character, load_project, read_json, save_page, write_json
+from soda_storyboard.io import load_project, read_json, save_page, write_json
 from soda_storyboard.json_safety import check_json_numbers
 from soda_storyboard.models import Character, Page, Project
 from soda_storyboard.persistence import page_lock
@@ -21,6 +21,7 @@ from soda_storyboard.production.paths import validate_production_paths
 from soda_storyboard.templates import suggest_layouts
 from soda_storyboard.validation import validate_page
 
+from .characters import CharacterStore
 from .common import APIError, identifier, inside, snapshot
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class Store:
         self.lock = threading.RLock()
         self.candidates: dict[str, dict] = {}
         self.production_pages: set[str] = set()
+        self.character_store = CharacterStore(self)
         load_project(self.path("project.json"))
 
     def path(self, relative: str) -> Path:
@@ -50,11 +52,7 @@ class Store:
         return self.path(f"pages/{identifier(page_id)}.json")
 
     def characters(self) -> list[dict]:
-        directory = self.path("characters")
-        return [
-            load_character(self.path(f"characters/{p.name}")).to_dict()
-            for p in sorted(directory.glob("*.json"))
-        ]
+        return self.character_store.catalog()["characters"]
 
     def character_map(self) -> dict[str, Character]:
         return {value["id"]: Character.from_dict(value) for value in self.characters()}
@@ -223,29 +221,9 @@ class Store:
     def save_character(
         self, value: dict, character_id: str | None = None, version: str | None = None
     ) -> dict:
-        with self.lock:
-            character = Character.from_dict(value)
-            identifier(character.id)
-            if character_id is not None and character.id != character_id:
-                raise APIError(400, "角色 id 必须与 URL 一致")
-            path = self.path(f"characters/{character.id}.json")
-            if character_id is None and path.exists():
-                raise APIError(409, "角色已存在")
-            if character_id is not None and not path.exists():
-                raise APIError(404, "角色不存在")
-            if version is not None and character_id is not None:
-                current, current_version = snapshot(path)
-                if current_version != version:
-                    raise APIError(
-                        409,
-                        "角色资料已在其他位置修改，请刷新后重试",
-                        current=current,
-                        version=current_version,
-                    )
-            # Validate with the model, but retain unknown nested fields in existing role files.
-            saved = value if character_id is not None else character.to_dict()
-            saved, saved_version = self.atomic(path, saved, version if character_id is not None else None)
-            return {"character": saved, "version": saved_version}
+        if character_id is None:
+            return self.character_store.create(value)
+        return self.character_store.save(character_id, value, version, patch=False)
 
     def preview(self, page_id: str, style: str, scale: float) -> bytes:
         page = self.render_page(page_id)
