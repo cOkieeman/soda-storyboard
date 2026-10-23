@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +16,26 @@ if TYPE_CHECKING:
 PATH_FIELDS = frozenset(
     {"path", "selected_render", "selected", "source_render", "mask", "candidate_sheet", "underlay", "font"}
 )
+
+
+def resolved_path(path: Path) -> Path:
+    """Resolve symlinks, then use one spelling of standard Windows paths.
+
+    Windows non-strict resolution can retain the extended-length prefix when
+    another writer creates a missing parent during resolution. Normalize only
+    resolved drive/UNC paths, so containment checks do not confuse namespaces.
+    """
+    resolved = path.resolve()
+    if os.name != "nt":
+        return resolved
+    text = str(resolved)
+    prefix = "\\\\?\\"
+    unc_prefix = prefix + "UNC\\"
+    if text.upper().startswith(unc_prefix):
+        return Path("\\\\" + text[len(unc_prefix) :])
+    if re.match(r"^\\\\\?\\[A-Za-z]:\\", text):
+        return Path(text[len(prefix) :])
+    return resolved
 
 
 def production_path(root: Path | None, value: Any, *, allow_absolute: bool = False) -> Path:
@@ -36,8 +58,8 @@ def production_path(root: Path | None, value: Any, *, allow_absolute: bool = Fal
         raise ValueError(message)
     if root is None:
         return Path(text)
-    root = root.resolve()
-    target = (root / Path(text)).resolve()
+    root = resolved_path(root)
+    target = resolved_path(root / Path(text))
     if not target.is_relative_to(root):
         message = "production 路径不能越出项目目录（包括符号链接）"
         raise ValueError(message)

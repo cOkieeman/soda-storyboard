@@ -83,6 +83,8 @@ def apply_translations(page: Page, characters: Mapping[str, Character], payload:
     for entry in entries:
         identifier = entry.get("panel_id") if isinstance(entry, dict) else None
         reason = None
+        text = entry.get("text") if isinstance(entry, dict) else None
+        cleaned = clean_caption([text], "en") if isinstance(text, str) else ""
         panel = panels.get(identifier) if isinstance(identifier, str) else None
         if panel is None:
             reason = "unknown_panel"
@@ -90,7 +92,7 @@ def apply_translations(page: Page, characters: Mapping[str, Character], payload:
             reason = "duplicate_panel"
         elif entry.get("source_hash") != source_hash(panel, page, characters):
             reason = "source_hash_mismatch"
-        elif not isinstance(entry.get("text"), str) or not entry["text"].strip():
+        elif not cleaned:
             reason = "empty_translation"
         if reason:
             rejected.append({"panel_id": identifier, "reason": reason})
@@ -98,7 +100,7 @@ def apply_translations(page: Page, characters: Mapping[str, Character], payload:
         seen.add(identifier)
         panel.caption_auto_en = {
             "format": SCENE_TRANSLATION_FORMAT,
-            "text": clean_caption([entry["text"]], "en"),
+            "text": cleaned,
             "source_hash": entry["source_hash"],
             "translated_at": datetime.now(UTC).isoformat(),
         }

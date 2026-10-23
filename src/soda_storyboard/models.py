@@ -65,6 +65,18 @@ def _number(value: Any, name: str) -> float:
     return result
 
 
+def _integer(value: Any, name: str, *, minimum: int | None = None) -> int:
+    """Validate JSON integer semantics before conversion, without truncation."""
+
+    number = _number(value, name)
+    if not number.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    result = int(value)
+    if minimum is not None and result < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return result
+
+
 def _text(value: Any, name: str, *, default: str = "") -> str:
     if value is None:
         return default
@@ -548,7 +560,7 @@ class Panel:
             shape = {key: value[key] for key in ("type", "x", "y", "w", "h") if key in value}
         return cls(
             id=_text(value.get("id", ""), "panel.id"),
-            order=int(value.get("order", 1)),
+            order=_integer(value.get("order", 1), "panel.order"),
             shape=shape_to_dict(shape),
             shot=_text(value.get("shot", value.get("shot_size", "medium")), "panel.shot"),
             angle=_text(value.get("angle", "eye"), "panel.angle"),
@@ -558,7 +570,7 @@ class Panel:
             description=_text(value.get("description", ""), "panel.description"),
             dialogue=[Dialogue.from_dict(item) for item in value.get("dialogue", [])],
             sfx=_strings(value.get("sfx", []), "panel.sfx"),
-            importance=int(value.get("importance", 1)),
+            importance=_integer(value.get("importance", 1), "panel.importance"),
             status=_text(value.get("status", "draft"), "panel.status"),
             caption_en=None
             if value.get("caption_en") is None
@@ -636,7 +648,7 @@ class Overlay:
             character_id=_text(value.get("character_id", ""), "overlay.character_id"),
             rect=RectShape.from_dict(value.get("rect", {})),
             panel_id=None if value.get("panel_id") is None else _text(value["panel_id"], "overlay.panel_id"),
-            z_index=int(value.get("z_index", 1)),
+            z_index=_integer(value.get("z_index", 1), "overlay.z_index"),
             description=_text(value.get("description", ""), "overlay.description"),
             status=_text(value.get("status", "planned"), "overlay.status"),
             image_path=None
@@ -712,7 +724,7 @@ class Page:
     reading_direction: str = "rtl"
     style_prefix: str = ""
     description: str = ""
-    panel_gap: int = 24
+    panel_gap: float = 24
     panels: list[Panel] = field(default_factory=list)
     dialogue_mode: str = "moss_text"
     text_direction: str = "vertical"
@@ -749,7 +761,7 @@ class Page:
         return self.canvas_width, self.canvas_height
 
     @property
-    def panel_spacing(self) -> int:
+    def panel_spacing(self) -> float:
         return self.panel_gap
 
     def __post_init__(self) -> None:
@@ -808,14 +820,14 @@ class Page:
         height = value.get("canvas_height", value.get("height", canvas.get("height", 1536)))
         return cls(
             page_id=_text(value.get("page_id", value.get("id", "")), "page.page_id"),
-            canvas_width=int(width),
-            canvas_height=int(height),
+            canvas_width=_integer(width, "page.canvas_width"),
+            canvas_height=_integer(height, "page.canvas_height"),
             reading_direction=_text(
                 value.get("reading_direction", value.get("direction", "rtl")), "page.reading_direction"
             ),
             style_prefix=_text(value.get("style_prefix", value.get("style", "")), "page.style_prefix"),
             description=_text(value.get("description", value.get("caption", "")), "page.description"),
-            panel_gap=int(value.get("panel_gap", value.get("gutter", 24))),
+            panel_gap=_number(value.get("panel_gap", value.get("gutter", 24)), "page.panel_gap"),
             panels=[Panel.from_dict(item) for item in value.get("panels", [])],
             dialogue_mode=_text(
                 value.get("dialogue_mode", value.get("lettering_mode", "moss_text")), "page.dialogue_mode"
@@ -829,7 +841,7 @@ class Page:
             else _text(value["style_prompt"], "page.style_prompt"),
             tags=_strings(value.get("tags", []), "page.tags"),
             text_font_size=_number(value.get("text_font_size", 42), "page.text_font_size"),
-            text_max_chars=int(value.get("text_max_chars", 10)),
+            text_max_chars=_integer(value.get("text_max_chars", 10), "page.text_max_chars"),
             legacy_caption_en=_boolean(value.get("legacy_caption_en", False), "page.legacy_caption_en"),
             caption_language=None
             if value.get("caption_language") is None
@@ -958,8 +970,8 @@ class Project:
                 value.get("default_style_prefix", value.get("style_prefix", "")),
                 "project.default_style_prefix",
             ),
-            default_canvas_width=int(width),
-            default_canvas_height=int(height),
+            default_canvas_width=_integer(width, "project.default_canvas_width", minimum=1),
+            default_canvas_height=_integer(height, "project.default_canvas_height", minimum=1),
             reading_direction=_text(
                 value.get("reading_direction", value.get("direction", "rtl")),
                 "project.reading_direction",

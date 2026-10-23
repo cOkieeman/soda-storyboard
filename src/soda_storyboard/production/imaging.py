@@ -11,7 +11,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from soda_storyboard.figure_semantics import figure_page_box
 from soda_storyboard.figures import panel_figures
-from soda_storyboard.geometry import shape_bbox
+from soda_storyboard.geometry import polygon_area, shape_bbox
 from soda_storyboard.lettering import layout_texts
 
 from .errors import ProductionError
@@ -87,8 +87,17 @@ def inset_quad(points: list[list[float]], inset: float = 12) -> list[tuple[float
             raise ProductionError(msg)
         distance = ((px - x) * pdy - (py - y) * pdx) / cross
         result.append((x + distance * dx, y + distance * dy))
-    if any(
-        (vx - x) * nx + (vy - y) * ny < -PIXEL_TOLERANCE for vx, vy in result for x, y, _, _, nx, ny in edges
+    if (
+        abs(polygon_area(result)) <= EPSILON
+        or any(
+            math.hypot(x - result[i - 1][0], y - result[i - 1][1]) <= EPSILON
+            for i, (x, y) in enumerate(result)
+        )
+        or any(
+            (vx - x) * nx + (vy - y) * ny < -PIXEL_TOLERANCE
+            for vx, vy in result
+            for x, y, _, _, nx, ny in edges
+        )
     ):
         msg = "cut-inset 太大，斜切格已没有可用区域"
         raise ProductionError(msg)

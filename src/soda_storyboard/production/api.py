@@ -18,8 +18,11 @@ from PIL import Image, ImageDraw
 from soda_storyboard.compiler import character_caption, compile_geometry_map, compile_page, panel_caption
 from soda_storyboard.figure_semantics import figure_page_box
 from soda_storyboard.figures import panel_figures
+from soda_storyboard.io import read_json
+from soda_storyboard.json_safety import check_json_numbers
 from soda_storyboard.lettering import layout_texts
 from soda_storyboard.lora import panel_characters, select_lora
+from soda_storyboard.persistence import page_lock
 
 from .check import page_graph
 from .errors import ProductionError, production_operation
@@ -177,15 +180,157 @@ def _registered(records: list[JSON], state: PageState, requested: str | Path) ->
     return record
 
 
+def _select_page_render(state: PageState, path: str) -> None:
+    if state.production.get("selected_render") != path:
+        state.production["selected_render"] = path
+        for panel in state.raw["panels"]:
+            panel.get("production", {}).pop("selected", None)
+        state.invalidate()
+
+
+def _render_target(state: PageState, panel_id: str | None, overlay_id: str | None) -> tuple[JSON, Path]:
+    if panel_id is not None and overlay_id is not None:
+        msg = "panel_id 和 overlay_id 不能同时指定"
+        raise ProductionError(msg)
+    if panel_id is not None:
+        data = state.panel(panel_id).setdefault("production", {})
+        state.base()  # Bind panel candidates to an existing selected page render.
+        return data, state.directory / "panels" / identifier(panel_id) / "renders"
+    if overlay_id is not None:
+        overlay = next((o for o in state.page.overlays if o.id == overlay_id and o.mode == "layer"), None)
+        if overlay is None:
+            msg = f"找不到 mode: layer 的出格图层：{overlay_id}"
+            raise ProductionError(msg)
+        data = state.production.setdefault("overlays", {}).setdefault(overlay_id, {})
+        return data, state.directory / "overlays" / identifier(overlay_id) / "renders"
+    return state.production, state.directory / "renders"
+
+
+def _check_render_image(path: Path) -> None:
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        with Image.open(path) as image:
+            image.load()
+    except (OSError, ValueError, SyntaxError) as exc:
+        msg = "登记源文件不是有效图片，请提供可解码的图片文件"
+        raise ProductionError(msg) from exc
+
+
+def _import_render(state: PageState, image_path: str | Path, folder: Path) -> Path:
+    # Explicit external inputs are allowed; every destination still goes through
+    # the same resolved project-boundary check as other production operations.
+    source = Path(image_path)
+    if not source.is_absolute():
+        source = state.root / source
+    source = source.resolve()
+    _check_render_image(source)
+    destination = state.local(folder / f"{stamp()}_{secrets.token_hex(8)}{source.suffix or '.img'}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, destination)
+    try:
+        _check_render_image(destination)
+    except ProductionError:
+        destination.unlink(missing_ok=True)
+        raise
+    return destination
+
+
+def _render_metadata(meta: JSON | None, preset: str | None, model: str | None) -> JSON:
+    if meta is not None and not isinstance(meta, dict):
+        msg = "meta 必须是 JSON 对象"
+        raise ProductionError(msg)
+    metadata = copy.deepcopy(meta) if meta is not None else {}
+    metadata["created_at"] = stamp()
+    for key, value in (("preset", preset), ("model", model)):
+        if value is not None:
+            if not isinstance(value, str):
+                msg = f"{key} 必须是字符串"
+                raise ProductionError(msg)
+            metadata[key] = value
+    check_json_numbers(metadata)
+    json.dumps(metadata, allow_nan=False)
+    return metadata
+
+
+def _save_registered_render(
+    state: PageState, panel_id: str | None, overlay_id: str | None, *, select: bool
+) -> None:
+    if panel_id is None and overlay_id is None:
+        state.save()
+        return
+    # Hold the shared lock through dependency checks and the reentrant save.
+    # Field merging alone cannot detect a panel's dependency on the page base,
+    # or the removal of a layer whose records live in page-level production.
+    with page_lock(state.path):
+        latest = read_json(state.path)
+        if (
+            panel_id is not None
+            and select
+            and latest.get("production", {}).get("selected_render") != state.production.get("selected_render")
+        ):
+            msg = "整页底图已切换，单格选中冲突；已复制图片保留，请重新读取后重试"
+            raise ProductionError(msg)
+        if overlay_id is not None and not any(
+            overlay.get("id") == overlay_id and overlay.get("mode") == "layer"
+            for overlay in latest.get("overlays", [])
+        ):
+            msg = "出格图层已删除或改变模式，登记冲突；已复制图片保留，请重新读取后重试"
+            raise ProductionError(msg)
+        state.save()
+
+
+@production_operation
+def register_render(  # noqa: PLR0913 -- public external-worker registration options
+    project_dir: str | Path,
+    page_id: str,
+    image_path: str | Path,
+    *,
+    seed: int | None = None,
+    preset: str | None = None,
+    model: str | None = None,
+    source: str = "external",
+    select: bool = False,
+    panel_id: str | None = None,
+    overlay_id: str | None = None,
+    meta: JSON | None = None,
+) -> dict:
+    """Copy and register a local worker image, optionally selecting it atomically.
+
+    Relative input paths are resolved from the project root. The returned path
+    is absolute; persisted paths are always project-relative. No jobs are sent.
+    """
+    if seed is not None:
+        _seed(seed)
+    if not isinstance(select, bool) or not isinstance(source, str) or not source.strip():
+        msg = "select 必须是布尔值，source 必须是非空字符串"
+        raise ProductionError(msg)
+    metadata = _render_metadata(meta, preset, model)
+    state = PageState(project_dir, page_id)
+    target, folder = _render_target(state, panel_id, overlay_id)
+    destination = _import_render(state, image_path, folder)
+    record = {"path": state.relative(destination), "seed": seed, "meta": metadata, "source": source}
+    if panel_id is not None:
+        record["source_render"] = state.production["selected_render"]
+    target.setdefault("renders", []).append(record)
+    if select:
+        if panel_id is not None:
+            target["selected"] = record["path"]
+            state.invalidate()
+        elif overlay_id is not None:
+            target.update(record)
+            state.invalidate()
+        else:
+            _select_page_render(state, record["path"])
+    _save_registered_render(state, panel_id, overlay_id, select=select)
+    return {**copy.deepcopy(record), "path": str(destination)}
+
+
 @production_operation
 def pick_render(project_dir: str | Path, page_id: str, render_path: str | Path) -> dict:
     state = PageState(project_dir, page_id)
     record = _registered(state.production.get("renders", []), state, render_path)
-    if state.production.get("selected_render") != record["path"]:
-        state.production["selected_render"] = record["path"]
-        for panel in state.raw["panels"]:
-            panel.get("production", {}).pop("selected", None)
-        state.invalidate()
+    _select_page_render(state, record["path"])
     state.save()
     return {**record, "path": str(state.local(record["path"]))}
 
@@ -860,5 +1005,6 @@ __all__ = [
     "pick_render",
     "production_plan",
     "redraw_panel",
+    "register_render",
     "split_page",
 ]

@@ -47,3 +47,59 @@ CLI：`soda-storyboard export-bundle <页> [--output <路径>] [--no-sketch] [--
 - `import_storyboard(source, *, page_id=None, default_color_mode="monochrome") -> (Page, report)`：补充宽松 JSON / Markdown。report 的公开键包括 guesses、warnings、unrecognized_items、canvas、panel_count；MOSS 报告还含 text_count、object_count、preserved_items。单画布由 page.extra["canvas_mode"] == "single" 表示（序列化为顶层 canvas_mode）。
 
 上述名称列入各模块及包根 `__all__`。0.4.x 保持已有参数、返回类型、包格式标记和必需键兼容；可增加可选字段和警告。理解报告的推断结果会随修复改善，不保证每个启发式结果或警告措辞永远不变；应按格式标记和结构字段消费，不按中文文案解析。破坏式格式变化需新标记或主版本迁移说明；内部下划线函数不属于稳定接口。
+
+## 登记外部生成图片（0.4.2）
+
+Hub Worker 等调用方自行完成出图后，可通过生产 API 登记本地图片；接口不连接 ComfyUI，也不提交生成任务。
+
+```python
+from pathlib import Path
+
+
+def register_render(
+    project_dir: str | Path,
+    page_id: str,
+    image_path: str | Path,
+    *,
+    seed: int | None = None,
+    preset: str | None = None,
+    model: str | None = None,
+    source: str = "external",
+    select: bool = False,
+    panel_id: str | None = None,
+    overlay_id: str | None = None,
+    meta: dict | None = None,
+) -> dict: ...
+```
+
+以上为类型签名。`image_path` 可以是项目外的绝对路径；相对路径以项目目录为基准。接口验证图片可完整解码，复制到 `pages/<页id>/` 下唯一命名的生产文件，项目内输入也会复制，以保留独立候选。目标路径复用生产路径边界检查，拒绝通过符号链接越出项目。保留原图片字节、尺寸和透明通道，不自动缩放。
+
+省略 `panel_id` 和 `overlay_id` 时，候选追加到页面 `production.renders`；`select=True` 同时设置 `selected_render`，清除旧底图的单格选中记录及过期 compose/letter 记录。`panel_id` 与 `overlay_id` 互斥：单格候选写入该格的 `production.renders`，绑定当前已选整页底图（因此必须先选底图），`select=True` 设置该格 `selected`；图层必须是已有的 `mode: "layer"`，候选写入页面 `production.overlays[id].renders`，`select=True` 同时更新该图层的生效记录。未选中的图层候选不会自动叠加。
+
+返回记录为 `{"path": "绝对路径", "seed": 123或null, "source": "hub-worker", "meta": {...}}`；单格记录还含项目内相对路径 `source_render`。磁盘记录的文件路径始终为项目内相对路径。`meta` 保留自定义 JSON 元数据，显式 `preset` / `model` 覆盖同名键，`created_at` 由接口填写；种子省略时记录 null，不虚构随机种子。外部预设和模型名按元数据保存，无需匹配本地 ComfyUI 配置。
+
+```python
+from soda_storyboard.production.api import register_render
+
+record = register_render(
+    r"E:\stories\chapter1",
+    "page01",
+    r"E:\worker-output\page01.png",
+    seed=123,
+    preset="final",
+    model="worker-model.safetensors",
+    source="hub-worker",
+    select=True,
+    meta={"job_id": "job-42"},
+)
+# select=False 时，也可稍后 pick_render(project_dir, "page01", record["path"])
+# 单格：register_render(project_dir, "page01", panel_png, panel_id="p1", select=True)
+# 图层：register_render(project_dir, "page01", rgba_png, overlay_id="hero", select=True)
+```
+
+```powershell
+soda-storyboard register-render page01 E:\worker-output\page01.png --project E:\stories\chapter1 --select --seed 123 --source hub-worker --preset final --model worker-model.safetensors --json
+# 单格、图层分别加 --panel p1 或 --overlay hero；二者互斥。
+```
+
+登记与选中通过共享文件锁、production 字段合并及版本检查一次写回，保留登记期间保存的页面正文和其他候选。互相冲突的选中操作会抛出 `ProductionError`，不覆盖并发编辑；已复制图片保留在生产目录，调用方重新读取后可重试。无效图片、目标 id、种子或越界目标也以 `ProductionError` 拒绝。整页候选可继续使用 `pick_render` / CLI `pick`，单格候选可使用 `pick_panel` / `pick-panel`，已选记录直接供 `compose_page` / `compose` 使用。

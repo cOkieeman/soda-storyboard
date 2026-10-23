@@ -94,6 +94,19 @@ def command(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915 --
                 model=args.model,
                 lora=args.lora,
             )
+        elif action == "register-render":
+            result = api.register_render(
+                root,
+                page_id,
+                args.image,
+                select=args.select,
+                seed=args.seed,
+                source=args.source,
+                preset=args.preset,
+                model=args.model,
+                panel_id=args.panel,
+                overlay_id=args.overlay,
+            )
         elif action == "pick":
             result = api.pick_render(root, page_id, args.render)
         elif action == "plan":
@@ -193,6 +206,18 @@ def register_commands(subparsers: argparse._SubParsersAction) -> None:  # noqa: 
     generate.add_argument("--preset", choices=("draft", "final"))
     generate.add_argument("--model", help="base / sft / 自定义模型文件名")
     generate.add_argument("--lora", default="auto", help="auto / none / 角色 id")
+    register = _common(
+        subparsers.add_parser("register-render", help="登记外部生成的图片候选"), "register-render"
+    )
+    register.add_argument("image", help="图片路径；相对路径基于项目目录，外部图片复制到生产目录")
+    register.add_argument("--select", action="store_true", help="登记后同时选中")
+    register.add_argument("--seed", type=int)
+    register.add_argument("--source", default="external")
+    register.add_argument("--preset")
+    register.add_argument("--model")
+    target = register.add_mutually_exclusive_group()
+    target.add_argument("--panel", help="登记为指定格子的候选；需要已选整页底图")
+    target.add_argument("--overlay", help="登记为指定 layer 图层的候选")
     pick = _common(subparsers.add_parser("pick", help="选定整页底图"), "pick")
     pick.add_argument("render")
     _common(subparsers.add_parser("plan", help="查看后续生产计划"), "plan")

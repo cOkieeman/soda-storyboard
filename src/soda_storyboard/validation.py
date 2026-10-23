@@ -417,6 +417,8 @@ def validate_page(
     for message in validate_production_paths(page.to_dict() if isinstance(page, Page) else _as_dict(page)):
         report.add("error", "invalid_production_path", message, field_name="production")
     _validate_enums_and_ids(page, report)
+    if not _validate_numeric_fields(page, report):
+        return report
     if geometry_tolerance is None:
         geometry_tolerance = _get(
             page, "geometry_tolerance", _get(page, "extra", {}).get("geometry_tolerance", 0.5)
@@ -624,6 +626,87 @@ def _validate_enums_and_ids(page: Any, report: ValidationReport) -> None:
                 report.add("error", "invalid_figure_id", "人物 id 不能为空或重复", field_name="figures.id")
             if isinstance(identifier, str):
                 figure_ids.add(identifier)
+
+
+def _validate_numeric_fields(page: Any, report: ValidationReport) -> bool:
+    """Reject lossy coercion in mappings and directly constructed model objects."""
+
+    original_count = len(report.errors)
+    canvas = _get(page, "canvas", _get(page, "canvas_size", {}))
+    width, height = canvas_size(page)
+    for key, value, minimum, integer in (
+        (
+            "canvas_width",
+            _get(page, "canvas_width", _get(page, "width", _get(canvas, "width", width))),
+            1,
+            True,
+        ),
+        (
+            "canvas_height",
+            _get(page, "canvas_height", _get(page, "height", _get(canvas, "height", height))),
+            1,
+            True,
+        ),
+        ("panel_gap", _get(page, "panel_gap", _get(page, "gutter", 0)), 0, False),
+        ("text_max_chars", _get(page, "text_max_chars", 10), 1, True),
+        ("text_font_size", _get(page, "text_font_size", 42), 0, False),
+    ):
+        _validate_numeric_field(
+            value, key, report, minimum=minimum, integer=integer, exclusive=key == "text_font_size"
+        )
+    for index, panel in enumerate(_panels(page)):
+        panel_id = _panel_id(panel, index)
+        for key, maximum in (("order", None), ("importance", 3)):
+            _validate_numeric_field(
+                _get(panel, key, index + 1 if key == "order" else 1),
+                key,
+                report,
+                minimum=1,
+                integer=True,
+                maximum=maximum,
+                panel_id=panel_id,
+            )
+    for overlay in _get(page, "overlays", []):
+        _validate_numeric_field(_get(overlay, "z_index", 1), "z_index", report, minimum=1, integer=True)
+    return len(report.errors) == original_count
+
+
+def _validate_numeric_field(
+    value: Any,
+    key: str,
+    report: ValidationReport,
+    *,
+    minimum: float,
+    integer: bool,
+    maximum: float | None = None,
+    exclusive: bool = False,
+    panel_id: str | None = None,
+) -> None:
+    valid = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if valid:
+        valid = (
+            (not integer or not isinstance(value, float) or value.is_integer())
+            and (value > minimum if exclusive else value >= minimum)
+            and (maximum is None or value <= maximum)
+        )
+    if not valid:
+        kind = "整数" if integer else "数值"
+        lower = ">" if exclusive else ">="
+        upper = "" if maximum is None else f" 且 <= {maximum:g}"
+        code = {
+            "canvas_width": "invalid_canvas",
+            "canvas_height": "invalid_canvas",
+            "text_font_size": "invalid_text_metrics",
+            "text_max_chars": "invalid_text_metrics",
+            "z_index": "invalid_overlay_layer",
+        }.get(key, f"invalid_{key}")
+        report.add(
+            "error",
+            code,
+            f"{key} 必须是{kind}，{lower} {minimum:g}{upper}",
+            panel_id=panel_id,
+            field_name=key,
+        )
 
 
 def _validate_character_clothing(

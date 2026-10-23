@@ -83,15 +83,19 @@ def panel_location(panel: Panel, page: Page) -> str:
 
 
 def _integer_bbox(shape: Shape, page: Page, *, inward: bool = False) -> list[int]:
-    bounds = [page.canvas_height // 2, page.canvas_width // 2] * 2
+    # Nearest rounding sends half pixels toward +infinity. Quantize the canvas
+    # edges the same way, so an odd width of 101 spans [-50, 51], preserving
+    # all 101 pixels. Hint mode instead keeps both ends inside the true edges.
+    lower = [-(page.canvas_height // 2), -(page.canvas_width // 2)] * 2
+    upper = [size // 2 if inward else (size + 1) // 2 for size in (page.canvas_height, page.canvas_width)] * 2
     values = panel_to_moss_bbox(shape, page.canvas_width, page.canvas_height)
     rounded = (
         [ceil(v - 1e-8) if i < len(values) // 2 else floor(v + 1e-8) for i, v in enumerate(values)]
         if inward
         else [floor(v + 0.5) for v in values]
     )
-    result = [max(-bound, min(bound, value)) for value, bound in zip(rounded, bounds, strict=True)]
-    if inward and (result[0] >= result[2] or result[1] >= result[3]):
+    result = [max(lo, min(hi, value)) for value, lo, hi in zip(rounded, lower, upper, strict=True)]
+    if result[0] >= result[2] or result[1] >= result[3]:
         message = "Panel is too small to contain a positive-area integer MOSS bbox"
         raise ValueError(message)
     return result

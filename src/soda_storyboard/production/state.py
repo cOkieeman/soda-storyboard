@@ -21,7 +21,7 @@ from soda_storyboard.persistence import file_snapshot, page_lock
 from .client import ComfyClient
 from .errors import ProductionError
 from .graphs import DEFAULTS, PRESETS
-from .paths import production_path, validate_production_paths
+from .paths import production_path, resolved_path, validate_production_paths
 
 type JSON = dict[str, Any]
 
@@ -102,7 +102,7 @@ def _merge_production(before: Any, changed: Any, current: Any) -> Any:  # noqa: 
 
 
 def configure(project_dir: str | Path, **updates: Any) -> JSON:  # noqa: ANN401 -- heterogeneous project configuration
-    root = Path(project_dir).resolve()
+    root = resolved_path(Path(project_dir))
     path = root / "project.json"
     payload = read_json(path)
     config = {**DEFAULTS, **payload.get("comfy", {})}
@@ -129,7 +129,7 @@ def configure(project_dir: str | Path, **updates: Any) -> JSON:  # noqa: ANN401 
 
 class PageState:
     def __init__(self, project_dir: str | Path, page_id: str) -> None:
-        self.root = Path(project_dir).resolve()
+        self.root = resolved_path(Path(project_dir))
         identifier(page_id)
         self.path = self.root / "pages" / f"{page_id}.json"
         if not self.path.is_file():
@@ -207,7 +207,7 @@ class PageState:
             raise ProductionError(str(exc)) from exc
 
     def relative(self, path: Path) -> str:
-        return path.resolve().relative_to(self.root).as_posix()
+        return resolved_path(path).relative_to(self.root).as_posix()
 
     def base(self) -> Path:
         selected = self.production.get("selected_render")

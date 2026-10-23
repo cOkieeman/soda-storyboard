@@ -186,8 +186,8 @@ def test_bbox_rounds_and_clamps_even_on_odd_canvas_and_tiny_panel() -> None:
     for item in compile_page(page)["items"]:
         assert all(type(value) is int for value in item["bbox"])
         y1, x1, y2, x2 = item["bbox"]
-        assert -75.5 <= y1 <= y2 <= 75.5
-        assert -50.5 <= x1 <= x2 <= 50.5
+        assert -75 <= y1 < y2 <= 76
+        assert -50 <= x1 < x2 <= 51
     page = Page(panels=[Panel("p", 1, {"x": 10.6, "y": 10.6, "w": 100.8, "h": 100.8})])
     assert compile_page(page)["items"][0]["bbox"] == [-757, -501, -657, -401]
 
