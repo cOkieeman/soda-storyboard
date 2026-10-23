@@ -7,7 +7,7 @@ import json
 import re
 from typing import TYPE_CHECKING
 
-from .clothing import clothing_phrases
+from .clothing import caption_clothing, clothing_phrases, contains_chinese
 from .figure_semantics import figure_description
 from .figures import panel_figures
 from .moss_roundtrip import entity_hash
@@ -107,21 +107,30 @@ def _join_preserving(parts: list[str], language: str, *, sentence: bool = True) 
     return result
 
 
+def _character_name(identifier: str, character: Character | None, language: str) -> str:
+    if character is None:
+        return identifier
+    name = (character.role_en or character.display_name) if language == "en" else character.display_name
+    return identifier if language == "en" and contains_chinese(name) else name
+
+
 def character_caption(identifier: str, characters: Mapping[str, Character], language: str = "zh") -> str:
     character = characters.get(identifier)
     if character is None:
         return identifier
     detail = (
-        (character.appearance_zh or character.display_name)
-        if language == "zh"
-        else (character.appearance_en or character.appearance_zh or character.display_name)
+        (character.appearance_zh or character.display_name) if language == "zh" else character.appearance_en
     )
-    parts = _unique([detail, *character.clothing])
+    parts = _unique([detail, *caption_clothing(character, language)])
     # Appearance is inserted verbatim; it can already start with the name.
-    name = (character.role_en or character.display_name) if language == "en" else character.display_name
+    name = _character_name(identifier, character, language)
     if not re.match(rf"^\s*{re.escape(name)}(?![A-Za-z0-9_])", detail, re.IGNORECASE):
         parts.insert(0, name)
-    if character.age and character.age not in detail:
+    if (
+        character.age
+        and character.age not in detail
+        and (language != "en" or not contains_chinese(character.age))
+    ):
         parts.insert(1, character.age)
     for trigger in character.trigger_words:
         if trigger and not _contains_identity(parts, trigger):
@@ -200,13 +209,7 @@ def outfit_distinction(panel: Panel, page: Page, characters: Mapping[str, Charac
     outfits = []
     for identifier in identifiers:
         character = characters.get(identifier)
-        name = (
-            identifier
-            if character is None
-            else (
-                (character.role_en or character.display_name) if language == "en" else character.display_name
-            )
-        )
+        name = _character_name(identifier, character, language)
         phrases = clothing_phrases(character, language) if character is not None else []
         outfit = (", " if language == "en" else "、").join(phrases)
         if not outfit:
@@ -353,6 +356,17 @@ def caption_notices(panel: Panel, page: Page, characters: Mapping[str, Character
             }
         )
     if (page.caption_language or "en") == "en" and not custom_caption_enabled(panel, page):
+        for identifier in panel_character_ids(panel, page):
+            character = characters.get(identifier)
+            if character and any(contains_chinese(text) for text in character.clothing):
+                notices.append(
+                    {
+                        "code": "character_clothing_translation_needed",
+                        "message": f"角色 {character.display_name or identifier} 的中文 clothing "
+                        "不会直接加入英文 caption；"
+                        "请核对 appearance.en，已包含的服装无需重复，缺少的款式和颜色请让 AI 翻译后补入。",
+                    }
+                )
         state = translation_state(panel, page, characters)
         if state not in {"fresh", "preserved"}:
             reason = "缺失" if state == "missing" else "已过期"

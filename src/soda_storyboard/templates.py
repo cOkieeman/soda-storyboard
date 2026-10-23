@@ -198,7 +198,7 @@ def load_user_templates(directory: str | Path | None) -> list[dict[str, Any]]:
         return []
     result: list[dict[str, Any]] = []
     for path in sorted(root.glob("*.json")):
-        with path.open(encoding="utf-8") as handle:
+        with path.open(encoding="utf-8-sig") as handle:
             value = json.load(handle)
         if isinstance(value, list):
             result.extend(dict(item) for item in value if isinstance(item, Mapping))

@@ -74,7 +74,7 @@ soda-storyboard pick stretch-color render.png --project examples/stretch-color -
 soda-storyboard plan stretch-color --project examples/stretch-color --json
 ```
 
-也可以使用唯一的候选文件名；直接复制进项目的图片不会自动登记。`plan` 会列出斜切、出框图层和排字等后续步骤。本例全是矩形、没有出框图层，主要需要程序排字。在 0.4.1 中，配角有自己的 LoRA 也不会因此自动安排换人。
+也可以使用唯一的候选文件名；直接复制进项目的图片不会自动登记。`plan` 会列出斜切、出框图层和排字等后续步骤。本例全是矩形、没有出框图层，主要需要程序排字。配角有自己的 LoRA 也不会因此自动安排换人。
 
 重新选底图后，旧的格子选择和派生成品会失效，需要对新底图重新完成后期。
 

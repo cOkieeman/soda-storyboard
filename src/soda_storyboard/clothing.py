@@ -33,13 +33,26 @@ def _matches(text: str, group: str) -> set[str]:
     }
 
 
+def contains_chinese(text: str) -> bool:
+    return re.search(r"[\u3400-\u9fff\U00020000-\U0002fa1f]", text) is not None
+
+
+def caption_clothing(character: Character, language: str) -> list[str]:
+    """The legacy clothing list is unlocalized; never inject Chinese into English."""
+    return [text for text in character.clothing if language != "en" or not contains_chinese(text)]
+
+
 def clothing_phrases(character: Character, language: str) -> list[str]:
     """Keep clothing clauses, excluding unrelated hair, skin and ornament colors."""
     appearance = character.appearance_en if language == "en" else character.appearance_zh
     # Chinese and English punctuation both delimit appearance clauses.
     phrases = [phrase.strip() for phrase in re.split(r"[,，;；。]|\.(?:\s|$)", appearance)]
     selected = [phrase for phrase in phrases if phrase and _matches(phrase, "categories")]
-    return list(dict.fromkeys([*selected, *(text.strip() for text in character.clothing if text.strip())]))
+    return list(
+        dict.fromkeys(
+            [*selected, *(text.strip() for text in caption_clothing(character, language) if text.strip())]
+        )
+    )
 
 
 def clothing_profile(character: Character) -> tuple[list[str], set[str], set[str]]:

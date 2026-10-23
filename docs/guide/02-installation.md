@@ -49,7 +49,7 @@ uv tool list
 uv tool install --force https://github.com/cOkieeman/soda-storyboard/releases/download/v0.4.2/soda_storyboard-0.4.2-py3-none-any.whl
 ```
 
-安装后用两步确认版本和启动器都恢复：`uv tool list` 应显示 `soda-storyboard v0.4.2`，而 `soda-storyboard --help` 应返回子命令列表并以 0 退出。需要核对其他已发布版本时，把 wheel URL 和 `uv tool list` 中显示的版本一起记录；不要把仍然报 trampoline 错误的空壳 exe 当成可用安装。
+安装后用两步确认版本和启动器都恢复：`uv tool list` 中 soda-storyboard 的版本应与所装 wheel 的版本一致，而 `soda-storyboard --help` 应返回子命令列表并以 0 退出。把 wheel URL 和 `uv tool list` 中显示的版本一起记录；不要把仍然报 trampoline 错误的空壳 exe 当成可用安装。
 
 如果 `uv tool list` 本身因权限或 uv 缓存目录报错，先修复 uv 的工具目录权限，再重复上面的检查；这与“命令不存在”是两种不同的故障。
 

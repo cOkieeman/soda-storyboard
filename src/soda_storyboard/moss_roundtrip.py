@@ -19,7 +19,24 @@ def entity_hash(value: dict) -> str:
     ).hexdigest()
 
 
-def imported_result(page: Page, compiled: dict, *, with_ids: bool) -> dict:  # noqa: C901, PLR0912 -- ordered passthrough, edits, deletion and additions
+def _legacy_snapshots(metadata: dict) -> dict[tuple[str, str], str]:
+    """Reconstruct display baselines for imports saved before model-v1 snapshots."""
+    from .importers import import_moss  # noqa: PLC0415 -- lazy import avoids the importer/hash cycle
+
+    source = {
+        **metadata.get("top_level", {}),
+        "summary": metadata.get("summary", {}),
+        "items": [entry["item"] for entry in metadata.get("entries", [])],
+    }
+    baseline, _ = import_moss(source)
+    return {
+        (entry["kind"], entry["id"]): entry["snapshot"]
+        for entry in baseline.extra["moss_import"]["entries"]
+        if entry["kind"] != "passthrough"
+    }
+
+
+def imported_result(page: Page, compiled: dict, *, with_ids: bool) -> dict:  # noqa: C901, PLR0912, PLR0915 -- ordered passthrough, legacy snapshots, edits, deletion and additions
     metadata = page.extra.get("moss_import")
     if not isinstance(metadata, dict):
         return compiled
@@ -36,6 +53,7 @@ def imported_result(page: Page, compiled: dict, *, with_ids: bool) -> dict:  # n
                 break
     used = set()
     items = []
+    legacy_snapshots = None
     for entry in metadata.get("entries", []):
         # Source fidelity must obey the current mode, including uneditable text.
         if page.dialogue_mode != "moss_text" and (
@@ -53,7 +71,13 @@ def imported_result(page: Page, compiled: dict, *, with_ids: bool) -> dict:  # n
         produced = generated.get(key)
         if produced:
             used.add(produced[0])
-        if entity_hash(entity.to_dict()) == entry["snapshot"]:
+        current_hash = entity_hash(entity.to_dict())
+        unchanged = current_hash == entry["snapshot"]
+        if not unchanged and metadata.get("snapshot_format") is None:
+            if legacy_snapshots is None:
+                legacy_snapshots = _legacy_snapshots(metadata)
+            unchanged = current_hash == legacy_snapshots.get(key)
+        if unchanged:
             original_item = copy.deepcopy(entry["item"])
             if with_ids:
                 original_item[

@@ -40,6 +40,8 @@ def _integer(token: str) -> int:
 
 def loads_json(content: str | bytes) -> Any:
     """Parse even nonstandard constants so one recursive check reports all overflow."""
+    if isinstance(content, str):
+        content = content.removeprefix("\ufeff")
     value = json.loads(content, parse_int=_integer)
     check_json_numbers(value)
     return value

@@ -8,10 +8,12 @@
 
 ## MOSS JSON 和单画布
 
-不带项目参数运行导入命令，可以只读查看报告：
+输入示例在**本仓库**的 `docs/examples/` 里；导入页、预览和编译输出则应保存到**你自己的故事项目**。相对路径总是从终端当前目录解析，不会自动从仓库或项目根目录寻找。
+
+下面假设仓库在 `D:\tools\soda-storyboard`，自己的项目已初始化在 `D:\comics\my-project`。请把这两个目录换成你的实际完整路径；路径两边保留引号，在任何工作目录都能运行。不带项目参数的第一条命令只读查看报告：
 
 ```powershell
-soda-storyboard import docs/examples/external-moss.json --json
+soda-storyboard import "D:\tools\soda-storyboard\docs\examples\external-moss.json" --json
 ```
 
 仓库里有一份最小、完整的[原生 MOSS JSON 示例](../examples/external-moss.json)。它以 `summary` 和 `items` 为核心字段，另带坐标声明，没有画布尺寸；三个条目分别是 `object`、`character` 和 `text`；`bbox_coord_space` 为 `abs_centralized`，`bbox_format` 为 `yxyx`。这是 MOSS 的输入格式，不是 `soda-storyboard-page-v1` 页面文件。
@@ -21,14 +23,14 @@ soda-storyboard import docs/examples/external-moss.json --json
 报告里的宽高、格数和未知条目核对好后，加上项目和页面参数，就能保存进项目：
 
 ```powershell
-soda-storyboard import docs/examples/external-moss.json --project my-project --page-id imported-moss --json
+soda-storyboard import "D:\tools\soda-storyboard\docs\examples\external-moss.json" --project "D:\comics\my-project" --page-id imported-moss --json
 ```
 
 保存后用本地草稿和编译结果核对单画布理解：
 
 ```powershell
-soda-storyboard preview my-project/pages/imported-moss.json --output my-project/previews/imported-moss.png --json
-soda-storyboard compile my-project/pages/imported-moss.json --output my-project/output/imported-moss.moss.json --json
+soda-storyboard preview "D:\comics\my-project\pages\imported-moss.json" --output "D:\comics\my-project\previews\imported-moss.png" --json
+soda-storyboard compile "D:\comics\my-project\pages\imported-moss.json" --output "D:\comics\my-project\output\imported-moss.moss.json" --json
 ```
 
 预期 `preview` 生成一张 1024×1536 的单画布草稿；`compile` 仍输出 `summary`、`items`、`bbox_coord_space: "abs_centralized"` 和 `bbox_format: "yxyx"`，并保留三个来源条目的顺序。先看报告和预览，再决定是否在编辑器里把人物框绑定到项目角色。
@@ -44,7 +46,7 @@ soda-storyboard compile my-project/pages/imported-moss.json --output my-project/
 导入器也接受常见 `frames`、`shots`、`panels`，以及 `prompt`、`description`、对白列表等宽松写法：
 
 ```powershell
-soda-storyboard import external.md --project my-project --page-id imported-page --json
+soda-storyboard import "E:\我的素材\external.md" --project "D:\comics\my-project" --page-id imported-page --json
 ```
 
 导入器会尝试识别不同的坐标顺序和归一化范围。坐标有歧义、未知字段较多，或者文本写法比较自由时，需要逐格核对报告。Markdown 中已有的分镜描述可以用来导入；一段任意小说文本则未必能自动得到合适的几何布局。
@@ -56,7 +58,7 @@ soda-storyboard import external.md --project my-project --page-id imported-page 
 自己的草图可以用颜色标记框的位置：青框是格子，绿框是文字，红色大框表示主角区域，红色横框可以表示标题。下面的命令会提取这些框位：
 
 ```powershell
-soda-storyboard layout extract reference.webp --mode color --preview my-project/previews/import-overlay.png --json
+soda-storyboard layout extract "E:\我的素材\reference.webp" --mode color --preview "D:\comics\my-project\previews\import-overlay.png" --json
 ```
 
 | 作为输入的颜色约定图 | `layout extract --mode color` 的识别叠加图 |

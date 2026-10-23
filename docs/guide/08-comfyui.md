@@ -4,7 +4,7 @@
 
 ![绯音的彩色五格漫画](images/stretch-color-finished.png)
 
-需要已发布的 **soda-storyboard 核心库 0.4.1**，安装到 ComfyUI 实际使用的 Python 环境，并安装 [ComfyUI-Soda-Storyboard 节点包](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard)。安装步骤见[第 2 章](02-installation.md)。本例使用 `scene-v1` 英文缓存；0.4.0 会把这份示例的缓存判为过期，试用前请升级。
+需要已发布的 **soda-storyboard 核心库 0.4.1 或更高版本**，安装到 ComfyUI 实际使用的 Python 环境，并安装 [ComfyUI-Soda-Storyboard 节点包](https://github.com/cOkieeman/ComfyUI-Soda-Storyboard)。安装步骤见[第 2 章](02-installation.md)。本例使用 `scene-v1` 英文缓存；0.4.0 会把这份示例的缓存判为过期，试用前请升级。
 
 ## 1. 准备配套工作流与分镜包
 

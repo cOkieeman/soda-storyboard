@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from .canvas_sizes import infer_dimensions
+from .json_safety import loads_json
 from .models import ObjectBox, Page, Panel, RectShape, Text
 from .moss_roundtrip import entity_hash
 from .templates import suggest_layouts
@@ -211,6 +212,9 @@ def import_moss(raw: dict[str, Any], *, default_color_mode: str = "monochrome") 
         containing = [panel for panel in page.panels if _contains(RectShape.from_dict(panel.shape), rect)]
         if containing:
             entity.panel_id = min(containing, key=lambda panel: panel.bbox[2] * panel.bbox[3]).id
+    # Snapshot the persisted model representation. Constructors can contain ints
+    # where loading uses floats; those are not user edits to the display box.
+    page = Page.from_dict(page.to_dict())
     by_id = {
         (kind, entity.id): entity
         for kind, entities in (("panel", page.panels), ("text", page.texts), ("object", page.objects))
@@ -220,6 +224,7 @@ def import_moss(raw: dict[str, Any], *, default_color_mode: str = "monochrome") 
         if entry["kind"] != "passthrough":
             entry["snapshot"] = entity_hash(by_id[entry["kind"], entry["id"]].to_dict())
     page.extra["moss_import"] = {
+        "snapshot_format": "model-v1",
         "entries": entries,
         "summary": copy.deepcopy(raw.get("summary", {})),
         "top_level": {
@@ -279,9 +284,11 @@ def import_storyboard(  # noqa: C901 -- heterogeneous source formats with explic
     source: str | dict | list, *, page_id: str | None = None, default_color_mode: str = "monochrome"
 ) -> tuple[Page, dict]:
     if isinstance(source, str):
-        content = re.sub(r"^```(?:json)?\s*|\s*```$", "", source.strip(), flags=re.IGNORECASE)
+        content = re.sub(
+            r"^```(?:json)?\s*|\s*```$", "", source.removeprefix("\ufeff").strip(), flags=re.IGNORECASE
+        )
         try:
-            source = json.loads(content)
+            source = loads_json(content)
         except json.JSONDecodeError:
             frames = _markdown(source)
             if not frames:

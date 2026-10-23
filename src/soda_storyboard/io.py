@@ -13,7 +13,7 @@ from .persistence import project_lock
 
 def read_json(path: str | Path) -> dict[str, Any]:
     file_path = Path(path)
-    with file_path.open(encoding="utf-8") as handle:
+    with file_path.open(encoding="utf-8-sig") as handle:
         value = loads_json(handle.read())
     if not isinstance(value, dict):
         raise ValueError(f"JSON 文件必须包含对象：{file_path}")

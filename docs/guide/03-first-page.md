@@ -16,7 +16,7 @@
 
 > 雨停后，晴雨牵着迷路的小猫来到旧书店。店主递给她一杯热茶，她笑着道谢。
 
-以下命令都在故事项目的工作目录运行；本次按同样顺序在一个空的 `two-sentence` 目录中实跑。`init`、角色卡和页面创建是自己或插件执行的命令；插件可以根据故事自动提出格子、人物和文字，**只有你确认后才写回**。`page new` 只建空页，不会自动增加格子。
+以下命令都在你准备存放项目的**父目录**运行。`init two-sentence` 会在这里创建 `two-sentence` 子目录，不需要先创建或 `cd` 进入它；后面的命令也留在父目录运行，通过 `--project two-sentence` 或 `two-sentence/pages/...` 指向项目，避免再嵌套一层同名目录。`init`、角色卡和页面创建是自己或插件执行的命令；插件可以根据故事自动提出格子、人物和文字，**只有你确认后才写回**。`page new` 只建空页，不会自动增加格子。
 
 | 步骤 | 插件可以自动做的部分 | 需要你自己确认或保存的部分 |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ soda-storyboard edit two-sentence --detach --no-browser --json
 ```powershell
 soda-storyboard page new --project two-sentence --id tea-corner --direction rtl `
   --width 1024 --height 1536 --style "Clean 2D anime comic, crisp ink outlines, soft cel shading" `
-  --description "雨后的街角，小猫把迷路的旅人带到旧书店，店主递给她一杯热茶。" `
+  --description "雨后的街角，晴雨牵着迷路的小猫来到旧书店，店主递给她一杯热茶。" `
   --dialogue-mode moss_text --text-direction vertical --color-mode color --json
 ```
 

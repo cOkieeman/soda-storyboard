@@ -19,7 +19,9 @@
 | 中文编辑后英文没变 | 查看过期、缺失或 legacy 状态，重新 todo / apply | 编译时不会调用翻译服务，没有新鲜译文时会退回中文 |
 | 改了衣服，译文状态没过期 | 看重新编译后的最终提示词 | 这是预期行为：角色外观由程序读取，不进入场景译文哈希 |
 
-`--outfit` 或角色卡的 `clothing` 写成中文时，当前代码可能把中文原样拼进英文 caption。外观描述可以分别填入 `appearance.zh` 和 `appearance.en`；如果希望最终提示词是纯英文，服装列表也需要用英文填写，并在编译后核对。
+角色卡的 `appearance.zh` 和 `appearance.en` 分别用于中文、英文 caption。`--outfit` 或 `clothing` 中的中文仍用于中文 caption，不会再直接追加到英文里；英文外观已写明的服装无需重复添加。校验和编译遇到中文服装列表时会提醒你核对 `appearance.en`，把其中尚未包含的款式和颜色交给 AI 翻译后补入，再检查最终提示词。
+
+页面、项目、角色卡、译文、导入 JSON 和分镜包都可以保存为 UTF-8，带 BOM 或不带 BOM 均可读取；工具写出的 JSON 统一不带 BOM。Windows PowerShell 5.1 的 `Set-Content -Encoding utf8` 所写文件也可直接使用。
 
 ## 命令、编辑器和保存
 
@@ -54,7 +56,7 @@ soda-storyboard comfy check --project my-project --json
 
 生成失败时，终端会给出简短原因，需要更多信息时可以查看故事项目 `logs/` 中的诊断。向别人求助时，错误摘要、版本和必要参数通常更方便排查；分享日志前，记得检查其中的本机文件信息。
 
-启动器问题要先分清两类：终端提示“找不到命令”时检查 PATH 和 `uv tool update-shell`；文件存在却出现 trampoline 错误时，问题在 uv 工具环境或其脚本目标，按上表先 `uv tool list`，再用发布版 wheel `--force` 重装。重装后应看到 `soda-storyboard v0.4.1`，并能独立运行 `soda-storyboard --help`。
+启动器问题要先分清两类：终端提示“找不到命令”时检查 PATH 和 `uv tool update-shell`；文件存在却出现 trampoline 错误时，问题在 uv 工具环境或其脚本目标，按上表先 `uv tool list`，再用发布版 wheel `--force` 重装。重装后 `uv tool list` 显示的 soda-storyboard 版本应与所装 wheel 的版本一致，并能独立运行 `soda-storyboard --help`。
 
 `validate` 检查的是结构和部分规则。没有 error 后，还需要查看 warning 的具体原因；info 中的本页 LoRA 则是说明信息。角色、手、斜格和台词最终画得怎样，需要在成图后检查。
 

@@ -91,7 +91,7 @@ soda-storyboard edit my-project --detach --no-browser --json
 
 整页生成一次最多加载一个人物 LoRA，其他角色靠各自的外观和衣服描述出图。网页编辑器的页面属性里有“本页 LoRA 角色”，可以选自动、不使用，或者某个带 LoRA 的角色，后期计划也不会为配角安排逐个替换。
 
-0.4.1 的项目设置有两种策略：
+项目设置有两种策略：
 
 ```json
 {"lora_policy": "single"}
