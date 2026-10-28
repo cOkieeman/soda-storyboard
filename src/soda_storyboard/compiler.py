@@ -309,9 +309,10 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
         caption += "; panels separated by slanted dividing lines"
     result: dict[str, Any] = {
         "summary": {
-            "meta": ["comic", "single_canvas" if single_canvas else "multi_panel"]
+            "meta": ["comic", "single" if single_canvas else "multi_panel"]
             + (["digital_painting"] if page.color_mode == "color" else []),
-            "canvas": "single_canvas" if single_canvas else "multi_panel",
+            # Official MOSS Layout vocabulary: single, multi_panel or collage.
+            "canvas": "single" if single_canvas else "multi_panel",
             "caption": caption,
         },
         "items": [],

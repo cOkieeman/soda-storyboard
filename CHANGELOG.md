@@ -1,5 +1,9 @@
 # 更新记录
 
+## 0.4.5 — 2026-10-28
+
+- 单画布页编译时 `summary.canvas` 改为官方 MOSS Layout 取值 `single`（原为 `single_canvas`），`meta` 同步；多格页仍为 `multi_panel`。外来 MOSS JSON 的原样透传不受影响。
+
 ## 0.4.4 — 2026-10-24
 
 - 发布流程新增：打标签时通过可信发布（Trusted Publishing）自动上传到 PyPI，之后可以直接 `pip install soda-storyboard` / `uv tool install soda-storyboard`。代码无功能变化。

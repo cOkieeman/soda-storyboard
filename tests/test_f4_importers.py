@@ -128,7 +128,8 @@ def test_single_canvas_summary_and_object_validation() -> None:
         objects=[{"id": "cup", "rect": {"x": 10, "y": 20, "w": 40, "h": 50}}], extra={"canvas_mode": "single"}
     )
     result = compile_page(page)
-    assert result["summary"]["canvas"] == "single_canvas"
+    assert result["summary"]["canvas"] == "single"
+    assert "single_canvas" not in result["summary"]["meta"]
     assert "gutters" not in result["summary"]["caption"]
     page.objects.append(ObjectBox("cup", RectShape(10, 20, 40, 50), panel_id="missing"))
     assert {issue.code for issue in validate_page(page).errors} >= {
