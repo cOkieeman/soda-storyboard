@@ -10,8 +10,11 @@ from typing import TYPE_CHECKING, Any
 from .captions import character_caption as character_caption  # noqa: PLC0414 -- public re-export
 from .captions import (
     custom_caption_enabled,
+    figure_name,
     instance_caption,
     panel_caption,
+    part_caption,
+    repeated_figure_note,
     translation_state,
 )
 from .captions import (
@@ -223,7 +226,10 @@ def _figure_items(
     panel: Panel, page: Page, characters: Mapping[str, Character], language: str, *, with_ids: bool
 ) -> list[dict[str, Any]]:
     items = []
-    for index, figure in enumerate(panel_figures(panel, page)):
+    figures = panel_figures(panel, page)
+    repeats = {figure.character_id for figure in figures if figure.character_id}
+    repeats = {cid for cid in repeats if sum(figure.character_id == cid for figure in figures) > 1}
+    for index, figure in enumerate(figures):
         x, y, right, bottom = figure_page_box(figure, panel)
         if right <= x or bottom <= y:
             continue
@@ -235,18 +241,31 @@ def _figure_items(
             "caption": _figure_caption(figure, characters, language, panel.shot),
             "bbox": bbox,
         }
+        if figure.character_id in repeats:
+            note = repeated_figure_note(figure_name(figure, characters, language), language)
+            item["caption"] = f"{item['caption'].rstrip('.。')}{'. ' if language == 'en' else '，'}{note}" + (
+                "." if language == "en" else "。"
+            )
         if with_ids:
             item.update(panel_id=panel.id, character_id=figure.character_id, figure_index=index)
         items.append(item)
     return items
 
 
-def _object_items(page: Page, *, with_ids: bool) -> list[dict]:
+def _object_items(
+    page: Page, characters: Mapping[str, Character], language: str, *, with_ids: bool
+) -> list[dict]:
     result = []
     for box in page.objects:
-        item = {"label": box.label, "caption": box.caption, "bbox": _integer_bbox(box.rect, page)}
+        if box.owner:
+            caption = part_caption(box, page, characters, language)
+            item = {"label": "character", "caption": caption, "bbox": _integer_bbox(box.rect, page)}
+        else:
+            item = {"label": box.label, "caption": box.caption, "bbox": _integer_bbox(box.rect, page)}
         if with_ids:
             item.update(object_id=box.id, panel_id=box.panel_id)
+            if box.owner:
+                item["owner"] = box.owner
         result.append(item)
     return result
 
@@ -354,7 +373,7 @@ def compile_page(  # noqa: C901, PLR0913 -- ordered emission and optional compil
                 _overlay_item(overlay, page, character_map, with_ids=with_ids, language=caption_language)
             )
     _validate_cut_regions(page, slant_mode, [item["bbox"] for item in items if item["label"] == "object"])
-    items.extend(_object_items(page, with_ids=with_ids))
+    items.extend(_object_items(page, character_map, caption_language, with_ids=with_ids))
     for text in texts:
         item = {
             "label": "text",

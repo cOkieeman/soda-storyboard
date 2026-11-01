@@ -34,7 +34,7 @@ export default function EditableObjectBox({ box, enabled, onDragStart, onDragMov
         useEditorStore.getState().updateObjectBox(box.id, { rect: { type: "rect", x, y, w, h } });
       }}>
       <Rect width={box.rect.w} height={box.rect.h} stroke={color} strokeWidth={2} dash={[7, 4]} fill={selected ? "rgba(154,50,31,.12)" : "rgba(120,110,90,.03)"} />
-      <Text text={`${box.label === "character" ? "人物框" : "物件框"} · ${box.caption.slice(0, 28)}`} x={5} y={5} width={Math.max(10, box.rect.w - 10)} fontSize={14} fill={color} listening={false} />
+      <Text text={`${box.owner ? "局部" : box.label === "character" ? "人物框" : "物件框"} · ${(box.owner ? box.part || box.caption : box.caption).slice(0, 28)}`} x={5} y={5} width={Math.max(10, box.rect.w - 10)} fontSize={14} fill={color} listening={false} />
     </Group>
     <Transformer ref={transformer} name="selection-transformer" rotateEnabled={false} flipEnabled={false} keepRatio={false} anchorSize={9} borderStroke={color} anchorStroke={color} anchorFill="#fbf6ec" />
   </Fragment>;

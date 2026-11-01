@@ -8,7 +8,7 @@
 
 已有角色卡时，固定外观放 `appearance.zh/en`：发型发色、服装款式与颜色、尾巴或头饰等显著标志物；`clothing` 逐件写清颜色和款式，同页角色之间要有区分。`lora` 为可选字段，整页最多用一个 LoRA，其余角色或全员均按描述出图；不要安排为配角切换 LoRA 的后期步骤。项目 `lora_policy` 为 `single`（默认）或 `none`，页面可选 `lora_character`（角色 id / `none`，省略自动）。翻译待办只翻场景、动作、道具，外观、镜头、程序姿势、方位由编译器插入；含外观的旧整句缓存需要通过 `translate --todo/--apply` 重译迁移。
 
-文字的 `panel_id` 可为空，表示页上文字；`kind` 支持 dialogue/narration/sfx/title/caption_tag，`bubble` 支持 speech/shout/thought/box/none。物件用 `objects`，包含 `id,rect,caption`，可选 `panel_id`，描述框直接编译成 object。单画布页使用 `canvas_mode: "single"` 和空 `panels`，照常放文字、物件或 `label: "character"` 的人物框。
+文字的 `panel_id` 可为空，表示页上文字；`kind` 支持 dialogue/narration/sfx/title/caption_tag，`bubble` 支持 speech/shout/thought/box/none。物件用 `objects`，包含 `id,rect,caption`，可选 `panel_id`，描述框直接编译成 object。物件框加上 `owner`（同一格的人物 id 或角色 id）和 `part`（部位）就成了局部框，用来定位抓握的手、屈膝等部位，编译成属于该人物的 character 条目。单画布页使用 `canvas_mode: "single"` 和空 `panels`，照常放文字、物件或 `label: "character"` 的人物框。
 
 完整示例（没有外部角色卡依赖）：
 

@@ -685,7 +685,11 @@ class Overlay:
 
 @dataclass(slots=True)
 class ObjectBox:
-    """An independently editable object or imported character without a rig."""
+    """An independently editable object or imported character without a rig.
+
+    ``owner`` turns the box into a local helper for one figure (a gripping hand,
+    a bent knee): a figure id, or a character id, in the same panel.
+    """
 
     id: str
     rect: RectShape
@@ -693,6 +697,8 @@ class ObjectBox:
     panel_id: str | None = None
     label: str = "object"
     extra: JsonObject = field(default_factory=dict, repr=False)
+    owner: str | None = None
+    part: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.rect, RectShape):
@@ -706,11 +712,15 @@ class ObjectBox:
             caption=_text(value.get("caption", value.get("description", "")), "object.caption"),
             panel_id=value.get("panel_id"),
             label=_text(value.get("label", "object"), "object.label"),
-            extra=_copy_extra(value, {"id", "rect", "bbox", "caption", "description", "panel_id", "label"}),
+            extra=_copy_extra(
+                value, {"id", "rect", "bbox", "caption", "description", "panel_id", "label", "owner", "part"}
+            ),
+            owner=None if value.get("owner") in (None, "") else _text(value["owner"], "object.owner"),
+            part=_text(value.get("part", ""), "object.part"),
         )
 
     def to_dict(self) -> JsonObject:
-        return {
+        result = {
             **self.extra,
             "id": self.id,
             "rect": self.rect.to_dict(),
@@ -718,6 +728,12 @@ class ObjectBox:
             "panel_id": self.panel_id,
             "label": self.label,
         }
+        # Only helper boxes carry these keys, so ordinary objects keep their old shape.
+        if self.owner:
+            result["owner"] = self.owner
+        if self.part:
+            result["part"] = self.part
+        return result
 
 
 @dataclass(slots=True)

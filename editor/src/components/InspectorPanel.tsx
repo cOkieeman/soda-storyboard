@@ -201,9 +201,9 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
   const selectedObject = selection?.kind === "object" ? sodaPage.objects?.find(object => object.id === selection.id) : undefined;
   const hasSelection = Boolean(selectedPanel || selectedFigure || selectedText || selectedOverlay || selectedObject);
   const figureName = selectedFigure ? characters.find(character => character.id === selectedFigure.character_id)?.display_name || characterDetails[selectedFigure.character_id]?.display_name || selectedFigure.anonymous_character?.display_name || "未指定角色" : "";
-  const title = selections.length > 1 ? "批量属性" : selectedObject ? selectedObject.label === "character" ? "人物框" : "物件框" : selectedFigure ? `${figureName} · 第 ${figurePanel!.order} 格` : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
+  const title = selections.length > 1 ? "批量属性" : selectedObject ? selectedObject.owner ? "局部框" : selectedObject.label === "character" ? "人物框" : "物件框" : selectedFigure ? `${figureName} · 第 ${figurePanel!.order} 格` : selectedPanel ? `格子 ${selectedPanel.order}` : selectedText ? "台词" : selectedOverlay ? "跨格人物" : "页面";
   const objectId = selectedFigure ? "人物与姿势" : selectedObject?.id || selectedPanel?.id || selectedText?.id || selectedOverlay?.id || sodaPage.id;
-  const deleteLabel = `删除${selectedObject ? "物件框" : selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
+  const deleteLabel = `删除${selectedObject ? selectedObject.owner ? "局部框" : "物件框" : selectedFigure ? "人物" : selectedPanel ? "格子" : selectedText ? "台词" : "跨格人物"}`;
   const errorCount = notices.filter((notice) => notice.severity === "error").length;
   const warningCount = notices.filter((notice) => notice.severity === "warning").length;
   const infoCount = notices.filter((notice) => notice.severity === "info").length;
@@ -342,7 +342,20 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
           </div>
         ) : selectedObject ? (
           <div key={selectedObject.id}>
-            <InspectorSection title="物件描述"><textarea aria-label="物件框描述" className="ui-textarea" rows={5} value={selectedObject.caption} onChange={event => useEditorStore.getState().updateObjectBox(selectedObject.id, { caption: event.target.value })} /></InspectorSection>
+            {selectedObject.owner && (() => {
+              const ownerPanel = sodaPage.panels.find(panel => panel.id === selectedObject.panel_id);
+              const figures = ownerPanel ? resolvedFigures(ownerPanel, sodaPage.reading_direction) : [];
+              const ownerIndex = figures.findIndex(figure => (figure.id || figure.character_id) === selectedObject.owner);
+              const options = figures.map(figure => ({ value: figure.id || figure.character_id, label: characters.find(character => character.id === figure.character_id)?.display_name || figure.anonymous_character?.display_name || figure.character_id || "未指定角色" }));
+              if (ownerIndex < 0) options.unshift({ value: selectedObject.owner, label: `找不到的人物 · ${selectedObject.owner}` });
+              return <InspectorSection title="所属人物与部位">
+                <label className="block"><span className="ui-label">所属人物</span><InspectorSelect label="所属人物" value={selectedObject.owner} options={options} onChange={value => useEditorStore.getState().updateObjectBox(selectedObject.id, { owner: value })} /></label>
+                <label className="mt-3 block"><span className="ui-label">部位</span><input className="ui-input" aria-label="局部框部位" placeholder="例如：右手、左膝、披风下摆" value={selectedObject.part || ""} onChange={event => useEditorStore.getState().updateObjectBox(selectedObject.id, { part: event.target.value })} /></label>
+                <p className="mt-2 text-[12px] leading-relaxed text-[var(--ink-light)]">下面的描述写清动作和连接，例如“抓住对方袖口，手腕接着前臂”。出图时会注明它属于同一个人物，不会画成另一个人。</p>
+                {ownerPanel && ownerIndex >= 0 && <button type="button" className="ui-btn ui-btn-sm mt-3" onClick={() => selectObject({ kind: "figure", id: getFigureId(figures[ownerIndex], ownerIndex), panelId: ownerPanel.id })}>返回这个人物<ArrowUpRight size={13} aria-hidden="true" /></button>}
+              </InspectorSection>;
+            })()}
+            <InspectorSection title={selectedObject.owner ? "动作与连接" : "物件描述"}><textarea aria-label="物件框描述" className="ui-textarea" rows={5} value={selectedObject.caption} onChange={event => useEditorStore.getState().updateObjectBox(selectedObject.id, { caption: event.target.value })} /></InspectorSection>
             <InspectorSection title="位置与大小"><div className="grid grid-cols-2 gap-3">{(["x", "y", "w", "h"] as const).map(key => <label key={key}><span className="ui-label">{{ x: "水平位置", y: "垂直位置", w: "宽度", h: "高度" }[key]}</span><NumberInput aria-label={`物件框 ${key}`} value={selectedObject.rect[key]} min={key === "w" || key === "h" ? 1 : 0} onCommit={value => useEditorStore.getState().updateObjectBox(selectedObject.id, { rect: { ...selectedObject.rect, [key]: value } })} /></label>)}</div></InspectorSection>
           </div>
         ) : selectedOverlay ? (
@@ -357,7 +370,7 @@ export default function InspectorPanel({ onSelectObject, onStartPage }: Inspecto
               <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-light)]">{firstPanel ? "选中一个格子，填写画面描述，安排人物，再添加台词。也可以直接点击画布上的格子。" : "先建立第一个格子，再安排版式和画面内容。"}</p>
               {firstPanel ? <button type="button" className="ui-btn mt-3" onClick={() => selectObject({ kind: "panel", id: firstPanel.id })}>编辑第 {firstPanel.order} 格<ArrowUpRight size={14} aria-hidden="true" /></button> : onStartPage && <button type="button" className="ui-btn mt-3" onClick={onStartPage}><Plus size={14} aria-hidden="true" />建立第一个格子</button>}
             </section>}
-            {Boolean(sodaPage.objects?.length) && <InspectorSection title="物件与人物框">{sodaPage.objects?.map(box => <button type="button" className="ui-btn ui-btn-sm mb-2 w-full !justify-start overflow-hidden" title={box.caption || box.id} key={box.id} onClick={() => selectObject({ kind: "object", id: box.id })}><span className="block min-w-0 truncate text-left">{box.label === "character" ? "人物框" : "物件框"} · {box.caption || box.id}</span></button>)}</InspectorSection>}
+            {Boolean(sodaPage.objects?.length) && <InspectorSection title="物件与人物框">{sodaPage.objects?.map(box => <button type="button" className="ui-btn ui-btn-sm mb-2 w-full !justify-start overflow-hidden" title={box.caption || box.id} key={box.id} onClick={() => selectObject({ kind: "object", id: box.id })}><span className="block min-w-0 truncate text-left">{box.owner ? "局部框" : box.label === "character" ? "人物框" : "物件框"} · {box.part || box.caption || box.id}</span></button>)}</InspectorSection>}
             <InspectorSection title="页面信息" open={false}>
               <dl className="space-y-3 text-[13px]">
                 <div className="flex justify-between gap-2"><dt className="text-[var(--ink-light)]">画布尺寸</dt><dd className="font-mono">{sodaPage.canvas_width} × {sodaPage.canvas_height}</dd></div>

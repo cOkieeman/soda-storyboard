@@ -21,6 +21,15 @@ MOSS-specific notes summarize the author's own generation tests;
 they are not guarantees of image-generation quality. The plugin package carries
 the same NOTICE and upstream MIT text for distribution.
 
+ComfyUI-MOSS-MangaLayout (https://github.com/wuhehen176/ComfyUI-MOSS-MangaLayout,
+author wuhehen176) inspired two features in 0.5.0, used with the author's permission:
+local helper boxes owned by one figure (objects.owner / objects.part), the
+"same character shown twice at different scales" caption note, and the
+reference-page reading guide skill/skills/soda-storyboard/references/
+reference-page-reading.md, which is a Chinese rewrite of the ideas in its
+layout-rules.md for this tool's storyboard format. No code from that
+repository is included.
+
 MIT License
 
 Copyright (c) 2026 c-a-p-engineer

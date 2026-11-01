@@ -292,6 +292,9 @@ export type SodaObject = {
   caption: string;
   label?: "object" | "character";
   panel_id?: string | null;
+  /** Local helper box (hand, knee, sleeve): figure id or character id of its owner. */
+  owner?: string | null;
+  part?: string;
   [key: string]: any;
 };
 

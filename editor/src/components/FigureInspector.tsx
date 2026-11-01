@@ -1,6 +1,6 @@
-import { ArrowLeft, ChevronDown, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronDown, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useEditorStore } from "../lib/store";
-import { ensureFigureEditor, FIGURE_POSE_PRESETS, getFigureId } from "../lib/figureRig";
+import { ensureFigureEditor, FIGURE_POSE_PRESETS, figureEditorBounds, getFigureId } from "../lib/figureRig";
 import { applyFigurePoseInPanel, editableFigureEditor, resolvedFigures } from "../lib/figures";
 import { characterSketchColor } from "../lib/characterColors";
 import type { Figure, FigureEditor, FigurePose, Selection, SodaPanel } from "../types";
@@ -51,6 +51,15 @@ export default function FigureInspector({ figure, figureId, panel, onSelectObjec
   const color = characterSketchColor(characters.find(character => character.id === figure.character_id) || figure.anonymous_character);
   if (!characterOptions.some((option) => option.value === figure.character_id)) characterOptions.unshift({ value: figure.character_id, label: figure.anonymous_character?.display_name || (!figure.character_id || figure.character_id === "char" ? "未指定角色" : figure.character_id) });
   const maxSize = Math.max(100, Math.round(Math.max(width, height) * 2));
+  // Legacy figures have no saved id, so their helper boxes point at the character instead.
+  const owner = figure.id || figure.character_id;
+  const partBoxes = useEditorStore((state) => (state.sodaPage?.objects || []).filter(box => box.owner && box.owner === owner && box.panel_id === panel.id));
+  const addPart = () => {
+    const origin = panel.shape.type === "rect" ? [panel.shape.x, panel.shape.y] : [Math.min(...panel.shape.points.map(([x]) => x)), Math.min(...panel.shape.points.map(([, y]) => y))];
+    const bounds = figureEditorBounds(editor);
+    const side = Math.max(48, Math.min(bounds.width, bounds.height) * 0.35);
+    useEditorStore.getState().addPartBox(panel.id, owner, { x: origin[0] + bounds.x + bounds.width / 2 - side / 2, y: origin[1] + bounds.y + bounds.height * 0.35, w: side, h: side });
+  };
   const changeNumber = (field: "x" | "y" | "size", raw: string) => {
     if (raw === "") return;
     const value = Number(raw);
@@ -81,6 +90,11 @@ export default function FigureInspector({ figure, figureId, panel, onSelectObjec
       <FigureSelect label="身体视角" value={editor.view || "front"} options={[{ value: "front", label: "正面" }, { value: "side", label: "侧面" }]} onChange={(value) => updateEditor({ view: value as FigureEditor["view"] })} />
       <FigureSelect label="人物样式" value={editor.style} options={[{ value: "stick", label: "火柴人" }, { value: "box", label: "方块人体" }, { value: "rough", label: "人体粗稿" }]} onChange={(value) => updateEditor({ style: value as FigureEditor["style"] })} />
       <div className="grid grid-cols-2 gap-3"><FigureSelect label="朝向" value={figure.facing} options={[{ value: "front", label: "正面" }, { value: "left", label: "向左" }, { value: "right", label: "向右" }, { value: "back", label: "背面" }]} onChange={(value) => update({ facing: value as Figure["facing"], editor: { ...editor, flip: value === "left" ? true : value === "right" ? false : editor.flip } })} /><FigureSelect label="生成景框" value={figure.framing || ""} options={[{ value: "", label: "默认" }, { value: "full", label: "全身" }, { value: "waist", label: "半身" }, { value: "bust", label: "胸部" }, { value: "face", label: "面部" }]} onChange={(value) => update({ framing: value ? value as Figure["framing"] : null })} /></div>
+    </FigureSection>
+    <FigureSection title="局部框">
+      <p className="text-[12px] leading-relaxed text-[var(--ink-light)]">抓握、屈膝、出框的手脚等容易画错的部位，可以单独加一个小框标出位置，再写明是哪个部位、接到哪里。</p>
+      {partBoxes.map(box => <button type="button" key={box.id} className="ui-btn ui-btn-sm mb-2 w-full !justify-start overflow-hidden" onClick={() => onSelectObject({ kind: "object", id: box.id })}><span className="block min-w-0 flex-1 truncate text-left">{box.part || box.caption || "未写部位"}</span><ArrowUpRight size={13} aria-hidden="true" /></button>)}
+      <button type="button" className="ui-btn ui-btn-sm" onClick={addPart}><Plus size={13} aria-hidden="true" />添加局部框</button>
     </FigureSection>
     <div className="inspector-section"><button type="button" className="ui-btn ui-btn-sm text-[var(--error)]" onClick={() => useEditorStore.getState().removeFigureById(panel.id, figureId)}><Trash2 size={13} aria-hidden="true" />删除这个人物</button></div>
   </div>;

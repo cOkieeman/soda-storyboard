@@ -1058,7 +1058,9 @@
             "string",
             "null"
           ]
-        }
+        },
+        "owner": {"type": ["string", "null"], "description": "局部辅助框所属人物：同一格里的人物 id 或角色 id"},
+        "part": {"type": "string", "description": "局部辅助框负责的部位，例如右手抓住对方袖口"}
       },
       "additionalProperties": true
     },

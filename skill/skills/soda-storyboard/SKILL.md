@@ -217,3 +217,5 @@ soda-storyboard import external.md --project my-story --page-id imported-page --
 用户说“照这一页的分格来”并给出图片路径时，先用 `layout extract "<图片绝对路径>" --direction rtl --preview "<叠加图绝对路径>" --json` 识别（同样先核对子命令帮助）。给用户看返回的叠加预览，解释数字是阅读顺序、橙色虚线是不确定格框；取得用户对格子和顺序的确认后，再运行 `layout extract "<图片绝对路径>" --name "<模板名>" --save --project "<项目绝对路径>" --json`。提醒用户模板只保存格子形状、来源文件名和识别日期，不保存原图；不要另行把参考页复制进项目。
 
 保存后用 `layout suggest --panels <识别格数> --templates "<项目绝对路径>/templates" --pick <保存模板中的id> --json` 获取几何，再按既有流程用于拆格。候选标明“来自参考页”。用户画日漫时默认 rtl；用户明确要西式顺序时使用 ltr。识别结果必须核对，不把低置信度结果当成精确描摹；无框或复杂页面可请用户调整源分格。
+
+用户还想照搬这页的镜头和人物安排（“照这页的分镜，换成我的角色”）时，格子落进分镜单后，先读 `references/reference-page-reading.md`，再看参考页逐格补上景别、机位、description、人物站位和裁切位置；跨格人物写成 overlay，抓握、屈膝这类容易画错的部位才加局部框（`objects` 的 owner / part）。人物按“角色1、角色2”编号，请用户确认每个编号对应项目里的哪个角色后再写 character_id；不抄原图台词。补完先出预览给用户看。

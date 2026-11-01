@@ -546,6 +546,41 @@ def validate_page(
         parent = _get(item, "panel_id")
         if parent is not None and parent not in panel_ids:
             report.add("error", "unknown_object_panel", "物件框引用了不存在的格子", field_name="objects")
+        owner = _get(item, "owner")
+        if owner:
+            owners = {
+                key
+                for panel in panels
+                if parent is None or _get(panel, "id") == parent
+                for figure in _get(panel, "figures", [])
+                for key in (
+                    _get(figure, "character_id"),
+                    (figure if isinstance(figure, Mapping) else _get(figure, "extra", {})).get("id"),
+                )
+                if key
+            } | {
+                cid
+                for panel in panels
+                if parent is None or _get(panel, "id") == parent
+                for cid in _get(panel, "character_ids", []) or []
+            }
+            if owner not in owners:
+                report.add(
+                    "warning",
+                    "unknown_object_owner",
+                    "局部框的所属人物不在这一格里，编译时只能按角色名描述",
+                    field_name="objects.owner",
+                )
+            if (
+                not str(_get(item, "part", "") or "").strip()
+                and not str(_get(item, "caption", "") or "").strip()
+            ):
+                report.add(
+                    "warning",
+                    "empty_object_part",
+                    "局部框要写明是哪个部位（例如右手抓住对方袖口）",
+                    field_name="objects.part",
+                )
         x, y, w, h = panel_bbox({"shape": _get(item, "rect", {})})
         if not _get(item, "id") or _get(item, "label", "object") not in {"object", "character"}:
             report.add(

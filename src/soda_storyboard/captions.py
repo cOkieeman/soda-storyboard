@@ -16,7 +16,7 @@ from .panel_positions import panel_positions
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .models import Character, Figure, Page, Panel
+    from .models import Character, Figure, ObjectBox, Page, Panel
 
 # ruff: noqa: RUF001 -- bilingual prompt punctuation and user-facing diagnostics.
 
@@ -159,6 +159,63 @@ def instance_caption(identifier: str, extra: dict, characters: Mapping[str, Char
     if not identifier and anonymous_character(snapshot):
         return character_caption("", {"": Character.from_dict(snapshot)}, language)
     return character_caption(identifier, characters, language)
+
+
+def figure_name(figure: Figure, characters: Mapping[str, Character], language: str) -> str:
+    """Short name for cross references; anonymous figures fall back to a generic word."""
+    if figure.character_id:
+        return _character_name(figure.character_id, characters.get(figure.character_id), language)
+    snapshot = figure.extra.get("anonymous_character") or {}
+    name = snapshot.get("display_name") if isinstance(snapshot, dict) else None
+    return name or ("the figure" if language == "en" else "该人物")
+
+
+def repeated_figure_note(name: str, language: str) -> str:
+    """Same character drawn twice in one panel, e.g. a large face beside a small full body."""
+    if language == "en":
+        return (
+            f"This is the same person as the other {name} in this panel, shown again at a different scale; "
+            "not twins, and not merged into one body"
+        )
+    return f"与本格另一处的{name}是同一个人，以不同尺度再次呈现，不是双胞胎，也不要拼成一个身体"
+
+
+def find_owner(page: Page, owner: str, panel_id: str | None) -> tuple[Panel, Figure] | None:
+    """Resolve a helper box owner: a figure id first, then a character id, within its panel."""
+    panels = [panel for panel in page.panels if panel_id is None or panel.id == panel_id]
+    for match in (
+        lambda figure: figure.extra.get("id") == owner,
+        lambda figure: figure.character_id == owner,
+    ):
+        for panel in panels:
+            for figure in panel_figures(panel, page):
+                if match(figure):
+                    return panel, figure
+    return None
+
+
+def part_caption(box: ObjectBox, page: Page, characters: Mapping[str, Character], language: str) -> str:
+    """Caption for a local helper box (hand, knee, sleeve) that belongs to one figure."""
+    if language == "en" and contains_chinese(box.part + box.caption):
+        language = "zh"  # Untranslated Chinese stays a whole Chinese sentence, as figures do.
+    found = find_owner(page, box.owner or "", box.panel_id)
+    if found:
+        name = figure_name(found[1], characters, language)
+    else:
+        character = characters.get(box.owner or "")
+        name = _character_name(box.owner or "", character, language)
+    detail = box.caption.strip().rstrip("。.，,")
+    if language == "en":
+        head = f"{box.part} of {name}" if box.part else f"Body detail of {name}"
+        head = head[:1].upper() + head[1:]
+        body = f"{head}, {detail}" if detail else head
+        return (
+            f"{body}. It belongs to the same continuous body as {name} in this panel, "
+            "connected to the rest of that figure, not a separate person."
+        )
+    head = f"{name}的{box.part}" if box.part else f"{name}的身体局部"
+    body = f"{head}，{detail}" if detail else head
+    return f"{body}。属于本格{name}同一个连续的身体，与人物其余部分相连，不是另一个人。"
 
 
 def custom_caption_enabled(panel: Panel, page: Page) -> bool:

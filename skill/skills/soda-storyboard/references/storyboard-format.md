@@ -41,6 +41,10 @@ Panel 可选 figures 数组。每个 figure 含 character_id、pose（默认 sta
 
 pose 预设：stand、walk、run、sit、crouch、wave、point、arms_up、hands_clasped、hand_on_chin、lie、back_view；未知值给 warning 并画 stand。人物名显示在头部附近，人物裁在所属格子内。用户调整姿势或站位时只改对应 figure。
 
+同一格里两个 figures 用同一个 character_id（例如放大的脸加较小的全身）时，编译器会给两者都注明“同一个人以不同尺度再次呈现，不是双胞胎，也不要拼成一个身体”。
+
+页面可选 objects 数组（物件框和局部框）。局部框是挂在某个人物身上的小框，用来定位抓握的手、屈膝、出框的手脚等容易画错的部位：写 `owner`（同一格里的人物 id，旧页面没有人物 id 时写角色 id）、`part`（部位，例如“右手”）、`panel_id`，`caption` 写动作和连接关系。编译时输出成 character 条目，并注明属于同一个连续的身体。owner 找不到时校验给 warning `unknown_object_owner`。怎么从参考页决定要不要加，见 reference-page-reading.md。
+
 页面可选 texts 数组，每个文字元素含：
 
 - id：稳定且不重复；kind：dialogue / narration / sfx / title / caption_tag。
